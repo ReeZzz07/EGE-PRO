@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SUBJECTS, TASKS, TOTAL_POINTS, taskById, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
+import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
@@ -103,6 +104,7 @@ export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
 /* ─────────── Статистика ─────────── */
 export function StatsView({ onNav }: { onNav: (v: View) => void }) {
   const { derived, resetAll } = useProgress();
+  const { isGuestMode } = useAuth();
   const [confirming, setConfirming] = useState(false);
   const atts = derived.attempts;
   const hours = Math.floor(derived.totalTimeSec / 3600);
@@ -215,7 +217,9 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
 
       <Reveal delay={150}>
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-2 border-dashed border-ink/25 bg-sheet px-5 py-4">
-          <p className="text-[13px] text-ink2">Прогресс хранится локально в твоём браузере и не отправляется никуда.</p>
+          <p className="text-[13px] text-ink2">
+            {isGuestMode ? "Прогресс хранится локально в твоём браузере и не отправляется никуда." : "Прогресс синхронизируется с твоим аккаунтом."}
+          </p>
           {confirming ? (
             <span className="flex items-center gap-2">
               <span className="text-[13px] font-bold text-red">Точно стереть всё?</span>

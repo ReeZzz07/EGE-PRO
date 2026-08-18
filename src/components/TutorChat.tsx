@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { getTutorReply } from "../data/tutor";
 import type { EgeTask } from "../data/tasks";
 import { taskById, SUBJECTS } from "../data/tasks";
 import { useProgress } from "../lib/store";
+import { callAiTutor, type AiMode } from "../lib/aiTutor";
 import { TutorText } from "./ui";
+
+const HINT_RE = /(подсказ|намек|намеёк|помоги решить|направь)/i;
+const EXPLAIN_RE = /(объясн|решени|разбор|разбери|как решить|полное реш|ответ задания)/i;
 
 interface Msg {
   role: "user" | "bot";
@@ -133,14 +136,23 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
     setBusy(true);
 
     const mistakeTasks = [...derived.mistakeIds].map((id) => taskById(id)).filter((t): t is EgeTask => !!t);
-    const reply = getTutorReply(text, {
-      task: contextTask,
-      hintLevel: hintLevelRef.current,
-      mistakeTasks,
-      solvedCount: derived.solvedIds.size,
+    const hasTask = !!contextTask;
+    const isHintReq = hasTask && HINT_RE.test(text);
+    const mode: AiMode = isHintReq ? "hint" : hasTask && EXPLAIN_RE.test(text) ? "explain_topic" : "chat";
+
+    const history = messagesRef.current
+      .filter((m) => !m.streaming)
+      .slice(-8)
+      .map((m) => ({ role: (m.role === "bot" ? "assistant" : "user") as "assistant" | "user", content: m.text }));
+
+    callAiTutor(
+      { mode, message: text, taskId: contextTask?.id, hintLevel: hintLevelRef.current, history },
+      { mistakeTasks, solvedCount: derived.solvedIds.size }
+    ).then((res) => {
+      const replyText = res.text ?? "Не получилось получить ответ — попробуй ещё раз.";
+      const delay = 450 + Math.min(900, replyText.length * 4);
+      setTimeout(() => streamIn({ text: replyText, actions: res.actions, bumpHint: isHintReq }), delay);
     });
-    const delay = 450 + Math.min(900, reply.text.length * 4);
-    setTimeout(() => streamIn(reply), delay);
   };
 
   const last = messages[messages.length - 1];

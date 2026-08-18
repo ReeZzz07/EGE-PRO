@@ -1,5 +1,7 @@
 import { SUBJECTS, TASKS, TOTAL_POINTS, tasksOf, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
+import { useAuth } from "../lib/auth";
+import { loadStudyPlan } from "../lib/planStorage";
 import { useMemo } from "react";
 import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
 import type { View } from "./Header";
@@ -20,6 +22,8 @@ function examTarget(): { date: Date; year: number } {
 
 export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
+  const { profile } = useAuth();
+  const plan = profile?.primarySubject ? loadStudyPlan(profile.primarySubject) : null;
   const exam = useMemo(examTarget, []);
   const cd = useCountdown(exam.date);
   const title = useScramble(`ЕГЭ·${exam.year}`);
@@ -153,6 +157,33 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
           ))}
         </div>
       </div>
+
+      {/* ─── план на сегодня (раздел 8.1 ТЗ) ─── */}
+      {plan && profile?.primarySubject && (
+        <Reveal>
+          <section className="mt-8 border-2 border-blue/40 bg-blue/5 p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-blue">план на сегодня · {SUBJECTS[profile.primarySubject].name}</p>
+                <ul className="mt-2 space-y-1">
+                  {plan.today.map((item, i) => (
+                    <li key={i} className="text-[13.5px] leading-relaxed text-ink/85">• {item.label}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                {plan.today.find((i) => i.taskIds.length) && (
+                  <button onClick={() => onNav({ name: "task", id: plan.today.find((i) => i.taskIds.length)!.taskIds[0] })} className="btn btn-blue px-4 py-2.5 text-[13px]">
+                    Продолжить <Icon name="arrowR" size={15} />
+                  </button>
+                )}
+                <button onClick={() => onNav({ name: "plan" })} className="btn btn-ghost px-4 py-2.5 text-[13px]">План целиком</button>
+                <button onClick={() => onNav({ name: "mock-exam" })} className="btn btn-ghost px-4 py-2.5 text-[13px]"><Icon name="timer" size={14} /> Пробник</button>
+              </div>
+            </div>
+          </section>
+        </Reveal>
+      )}
 
       {/* ─── тренажёр по предметам ─── */}
       <section className="mt-14">

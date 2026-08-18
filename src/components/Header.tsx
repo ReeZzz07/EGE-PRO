@@ -1,7 +1,22 @@
+import type { Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
+import { useAuth } from "../lib/auth";
 import { Icon } from "./ui";
 
-export type View = { name: "home" } | { name: "bank" } | { name: "tutor" } | { name: "mistakes" } | { name: "stats" } | { name: "task"; id: string };
+export type View =
+  | { name: "landing" }
+  | { name: "auth" }
+  | { name: "onboarding"; subject?: Subject }
+  | { name: "home" }
+  | { name: "bank" }
+  | { name: "tutor" }
+  | { name: "mistakes" }
+  | { name: "stats" }
+  | { name: "task"; id: string }
+  | { name: "diagnostic"; subject: Subject }
+  | { name: "plan" }
+  | { name: "mock-exam" }
+  | { name: "session-summary" };
 
 const NAV: { id: string; label: string; icon: string }[] = [
   { id: "home", label: "Главная", icon: "home" },
@@ -13,6 +28,7 @@ const NAV: { id: string; label: string; icon: string }[] = [
 
 export default function Header({ view, onNav }: { view: View; onNav: (v: View) => void }) {
   const { derived } = useProgress();
+  const { profile, signOut } = useAuth();
   const active = view.name === "task" ? "bank" : view.name;
   return (
     <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
@@ -69,6 +85,16 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
             <Icon name="star" size={13} className="text-hl" />
             {derived.earnedPoints} п.б.
           </span>
+          {profile ? (
+            <button onClick={() => { signOut(); onNav({ name: "landing" }); }} title="Выйти" className="flex items-center gap-1.5 rounded-sm border-2 border-ink/20 px-1.5 py-1 text-[11px] font-bold text-ink2 hover:border-ink hover:text-ink sm:px-2">
+              <span className="hidden max-w-[80px] truncate sm:inline">{profile.name || profile.email}</span>
+              <Icon name="x" size={12} />
+            </button>
+          ) : (
+            <button onClick={() => onNav({ name: "auth" })} className="btn btn-ink px-2.5 py-1.5 text-[11px] sm:px-3">
+              Войти
+            </button>
+          )}
         </div>
       </div>
     </header>

@@ -4,15 +4,23 @@ import { useProgress } from "../lib/store";
 import { checkAnswer, formatClock, plural } from "../lib/utils";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
+import EssayView from "./EssayView";
 import { Burst, Icon, Stamp, useToast } from "./ui";
 
 type Phase = "solve" | "wrong" | "correct" | "revealed";
 
 export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v: View) => void }) {
   const task = taskById(taskId);
+
+  // задания с развёрнутым ответом ведут в отдельный флоу — SolveView для них хуков не вызывает
+  if (task && task.answerType === "essay") {
+    const idx = TASKS.findIndex((t) => t.id === task.id);
+    const nextTaskId = TASKS[(idx + 1) % TASKS.length].id;
+    return <EssayView task={task} onNav={onNav} nextTaskId={nextTaskId} />;
+  }
+
   const { derived, addAttempt } = useProgress();
   const { push } = useToast();
-
   const [phase, setPhase] = useState<Phase>("solve");
   const [value, setValue] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -271,6 +279,9 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
                   </button>
                   <button onClick={() => goTo({ name: "mistakes" })} className="btn btn-ghost px-5 py-2.5 text-sm">
                     <Icon name="alert" size={15} /> Тетрадь ошибок
+                  </button>
+                  <button onClick={() => goTo({ name: "session-summary" })} className="btn btn-ghost px-5 py-2.5 text-sm">
+                    Завершить сессию
                   </button>
                 </div>
               </div>

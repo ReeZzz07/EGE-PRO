@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import { TASKS, taskById, type Subject } from "../data/tasks";
 import { dateKey } from "./utils";
+import { supabase, isSupabaseConfigured } from "./supabase";
+import { useAuth } from "./auth";
 
 export interface Attempt {
   taskId: string;
@@ -14,7 +16,7 @@ interface ProgressState {
   attempts: Attempt[];
 }
 
-type Action = { type: "ADD"; attempt: Attempt } | { type: "CLEAR_TASK"; taskId: string } | { type: "RESET" };
+type Action = { type: "ADD"; attempt: Attempt } | { type: "CLEAR_TASK"; taskId: string } | { type: "RESET" } | { type: "LOAD"; attempts: Attempt[] };
 
 const KEY = "ege-pro.attempts.v1";
 
@@ -36,9 +38,44 @@ function reducer(state: ProgressState, action: Action): ProgressState {
       return { attempts: state.attempts.filter((a) => a.taskId !== action.taskId) };
     case "RESET":
       return { attempts: [] };
+    case "LOAD":
+      return { attempts: action.attempts };
     default:
       return state;
   }
+}
+
+/** Загружает попытки пользователя из Supabase и переносит туда локальные (гостевые), если это первый вход. */
+async function syncOnLogin(userId: string, local: Attempt[]): Promise<Attempt[]> {
+  if (!supabase) return local;
+  const migratedFlag = `ege-pro.migrated.${userId}`;
+  const { data: remoteRows } = await supabase.from("attempts").select("task_id, given, correct, seconds, created_at").eq("user_id", userId);
+  const remote: Attempt[] = (remoteRows ?? []).map((r) => ({ taskId: r.task_id, given: r.given, correct: r.correct, seconds: r.seconds, ts: new Date(r.created_at).getTime() }));
+
+  let alreadyMigrated = false;
+  try {
+    alreadyMigrated = localStorage.getItem(migratedFlag) === "1";
+  } catch {
+    /* ignore */
+  }
+
+  if (!alreadyMigrated && local.length > 0) {
+    const rows = local.map((a) => ({ user_id: userId, task_id: a.taskId, given: a.given, correct: a.correct, seconds: a.seconds, created_at: new Date(a.ts).toISOString() }));
+    await supabase.from("attempts").insert(rows);
+    try {
+      localStorage.setItem(migratedFlag, "1");
+    } catch {
+      /* ignore */
+    }
+    return [...remote, ...local];
+  }
+
+  try {
+    localStorage.setItem(migratedFlag, "1");
+  } catch {
+    /* ignore */
+  }
+  return remote.length ? remote : local;
 }
 
 export interface Derived {
@@ -65,6 +102,8 @@ const ProgressCtx = createContext<Ctx | null>(null);
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined as unknown as ProgressState, load);
+  const { profile, isGuestMode } = useAuth();
+  const syncedUserId = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -73,6 +112,15 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, [state]);
+
+  // при входе в настоящий (не гостевой) аккаунт — подгружаем и мигрируем попытки в Supabase
+  useEffect(() => {
+    if (isGuestMode || !profile || !isSupabaseConfigured) return;
+    if (syncedUserId.current === profile.id) return;
+    syncedUserId.current = profile.id;
+    syncOnLogin(profile.id, state.attempts).then((merged) => dispatch({ type: "LOAD", attempts: merged }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, isGuestMode]);
 
   const derived = useMemo<Derived>(() => {
     const solved = new Set<string>();
@@ -119,10 +167,22 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     };
   }, [state]);
 
+  const addAttempt = (attempt: Attempt) => {
+    dispatch({ type: "ADD", attempt });
+    if (!isGuestMode && profile && supabase) {
+      supabase
+        .from("attempts")
+        .insert({ user_id: profile.id, task_id: attempt.taskId, given: attempt.given, correct: attempt.correct, seconds: attempt.seconds, created_at: new Date(attempt.ts).toISOString() })
+        .then(({ error }) => {
+          if (error) console.warn("Не удалось сохранить попытку в Supabase:", error.message);
+        });
+    }
+  };
+
   const value: Ctx = {
     state,
     derived,
-    addAttempt: (attempt) => dispatch({ type: "ADD", attempt }),
+    addAttempt,
     clearTask: (taskId) => dispatch({ type: "CLEAR_TASK", taskId }),
     resetAll: () => dispatch({ type: "RESET" }),
   };
