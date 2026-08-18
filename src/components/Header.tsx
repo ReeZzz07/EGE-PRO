@@ -15,7 +15,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
   const { derived } = useProgress();
   const active = view.name === "task" ? "bank" : view.name;
   return (
-    <header className="sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
+    <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
         <button onClick={() => onNav({ name: "home" })} className="group flex shrink-0 items-center gap-2.5" aria-label="На главную">
           <span className="flex h-9 w-9 items-center justify-center border-2 border-ink bg-ink text-hl transition group-hover:bg-blue group-hover:border-blue">
@@ -29,26 +29,30 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           </span>
         </button>
 
-        <nav className="ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-clip sm:gap-1 lg:justify-start lg:gap-1.5">
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => onNav({ name: n.id } as View)}
-              title={n.label}
-              aria-label={n.label}
-              className={`link-slide flex min-w-0 items-center gap-1.5 px-1.5 py-1.5 text-[12.5px] font-bold transition sm:px-2 lg:px-2.5 lg:text-[13px] ${
-                active === n.id ? "active text-blue" : "text-ink2 hover:text-ink"
-              }`}
-            >
-              <Icon name={n.icon} size={15} />
-              <span className="hidden whitespace-nowrap xl:inline">{n.label}</span>
-              {n.id === "mistakes" && derived.mistakeIds.size > 0 && (
-                <span className="rounded-sm bg-red px-1 py-px font-mono text-[10px] font-bold leading-none text-white">
-                  {derived.mistakeIds.size}
-                </span>
-              )}
-            </button>
-          ))}
+        <nav className="no-scrollbar ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-clip sm:gap-1 lg:justify-start lg:gap-1.5">
+          {NAV.map((n) => {
+            const isActive = active === n.id;
+            return (
+              <button
+                key={n.id}
+                onClick={() => onNav({ name: n.id } as View)}
+                title={n.label}
+                aria-label={n.label}
+                className={`relative flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold transition-colors sm:px-2 lg:px-2.5 lg:text-[13px] ${
+                  isActive ? "text-blue" : "text-ink2 hover:bg-ink/5 hover:text-ink"
+                }`}
+              >
+                <Icon name={n.icon} size={15} />
+                <span className="hidden whitespace-nowrap xl:inline">{n.label}</span>
+                {n.id === "mistakes" && derived.mistakeIds.size > 0 && (
+                  <span className="rounded-sm bg-red px-1 py-px font-mono text-[10px] font-bold leading-none text-white">
+                    {derived.mistakeIds.size}
+                  </span>
+                )}
+                {isActive && <span className="absolute inset-x-1.5 bottom-0.5 h-[2.5px] rounded-full bg-blue" aria-hidden />}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
