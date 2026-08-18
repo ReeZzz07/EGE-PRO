@@ -29,7 +29,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           </span>
         </button>
 
-        <nav className="ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 sm:gap-1 lg:justify-start lg:gap-1.5">
+        <nav className="ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-clip sm:gap-1 lg:justify-start lg:gap-1.5">
           {NAV.map((n) => (
             <button
               key={n.id}
