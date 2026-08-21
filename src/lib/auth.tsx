@@ -17,6 +17,8 @@ export interface Profile {
   primarySubject?: Subject;
   /** timestamp завершения онбординга (квиз + «как это работает») */
   onboardedAt?: number;
+  /** доступ к админке управления контентом лендинга (раздел 2.4 ТЗ, узкий срез) */
+  isAdmin?: boolean;
 }
 
 interface AuthResult {
@@ -85,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           dailyMinutes: data.daily_minutes ?? undefined,
           primarySubject: data.primary_subject ?? undefined,
           onboardedAt: data.onboarded_at ? new Date(data.onboarded_at).getTime() : undefined,
+          isAdmin: data.is_admin ?? false,
         });
       } else {
         setProfile({ id: userId, name: fallbackName, email: fallbackEmail });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import Header, { type View } from "./components/Header";
+import Header, { ADMIN_ONLY_VIEWS, PROTECTED_VIEWS, landingSection, type View } from "./components/Header";
+import AdminContent from "./components/AdminContent";
 import Dashboard from "./components/Dashboard";
 import TaskBank from "./components/TaskBank";
 import SolveView from "./components/SolveView";
@@ -17,6 +18,7 @@ import MockExam from "./components/MockExam";
 import SessionSummary from "./components/SessionSummary";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
+  const { profile } = useAuth();
   return (
     <footer className="border-t-2 border-ink bg-night text-paper">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
@@ -40,7 +42,10 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
           <ul className="mt-3 space-y-2">
             {Object.values(SUBJECTS).map((s) => (
               <li key={s.id}>
-                <button onClick={() => onNav({ name: "bank" })} className="link-slide text-[13px] font-semibold text-paper/75 hover:text-paper">
+                <button
+                  onClick={() => onNav(profile ? { name: "bank" } : { name: "onboarding", subject: s.id })}
+                  className="link-slide text-[13px] font-semibold text-paper/75 hover:text-paper"
+                >
                   {s.name}
                 </button>
               </li>
@@ -48,17 +53,42 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
           </ul>
         </div>
         <div>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Инструменты</p>
-          <ul className="mt-3 space-y-2 text-[13px]">
-            {([["bank", "Банк заданий"], ["tutor", "ИИ-репетитор"], ["mistakes", "Тетрадь ошибок"], ["stats", "Статистика"]] as const).map(([id, label]) => (
-              <li key={id}>
-                <button onClick={() => onNav({ name: id } as View)} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
-                  <Icon name={id === "bank" ? "list" : id === "tutor" ? "chat" : id === "mistakes" ? "alert" : "chart"} size={14} />
-                  {label}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {profile ? (
+            <>
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Инструменты</p>
+              <ul className="mt-3 space-y-2 text-[13px]">
+                {([["bank", "Банк заданий"], ["tutor", "ИИ-репетитор"], ["mistakes", "Тетрадь ошибок"], ["stats", "Статистика"]] as const).map(([id, label]) => (
+                  <li key={id}>
+                    <button onClick={() => onNav({ name: id } as View)} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
+                      <Icon name={id === "bank" ? "list" : id === "tutor" ? "chat" : id === "mistakes" ? "alert" : "chart"} size={14} />
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Разделы</p>
+              <ul className="mt-3 space-y-2 text-[13px]">
+                <li>
+                  <button onClick={() => onNav(landingSection("features"))} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
+                    <Icon name="chat" size={14} /> Возможности
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => onNav(landingSection("principle"))} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
+                    <Icon name="target" size={14} /> Принцип платформы
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => onNav({ name: "auth" })} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
+                    <Icon name="star" size={14} /> Войти
+                  </button>
+                </li>
+              </ul>
+            </>
+          )}
         </div>
       </div>
     </footer>
@@ -70,6 +100,7 @@ function AppShell() {
   const { profile, loading } = useAuth();
 
   useEffect(() => {
+    if (view.name === "landing" && view.section) return; // Landing сама проскроллит к разделу
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, [view]);
 
@@ -78,6 +109,18 @@ function AppShell() {
     if (!loading && profile && view.name === "landing") setView({ name: "home" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile]);
+
+  // неавторизованных не пускаем на разделы, требующие аккаунта (см. PROTECTED_VIEWS)
+  useEffect(() => {
+    if (!loading && !profile && PROTECTED_VIEWS.includes(view.name)) setView({ name: "landing" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, profile, view.name]);
+
+  // разделы админки — только для администраторов
+  useEffect(() => {
+    if (!loading && profile && !profile.isAdmin && ADMIN_ONLY_VIEWS.includes(view.name)) setView({ name: "home" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, profile, view.name]);
 
   if (loading) {
     return (
@@ -92,7 +135,14 @@ function AppShell() {
       <div className="noise-layer" aria-hidden />
       <Header view={view} onNav={setView} />
       <main className="flex-1">
-        {view.name === "landing" && <Landing onStart={(subject) => setView({ name: "onboarding", subject })} onLogin={() => setView({ name: "auth" })} />}
+        {view.name === "landing" && (
+          <Landing
+            onStart={(subject) => setView({ name: "onboarding", subject })}
+            onLogin={() => setView({ name: "auth" })}
+            scrollTo={view.section}
+            scrollNonce={view.nonce}
+          />
+        )}
 
         {view.name === "auth" && (
           <AuthScreen onSuccess={() => setView({ name: "home" })} />
@@ -145,6 +195,7 @@ function AppShell() {
         )}
 
         {view.name === "session-summary" && <SessionSummary onNav={setView} />}
+        {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
       <Footer onNav={setView} />
     </div>
