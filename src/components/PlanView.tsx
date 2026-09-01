@@ -12,6 +12,13 @@ const SUBJECT_DATIVE: Record<Subject, string> = {
   inf: "информатике",
   fiz: "физике",
   soc: "обществознанию",
+  bio: "биологии",
+  eng: "английскому языку",
+  geo: "географии",
+  chem: "химии",
+  hist: "истории",
+  lit: "литературе",
+  math_base: "математике (базовый уровень)",
 };
 
 export default function PlanView({ subject, onStartTraining, onSkipToBank }: { subject: Subject; onStartTraining: (taskId: string) => void; onSkipToBank: () => void }) {

@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { SUBJECTS, TASKS, TOTAL_POINTS, taskById, type Subject } from "../data/tasks";
+import { useEffect, useState } from "react";
+import { SUBJECTS, taskById, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
+import { getGlobalPointsTotal, getGlobalTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import { Icon, Reveal } from "./ui";
@@ -10,10 +11,17 @@ import { Icon, Reveal } from "./ui";
 /* ─────────── Тетрадь ошибок ─────────── */
 export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
   const { state, derived, clearTask } = useProgress();
+  useTasksVersion();
+  // после перезагрузки страницы TASKS снова пуст — задания из ошибок надо точечно догрузить по id
+  // (их предметы могли не открываться в этой сессии), см. lib/dbTasks.ts
+  useEffect(() => {
+    hydrateTasksByIds([...derived.mistakeIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derived.mistakeIds]);
   const mistakes = [...derived.mistakeIds].map((id) => taskById(id)!).filter(Boolean);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-20">
+    <div className="mx-auto max-w-[1600px] px-4 pb-20">
       <div className="mt-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-red">работа над ошибками</p>
@@ -104,23 +112,31 @@ export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
 /* ─────────── Статистика ─────────── */
 export function StatsView({ onNav }: { onNav: (v: View) => void }) {
   const { derived, resetAll } = useProgress();
+  useTasksVersion();
   const { isGuestMode } = useAuth();
   const [confirming, setConfirming] = useState(false);
   const atts = derived.attempts;
   const hours = Math.floor(derived.totalTimeSec / 3600);
   const mins = Math.floor((derived.totalTimeSec % 3600) / 60);
 
+  // «последние попытки» ссылаются на задания по id — после перезагрузки страницы их может не быть
+  // в TASKS, если предмет не открывался в этой сессии; догружаем точечно (см. lib/dbTasks.ts)
+  useEffect(() => {
+    hydrateTasksByIds(derived.recent.map((a) => a.taskId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derived.recent]);
+
   const summary = [
     { label: "Попыток всего", value: String(atts.length), icon: "list" },
     { label: "Точность", value: `${Math.round(derived.accuracy * 100)}%`, icon: "target" },
-    { label: "Первичные баллы", value: `${derived.earnedPoints}/${TOTAL_POINTS}`, icon: "star" },
+    { label: "Первичные баллы", value: `${derived.earnedPoints}/${getGlobalPointsTotal()}`, icon: "star" },
     { label: "Время за решением", value: hours ? `${hours} ч ${mins} м` : `${mins} мин`, icon: "timer" },
     { label: "Серия дней", value: String(derived.streak), icon: "flame" },
-    { label: "Заданий решено", value: `${derived.solvedIds.size}/${TASKS.length}`, icon: "check" },
+    { label: "Заданий решено", value: `${derived.solvedIds.size}/${getGlobalTaskTotal()}`, icon: "check" },
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-20">
+    <div className="mx-auto max-w-[1600px] px-4 pb-20">
       <div className="mt-8">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">личный протокол</p>
         <h1 className="font-display mt-1 text-3xl font-black sm:text-4xl">Статистика</h1>
@@ -139,7 +155,7 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
         ))}
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
         {/* по предметам */}
         <Reveal>
           <div className="sheet p-6">
@@ -240,8 +256,8 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
 /* ─────────── Полная страница репетитора ─────────── */
 export function TutorView({ onNav }: { onNav: (v: View) => void }) {
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-20">
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+    <div className="mx-auto max-w-[1600px] px-4 pb-20">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.2fr]">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">кабинет репетитора</p>
           <h1 className="font-display mt-1 text-3xl font-black leading-tight sm:text-4xl">

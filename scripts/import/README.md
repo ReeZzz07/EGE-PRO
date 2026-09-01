@@ -78,11 +78,19 @@ node scripts/import/solve-tasks.mjs --concurrency=6
 - `--subjects=biologiya,fizika` — ограничить предметами.
 - `--concurrency=N` — параллельность (по умолчанию 4).
 
-## Что дальше (после решения) — не входит в этот скрипт
+## Публикация в Supabase
 
-1. Задания с `needs_review: true` (расхождение решений, ошибки, критерии сочинений,
-   444 задания информатики с zip/txt-датасетами) — ручная проверка методиста обязательна.
-2. Отдельный шаг **публикации**: перенос `tasks.jsonl` + `tasks.answered.jsonl` + файлов из
-   `assets/` в таблицы Supabase (`tasks`, `task_media`, `task_answers`/`task_criteria`) и
-   Supabase Storage — этот шаг ещё не написан, разумно делать его после того, как решённые
-   данные пройдут проверку и станет ясно, сколько заданий реально дошло до публикации.
+```bash
+node scripts/import/publish-to-supabase.mjs --subject=biologiya --db-subject=bio \
+  --admin-email=... --admin-password=...
+```
+
+Переносит `tasks.jsonl` + `tasks.answered.jsonl` + картинки из `assets/` в таблицы Supabase
+(`public.tasks`, `public.task_media`) и Storage-бакет `task-media`. Идемпотентно (upsert по
+`id`) — можно перезапускать. Задания с `needs_review: true` (расхождение решений, ошибки,
+критерии сочинений) публикуются с флагом `published: false` — их не видят ученики, только
+админ в разделе «Задания на проверке» (`/admin` → вкладка «Задания на проверке»), где можно
+поправить текст/ответ/картинки и опубликовать. Флаги:
+
+- `--limit=N` — тестовый прогон на N заданий.
+- `--skip-media` / `--only-media` — раздельные прогоны текста и картинок (полезно при сетевых сбоях на загрузке).

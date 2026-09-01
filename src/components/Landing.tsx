@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { SUBJECTS, TASKS, TOTAL_POINTS, taskById, tasksOf, type Subject } from "../data/tasks";
+import { SUBJECTS, type Subject } from "../data/tasks";
 import { DEFAULT_CONTENT, loadLandingContent, type LandingContent } from "../lib/content";
+import { getEssayTaskTotal, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectTotal, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal, Stamp } from "./ui";
 
 const TICKER = [
@@ -50,11 +51,21 @@ export default function Landing({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollTo, scrollNonce]);
 
-  const essayCount = TASKS.filter((t) => t.answerType === "essay").length;
-  const preview = taskById("m3")!;
+  useTasksVersion();
+
+  // Иллюстративный образец для лендинга — не тянем из банка (гость видит эту страницу до того,
+  // как банк вообще подгрузился), поэтому просто фиксированный пример «как выглядит задание».
+  const preview = {
+    subject: "math" as Subject,
+    fipiId: "99566",
+    topic: "Логарифмические уравнения",
+    statement: "Найдите корень уравнения:  log₂(x − 3) = 4",
+    answer: "19",
+    points: 1,
+  };
 
   return (
-    <div className="mx-auto max-w-6xl px-4">
+    <div className="mx-auto max-w-[1600px] px-4">
       {/* ─── Блок 1: первый экран ─── */}
       <div className="mt-6 flex items-center justify-between">
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.3em] text-blue">● новый ученик</span>
@@ -93,10 +104,10 @@ export default function Landing({
             {/* цифры банка заданий — конкретика вместо общих слов */}
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 border-t-2 border-dashed border-ink/20 pt-5">
               {[
-                [String(TASKS.length), "заданий в банке"],
+                [String(getGlobalTaskTotal()), "заданий в банке"],
                 [String(Object.keys(SUBJECTS).length), "предметов"],
-                [String(TOTAL_POINTS), "первичных баллов"],
-                [String(essayCount), "заданий с развёрнутым ответом"],
+                [String(getGlobalPointsTotal()), "первичных баллов"],
+                [String(getEssayTaskTotal()), "заданий с развёрнутым ответом"],
               ].map(([v, l]) => (
                 <div key={l}>
                   <div className="font-display text-2xl font-black leading-none text-ink">{v}</div>
@@ -118,9 +129,9 @@ export default function Landing({
                 <span className="rounded-sm border border-ink/25 px-2.5 py-1 font-mono text-[12px] text-ink2">№ {preview.fipiId}</span>
               </div>
               <h3 className="font-display mt-4 text-xl font-bold leading-snug">{preview.topic}</h3>
-              <p className="mt-2.5 text-[15.5px] leading-relaxed text-ink/85">{preview.statement[0]}</p>
+              <p className="mt-2.5 text-[15.5px] leading-relaxed text-ink/85">{preview.statement}</p>
               <div className="mt-5 flex items-center gap-2.5">
-                <div className="input-blank flex-1 rounded-sm px-4 py-3 text-center font-mono text-xl font-bold">{preview.answers[0]}</div>
+                <div className="input-blank flex-1 rounded-sm px-4 py-3 text-center font-mono text-xl font-bold">{preview.answer}</div>
                 <span className="btn btn-blue px-4 py-3 text-sm">
                   <Icon name="check" size={18} />
                 </span>
@@ -151,7 +162,7 @@ export default function Landing({
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1</p>
           <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">С какого предмета начнём?</h2>
-          <p className="mt-1.5 max-w-xl text-[13.5px] text-ink2">Скоро добавим остальные предметы. Начни с любого из пяти — дальше сможешь тренировать все.</p>
+          <p className="mt-1.5 max-w-xl text-[13.5px] text-ink2">Скоро добавим остальные предметы. Начни с любого из {Object.keys(SUBJECTS).length} — дальше сможешь тренировать все.</p>
         </Reveal>
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.values(SUBJECTS).map((s, i) => (
@@ -162,7 +173,7 @@ export default function Landing({
                   <span className="block truncate text-[14px] font-bold">{s.name}</span>
                   <span className="block truncate text-[12px] text-ink2">{s.desc}</span>
                 </span>
-                <span className="shrink-0 font-mono text-[11px] text-ink2">{tasksOf(s.id).length} заданий</span>
+                <span className="shrink-0 font-mono text-[11px] text-ink2">{getSubjectTotal(s.id)} заданий</span>
                 <Icon name="arrowR" size={16} className="shrink-0 text-ink2 transition group-hover:translate-x-0.5 group-hover:text-ink" />
               </button>
             </Reveal>

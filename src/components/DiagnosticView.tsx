@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { checkAnswer } from "../lib/utils";
 import { pickDiagnosticTasks, scoreDiagnostic, LEVEL_LABEL, type DiagnosticAnswer, type DiagnosticResult } from "../lib/diagnostic";
 import { saveDiagnosticResult, mirrorDiagnosticToSupabase } from "../lib/planStorage";
 import { useAuth } from "../lib/auth";
+import { hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal } from "./ui";
 
 type Phase = "setup" | "running" | "result";
@@ -11,13 +12,20 @@ type Phase = "setup" | "running" | "result";
 export default function DiagnosticView({ subject, onFinish, onSkip }: { subject: Subject; onFinish: (result: DiagnosticResult) => void; onSkip: () => void }) {
   const meta = SUBJECTS[subject];
   const { profile, isGuestMode } = useAuth();
+  const tasksVersion = useTasksVersion();
   const [phase, setPhase] = useState<Phase>("setup");
   const [count, setCount] = useState(10);
   const [idx, setIdx] = useState(0);
   const [value, setValue] = useState("");
   const [answers, setAnswers] = useState<DiagnosticAnswer[]>([]);
 
-  const tasks = useMemo(() => pickDiagnosticTasks(subject, count), [subject, count]);
+  useEffect(() => {
+    hydrateSubjectTasks(subject);
+  }, [subject]);
+  const loadingBank = isSubjectLoading(subject);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tasks = useMemo(() => pickDiagnosticTasks(subject, count), [subject, count, tasksVersion]);
   const task = tasks[idx];
 
   const result = useMemo(() => (phase === "result" ? scoreDiagnostic(subject, answers) : null), [phase, subject, answers]);
@@ -57,11 +65,17 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
             Это не экзамен. Ошибаться нормально. Так мы поймём, что нужно повторить в первую очередь. Если не знаешь ответ — просто пропусти,
             это тоже поможет точнее определить слабые места. Подсказок здесь нет — иначе результат будет неточным.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button onClick={() => start(10)} className="btn btn-blue px-6 py-3 text-sm">Начать диагностику <Icon name="arrowR" size={16} /></button>
-            <button onClick={() => start(5)} className="btn btn-ghost px-5 py-3 text-sm">Короче — 5 заданий</button>
-            <button onClick={onSkip} className="btn btn-ghost px-5 py-3 text-sm">Пройти позже</button>
-          </div>
+          {loadingBank ? (
+            <p className="mt-4 flex items-center gap-2 text-sm text-ink2">
+              <Icon name="refresh" size={16} className="animate-spin" /> Загружаем банк по предмету…
+            </p>
+          ) : (
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button onClick={() => start(10)} className="btn btn-blue px-6 py-3 text-sm">Начать диагностику <Icon name="arrowR" size={16} /></button>
+              <button onClick={() => start(5)} className="btn btn-ghost px-5 py-3 text-sm">Короче — 5 заданий</button>
+              <button onClick={onSkip} className="btn btn-ghost px-5 py-3 text-sm">Пройти позже</button>
+            </div>
+          )}
         </Reveal>
       </div>
     );

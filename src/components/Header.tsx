@@ -5,10 +5,10 @@ import { Icon } from "./ui";
 
 export type View =
   | { name: "landing"; section?: string; nonce?: number }
-  | { name: "auth" }
+  | { name: "auth"; mode?: "signup" | "login" }
   | { name: "onboarding"; subject?: Subject }
   | { name: "home" }
-  | { name: "bank" }
+  | { name: "bank"; subject?: Subject }
   | { name: "tutor" }
   | { name: "mistakes" }
   | { name: "stats" }
@@ -51,7 +51,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
   const active = view.name === "task" ? "bank" : view.name;
   return (
     <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
+      <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
         <button onClick={() => onNav({ name: "home" })} className="group flex shrink-0 items-center gap-2.5" aria-label="На главную">
           <span className="flex h-9 w-9 items-center justify-center border-2 border-ink bg-ink text-hl transition group-hover:bg-blue group-hover:border-blue">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -60,11 +60,11 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           </span>
           <span className="hidden flex-col items-start leading-none lg:flex">
             <span className="font-display text-[15px] font-black tracking-tight">ЕГЭ·ПРО</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-ink2">тренажёр + репетитор</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-[0.22em] text-ink2 xl:block">тренажёр + репетитор</span>
           </span>
         </button>
 
-        <nav className="no-scrollbar ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-clip sm:gap-1 lg:justify-start lg:gap-1.5">
+        <nav className="no-scrollbar ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden sm:gap-1 lg:justify-start lg:gap-1">
           {profile
             ? (profile.isAdmin ? [...NAV, { id: "admin", label: "Админка", icon: "sigma" }] : NAV).map((n) => {
                 const isActive = active === n.id;
@@ -74,12 +74,12 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                     onClick={() => onNav({ name: n.id } as View)}
                     title={n.label}
                     aria-label={n.label}
-                    className={`relative flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold transition-colors sm:px-2 lg:px-2.5 lg:text-[13px] ${
+                    className={`relative flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold transition-colors sm:px-2 lg:px-1.5 lg:text-[13px] ${
                       isActive ? "text-blue" : "text-ink2 hover:bg-ink/5 hover:text-ink"
                     }`}
                   >
                     <Icon name={n.icon} size={15} />
-                    <span className="hidden whitespace-nowrap xl:inline">{n.label}</span>
+                    <span className="hidden whitespace-nowrap lg:inline">{n.label}</span>
                     {n.id === "mistakes" && derived.mistakeIds.size > 0 && (
                       <span className="rounded-sm bg-red px-1 py-px font-mono text-[10px] font-bold leading-none text-white">
                         {derived.mistakeIds.size}
@@ -95,10 +95,10 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                   onClick={() => onNav(landingSection(n.section))}
                   title={n.label}
                   aria-label={n.label}
-                  className="flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold text-ink2 transition-colors hover:bg-ink/5 hover:text-ink sm:px-2 lg:px-2.5 lg:text-[13px]"
+                  className="flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold text-ink2 transition-colors hover:bg-ink/5 hover:text-ink sm:px-2 lg:px-1.5 lg:text-[13px]"
                 >
                   <Icon name={n.icon} size={15} />
-                  <span className="hidden whitespace-nowrap xl:inline">{n.label}</span>
+                  <span className="hidden whitespace-nowrap lg:inline">{n.label}</span>
                 </button>
               ))}
         </nav>
@@ -107,7 +107,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           {profile && (
             <>
               <span
-                className={`hidden items-center gap-1 rounded-sm border-2 px-1.5 py-1 font-mono text-[11px] font-bold sm:flex lg:px-2 ${
+                className={`hidden items-center gap-1 rounded-sm border-2 px-1.5 py-1 font-mono text-[11px] font-bold sm:flex lg:hidden lg:px-2 xl:flex ${
                   derived.streak > 0 ? "border-amber text-amber" : "border-line text-ink2"
                 }`}
                 title="Серия дней с верными решениями"
@@ -123,12 +123,12 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           )}
           {profile ? (
             <button onClick={() => { signOut(); onNav({ name: "landing" }); }} title="Выйти" className="flex items-center gap-1.5 rounded-sm border-2 border-ink/20 px-1.5 py-1 text-[11px] font-bold text-ink2 hover:border-ink hover:text-ink sm:px-2">
-              <span className="hidden max-w-[80px] truncate sm:inline">{profile.name || profile.email}</span>
+              <span className="hidden max-w-[80px] truncate sm:inline lg:hidden xl:inline">{profile.name || profile.email}</span>
               <Icon name="x" size={12} />
             </button>
           ) : (
-            <button onClick={() => onNav({ name: "auth" })} className="btn btn-ink px-2.5 py-1.5 text-[11px] sm:px-3">
-              Войти
+            <button onClick={() => onNav({ name: "auth", mode: "signup" })} className="btn btn-ink px-2.5 py-1.5 text-[11px] sm:px-3">
+              Регистрация
             </button>
           )}
         </div>

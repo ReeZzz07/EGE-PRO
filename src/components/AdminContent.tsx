@@ -4,6 +4,9 @@ import { isSupabaseConfigured } from "../lib/supabase";
 import { DEFAULT_CONTENT, ICON_OPTIONS, loadLandingContent, saveLandingBlock, type CapabilityItem, type FaqItem, type HeroContent, type ProcessItem } from "../lib/content";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
+import AdminTaskReview from "./AdminTaskReview";
+import AdminAiSettings from "./AdminAiSettings";
+import AdminTaskImport from "./AdminTaskImport";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -62,6 +65,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(DEFAULT_CONTENT.capabilities);
@@ -111,7 +115,54 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         </p>
       )}
 
+      <div className="mt-6 flex gap-2 border-b-2 border-ink/15 pb-px">
+        <button
+          onClick={() => setTab("content")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "content" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Контент лендинга
+        </button>
+        <button
+          onClick={() => setTab("tasks")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "tasks" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Задания на проверке
+        </button>
+        <button
+          onClick={() => setTab("import")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "import" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Импорт
+        </button>
+        <button
+          onClick={() => setTab("ai")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "ai" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          ИИ-репетитор
+        </button>
+      </div>
+
+      {tab === "tasks" && (
+        <div className="mt-6">
+          <AdminTaskReview />
+        </div>
+      )}
+
+      {tab === "import" && (
+        <div className="mt-6">
+          <AdminTaskImport />
+        </div>
+      )}
+
+      {tab === "ai" && (
+        <div className="mt-6">
+          <AdminAiSettings />
+        </div>
+      )}
+
       {/* ── hero ── */}
+      {tab === "content" && (
+      <>
       <div className="mt-6">
         <SectionShell
           title="Первый экран"
@@ -215,6 +266,8 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
           </button>
         </SectionShell>
       </div>
+      </>
+      )}
     </div>
   );
 }

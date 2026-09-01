@@ -3,9 +3,17 @@ import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { Icon } from "./ui";
 
-export default function AuthScreen({ compact = false, onSuccess }: { compact?: boolean; onSuccess: () => void }) {
+export default function AuthScreen({
+  compact = false,
+  onSuccess,
+  initialMode = "signup",
+}: {
+  compact?: boolean;
+  onSuccess: () => void;
+  initialMode?: "signup" | "login";
+}) {
   const { signUp, signIn, isGuestMode } = useAuth();
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [mode, setMode] = useState<"signup" | "login">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

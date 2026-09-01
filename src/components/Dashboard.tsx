@@ -1,9 +1,10 @@
-import { SUBJECTS, TASKS, TOTAL_POINTS, tasksOf, type Subject } from "../data/tasks";
+import { SUBJECTS, TASKS, tasksOf, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { loadStudyPlan } from "../lib/planStorage";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
+import { getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal } from "./ui";
 
@@ -22,20 +23,39 @@ function examTarget(): { date: Date; year: number } {
 
 export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
+  useTasksVersion();
   const { profile } = useAuth();
-  const plan = profile?.primarySubject ? loadStudyPlan(profile.primarySubject) : null;
+  const primarySubject = profile?.primarySubject;
+  const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
   const exam = useMemo(examTarget, []);
   const cd = useCountdown(exam.date);
   const title = useScramble(`ЕГЭ·${exam.year}`);
-  const total = TASKS.length;
-  const solved = derived.solvedIds.size;
+
+  // «задание дня» и «личный зачёт» показываются в рамках выбранного предмета пользователя —
+  // догружаем его банк в фоне, если он ещё не открывался в этой сессии (см. lib/dbTasks.ts).
+  useEffect(() => {
+    if (primarySubject) hydrateSubjectTasks(primarySubject);
+  }, [primarySubject]);
+
+  const subjStats = primarySubject ? derived.perSubject[primarySubject] : null;
+  const total = subjStats ? subjStats.total : TASKS.length;
+  const solved = subjStats ? subjStats.solved : derived.solvedIds.size;
   const progress = total ? solved / total : 0;
 
-  const todayTask = TASKS[dayIndex(total)];
+  const subjectPool = primarySubject ? tasksOf(primarySubject) : TASKS;
+  const todayTask = subjectPool.length ? subjectPool[dayIndex(subjectPool.length)] : undefined;
+  const todayTaskLoading = !todayTask && !!primarySubject && isSubjectLoading(primarySubject);
   const mistakes = [...derived.mistakeIds].slice(0, 3);
 
+  // превью «на реванш» ссылается на задания по id — после перезагрузки страницы их может не быть
+  // в TASKS, если предмет не открывался в этой сессии; догружаем точечно (см. lib/dbTasks.ts)
+  useEffect(() => {
+    if (mistakes.length) hydrateTasksByIds(mistakes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derived.mistakeIds]);
+
   return (
-    <div className="mx-auto max-w-6xl px-4">
+    <div className="mx-auto max-w-[1600px] px-4">
       {/* ─── БЛАНК № 1 ─── */}
       <section className="sheet sheet-holes gridpaper relative mt-6 overflow-hidden">
         <div className="absolute right-5 top-5 hidden text-ink/70 sm:block" aria-hidden>
@@ -50,7 +70,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
           </svg>
         </div>
 
-        <div className="grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.5fr_1fr] lg:items-center">
+        <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-[1.5fr_1fr] lg:items-center">
           <div>
             <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em] text-red">
               ● допуск подтверждён · основной период
@@ -112,7 +132,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               <div className="grid flex-1 gap-2.5">
                 <div className="flex items-baseline justify-between border-b border-dashed border-ink/25 pb-1">
                   <span className="text-[12px] font-semibold text-ink2">Первичные баллы</span>
-                  <span className="font-mono text-lg font-extrabold text-blue">{derived.earnedPoints}<span className="text-[11px] text-ink2">/{TOTAL_POINTS}</span></span>
+                  <span className="font-mono text-lg font-extrabold text-blue">{derived.earnedPoints}<span className="text-[11px] text-ink2">/{getGlobalPointsTotal()}</span></span>
                 </div>
                 <div className="flex items-baseline justify-between border-b border-dashed border-ink/25 pb-1">
                   <span className="text-[12px] font-semibold text-ink2">Серия дней</span>
@@ -129,7 +149,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
                 const st = derived.perSubject[s];
                 const pct = st.total ? st.solved / st.total : 0;
                 return (
-                  <button key={s} onClick={() => onNav({ name: "bank" })} className="group flex w-full items-center gap-2.5 text-left">
+                  <button key={s} onClick={() => onNav({ name: "bank", subject: s })} className="group flex w-full items-center gap-2.5 text-left">
                     <span className={`font-mono text-[10px] font-bold ${SUBJECTS[s].color}`}>{SUBJECTS[s].short}</span>
                     <span className="h-2 flex-1 overflow-hidden rounded-full bg-ink/10">
                       <span className={`block h-full rounded-full ${SUBJECTS[s].bg} transition-all duration-700`} style={{ width: `${pct * 100}%` }} />
@@ -194,7 +214,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Тренажёр по предметам</h2>
             </div>
             <button onClick={() => onNav({ name: "bank" })} className="link-slide hidden items-center gap-2 text-sm font-bold text-ink sm:flex">
-              все {TASKS.length} заданий <Icon name="arrowR" size={16} />
+              все {getGlobalTaskTotal()} заданий <Icon name="arrowR" size={16} />
             </button>
           </div>
         </Reveal>
@@ -207,12 +227,12 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
             return (
               <Reveal key={s.id} delay={idx * 70} className={cls}>
                 <button
-                  onClick={() => onNav({ name: "bank" })}
+                  onClick={() => onNav({ name: "bank", subject: s.id })}
                   className="sheet card-lift group flex h-full w-full flex-col p-5 text-left"
                 >
                   <div className="flex items-start justify-between">
                     <span className={`font-display inline-block border-2 border-ink px-2 py-0.5 text-[11px] font-black ${s.color}`}>{s.short}</span>
-                    <span className="font-mono text-[11px] text-ink2">{st.points} из {tasksOf(s.id).reduce((a, t) => a + t.points, 0)} п.б.</span>
+                    <span className="font-mono text-[11px] text-ink2">{st.points} из {getSubjectPointsTotal(s.id)} п.б.</span>
                   </div>
                   <h3 className="font-display mt-3 text-lg font-bold leading-tight">{s.name}</h3>
                   <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-ink2">{s.desc}</p>
@@ -248,25 +268,37 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
       </section>
 
       {/* ─── задание дня + ошибки ─── */}
-      <section className="mt-16 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <section className="mt-16 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Reveal>
           <div className="sheet sheet-margin h-full p-6 pl-14 sm:pl-16">
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-red">раздел 02 · задание дня</p>
-              <span className={`font-mono text-[11px] font-bold ${SUBJECTS[todayTask.subject].color}`}>№ {todayTask.fipiId}</span>
+              {todayTask && <span className={`font-mono text-[11px] font-bold ${SUBJECTS[todayTask.subject].color}`}>№ {todayTask.fipiId}</span>}
             </div>
-            <h3 className="font-display mt-3 text-xl font-bold leading-snug">{todayTask.topic}</h3>
-            <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-ink2">{todayTask.statement[0]}</p>
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] font-semibold text-ink2">
-              <span className="rounded-sm border border-ink/20 px-2 py-0.5">{SUBJECTS[todayTask.subject].name}</span>
-              <span className="rounded-sm border border-ink/20 px-2 py-0.5">{todayTask.points} первичный {plural(todayTask.points, "балл", "балла", "баллов")}</span>
-              <span className="rounded-sm border border-ink/20 px-2 py-0.5">{derived.solvedIds.has(todayTask.id) ? "уже решено ✓" : "ещё не решено"}</span>
-            </div>
-            <div className="mt-5">
-              <button onClick={() => onNav({ name: "task", id: todayTask.id })} className="btn btn-ink px-5 py-2.5 text-sm">
-                Решать <Icon name="arrowR" size={16} />
-              </button>
-            </div>
+            {todayTask ? (
+              <>
+                <h3 className="font-display mt-3 text-xl font-bold leading-snug">{todayTask.topic}</h3>
+                <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-ink2">{todayTask.statement[0]}</p>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] font-semibold text-ink2">
+                  <span className="rounded-sm border border-ink/20 px-2 py-0.5">{SUBJECTS[todayTask.subject].name}</span>
+                  <span className="rounded-sm border border-ink/20 px-2 py-0.5">{todayTask.points} первичный {plural(todayTask.points, "балл", "балла", "баллов")}</span>
+                  <span className="rounded-sm border border-ink/20 px-2 py-0.5">{derived.solvedIds.has(todayTask.id) ? "уже решено ✓" : "ещё не решено"}</span>
+                </div>
+                <div className="mt-5">
+                  <button onClick={() => onNav({ name: "task", id: todayTask.id })} className="btn btn-ink px-5 py-2.5 text-sm">
+                    Решать <Icon name="arrowR" size={16} />
+                  </button>
+                </div>
+              </>
+            ) : todayTaskLoading ? (
+              <p className="mt-4 flex items-center gap-2 text-sm text-ink2">
+                <Icon name="refresh" size={16} className="animate-spin" /> Загружаем банк по твоему предмету…
+              </p>
+            ) : (
+              <p className="mt-4 text-sm text-ink2">
+                {primarySubject ? "Пока нет заданий по этому предмету — загляни в банк заданий." : "Пройди онбординг, чтобы выбрать предмет — тогда здесь появится задание дня."}
+              </p>
+            )}
           </div>
         </Reveal>
 
@@ -284,12 +316,13 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
                   <Icon name="check" size={26} />
                 </span>
                 <p className="font-display mt-3 text-sm font-bold">Ошибок нет</p>
-                <p className="mt-1 max-w-[220px] text-[12px] leading-relaxed text-ink2">Идеально чисто. Загляни в банк — там {TOTAL_POINTS - derived.earnedPoints} первичных баллов ждут тебя.</p>
+                <p className="mt-1 max-w-[220px] text-[12px] leading-relaxed text-ink2">Идеально чисто. Загляни в банк — там {getGlobalPointsTotal() - derived.earnedPoints} первичных баллов ждут тебя.</p>
               </div>
             ) : (
               <ul className="mt-4 space-y-2.5">
                 {mistakes.map((id) => {
-                  const t = TASKS.find((x) => x.id === id)!;
+                  const t = TASKS.find((x) => x.id === id);
+                  if (!t) return null;
                   return (
                     <li key={id}>
                       <button
