@@ -7,6 +7,7 @@ import type { View } from "./Header";
 import AdminTaskReview from "./AdminTaskReview";
 import AdminAiSettings from "./AdminAiSettings";
 import AdminTaskImport from "./AdminTaskImport";
+import AdminTariffs from "./AdminTariffs";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -65,7 +66,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "tariffs">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(DEFAULT_CONTENT.capabilities);
@@ -140,6 +141,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         >
           ИИ-репетитор
         </button>
+        <button
+          onClick={() => setTab("tariffs")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "tariffs" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Тарифы
+        </button>
       </div>
 
       {tab === "tasks" && (
@@ -157,6 +164,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       {tab === "ai" && (
         <div className="mt-6">
           <AdminAiSettings />
+        </div>
+      )}
+
+      {tab === "tariffs" && (
+        <div className="mt-6">
+          <AdminTariffs />
         </div>
       )}
 

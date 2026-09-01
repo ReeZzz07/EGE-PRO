@@ -17,6 +17,7 @@ export type View =
   | { name: "plan" }
   | { name: "mock-exam" }
   | { name: "session-summary" }
+  | { name: "tariffs" }
   | { name: "admin" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
@@ -36,13 +37,15 @@ const NAV: { id: string; label: string; icon: string }[] = [
   { id: "tutor", label: "ИИ-репетитор", icon: "chat" },
   { id: "mistakes", label: "Ошибки", icon: "alert" },
   { id: "stats", label: "Статистика", icon: "chart" },
+  { id: "tariffs", label: "Тариф", icon: "spark" },
 ];
 
-const GUEST_NAV: { section?: string; label: string; icon: string }[] = [
+const GUEST_NAV: { section?: string; view?: View; label: string; icon: string }[] = [
   { label: "Главная", icon: "home" },
   { section: "subjects", label: "Предметы", icon: "list" },
   { section: "features", label: "Возможности", icon: "chat" },
   { section: "principle", label: "Принцип", icon: "target" },
+  { view: { name: "tariffs" }, label: "Тарифы", icon: "spark" },
 ];
 
 export default function Header({ view, onNav }: { view: View; onNav: (v: View) => void }) {
@@ -92,7 +95,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
             : GUEST_NAV.map((n) => (
                 <button
                   key={n.label}
-                  onClick={() => onNav(landingSection(n.section))}
+                  onClick={() => onNav(n.view ?? landingSection(n.section))}
                   title={n.label}
                   aria-label={n.label}
                   className="flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold text-ink2 transition-colors hover:bg-ink/5 hover:text-ink sm:px-2 lg:px-1.5 lg:text-[13px]"

@@ -19,6 +19,9 @@ export interface Profile {
   onboardedAt?: number;
   /** доступ к админке управления контентом лендинга (раздел 2.4 ТЗ, узкий срез) */
   isAdmin?: boolean;
+  /** id тарифа из public.tariffs; по умолчанию "free". Администраторы тариф игнорируют — им
+   *  всегда доступно всё, независимо от того, что здесь записано (см. isAdmin). */
+  tariffId?: string;
 }
 
 interface AuthResult {
@@ -88,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           primarySubject: data.primary_subject ?? undefined,
           onboardedAt: data.onboarded_at ? new Date(data.onboarded_at).getTime() : undefined,
           isAdmin: data.is_admin ?? false,
+          tariffId: data.tariff_id ?? "free",
         });
       } else {
         setProfile({ id: userId, name: fallbackName, email: fallbackEmail });
@@ -166,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           daily_minutes: patch.dailyMinutes,
           primary_subject: patch.primarySubject,
           onboarded_at: patch.onboardedAt ? new Date(patch.onboardedAt).toISOString() : undefined,
+          tariff_id: patch.tariffId,
         })
         .eq("id", profile.id);
     }

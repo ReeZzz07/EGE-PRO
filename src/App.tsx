@@ -16,6 +16,7 @@ import DiagnosticView from "./components/DiagnosticView";
 import PlanView from "./components/PlanView";
 import MockExam from "./components/MockExam";
 import SessionSummary from "./components/SessionSummary";
+import Tariffs from "./components/Tariffs";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
@@ -239,6 +240,7 @@ function AppShell() {
         )}
 
         {view.name === "session-summary" && <SessionSummary onNav={setView} />}
+        {view.name === "tariffs" && <Tariffs onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
       <Footer onNav={setView} />

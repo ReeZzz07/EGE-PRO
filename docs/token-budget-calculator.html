@@ -1,0 +1,776 @@
+<title>Смета токенов</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #EEF1F5;
+    --surface: #FFFFFF;
+    --surface-2: #F5F7FA;
+    --ink: #161922;
+    --ink-soft: #5B6272;
+    --ink-faint: #8A90A0;
+    --accent: #B5651D;
+    --accent-ink: #7A4413;
+    --accent-soft: #F1E1C9;
+    --line: #D9DEE6;
+    --line-strong: #C3CAD6;
+    --good: #1F7A5C;
+    --good-soft: #DCEFE7;
+    --warn: #B5651D;
+    --warn-soft: #F1E1C9;
+    --critical: #B23A34;
+    --critical-soft: #F6DEDC;
+    --shadow: 0 1px 2px rgba(22,25,34,0.04), 0 8px 24px -12px rgba(22,25,34,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12141B;
+      --surface: #1B1E28;
+      --surface-2: #20232F;
+      --ink: #ECEEF3;
+      --ink-soft: #9AA1B0;
+      --ink-faint: #6E7482;
+      --accent: #E0995A;
+      --accent-ink: #F4C797;
+      --accent-soft: #3A2B18;
+      --line: #2A2E39;
+      --line-strong: #383D4B;
+      --good: #4FBF93;
+      --good-soft: #16302A;
+      --warn: #E0995A;
+      --warn-soft: #3A2B18;
+      --critical: #E77268;
+      --critical-soft: #3A1E1D;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12141B;
+    --surface: #1B1E28;
+    --surface-2: #20232F;
+    --ink: #ECEEF3;
+    --ink-soft: #9AA1B0;
+    --ink-faint: #6E7482;
+    --accent: #E0995A;
+    --accent-ink: #F4C797;
+    --accent-soft: #3A2B18;
+    --line: #2A2E39;
+    --line-strong: #383D4B;
+    --good: #4FBF93;
+    --good-soft: #16302A;
+    --warn: #E0995A;
+    --warn-soft: #3A2B18;
+    --critical: #E77268;
+    --critical-soft: #3A1E1D;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  ::selection { background: var(--accent-soft); color: var(--accent-ink); }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 96px; }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; margin-bottom: 6px; }
+  .eyebrow { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+  h1 {
+    font-family: "Big Shoulders Display", ui-sans-serif, sans-serif;
+    font-weight: 800;
+    font-size: clamp(34px, 5.2vw, 52px);
+    letter-spacing: 0.005em;
+    line-height: 0.98;
+    margin: 4px 0 0;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .dek { max-width: 62ch; color: var(--ink-soft); font-size: 15.5px; margin: 14px 0 0; }
+  .dek strong { color: var(--ink); font-weight: 600; }
+
+  hr.rule { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
+  hr.rule.strong { border-top: 2px solid var(--ink); opacity: 0.9; }
+
+  /* ---------- finding callout ---------- */
+  .finding {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--good);
+    border-radius: 3px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    margin: 22px 0 8px;
+  }
+  .finding .mark {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--good);
+    background: var(--good-soft);
+    border-radius: 3px;
+    padding: 3px 7px;
+    height: fit-content;
+    white-space: nowrap;
+  }
+  .finding h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 700; }
+  .finding p { margin: 0; color: var(--ink-soft); font-size: 13.8px; }
+  .finding code { font-family: "IBM Plex Mono", monospace; font-size: 0.92em; background: var(--surface-2); padding: 0.1em 0.4em; border-radius: 2px; }
+
+  /* ---------- module card ---------- */
+  .module { margin-top: 40px; }
+  .module-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .module-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+  .module h2 { font-family: "Big Shoulders Display", sans-serif; font-weight: 700; font-size: 26px; margin: 2px 0 0; letter-spacing: 0.005em; }
+  .module > .note { color: var(--ink-soft); font-size: 13.8px; max-width: 68ch; margin: 8px 0 0; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 3px; box-shadow: var(--shadow); }
+  .card-pad { padding: 22px 24px; }
+
+  /* ---------- inputs grid ---------- */
+  .inputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px 28px; }
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+  .field .hint { font-size: 11.5px; color: var(--ink-faint); margin-top: -3px; }
+  .field .row { display: flex; align-items: center; gap: 10px; }
+  .field input[type="range"] {
+    flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
+    background: var(--line-strong); border-radius: 2px; outline: none;
+  }
+  .field input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+  }
+  .field input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--surface);
+    background: var(--accent); box-shadow: 0 0 0 1px var(--accent); cursor: pointer;
+  }
+  .field .val {
+    font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums;
+    font-size: 13.5px; font-weight: 600; color: var(--ink); min-width: 3.6em; text-align: right;
+  }
+  .field select, .field input[type="number"] {
+    font-family: "IBM Plex Mono", monospace; font-size: 13.5px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 3px;
+    padding: 8px 10px; outline: none; width: 100%;
+  }
+  .field select:focus, .field input[type="number"]:focus, .field input[type="range"]:focus-visible {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .price-row { display: flex; gap: 10px; align-items: center; }
+  .price-row .prefix { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-faint); }
+  .preset-btns { display: flex; gap: 6px; margin-top: 2px; }
+  .preset-btn {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500;
+    background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--ink-soft);
+    border-radius: 3px; padding: 5px 9px; cursor: pointer; transition: border-color .12s, color .12s;
+  }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .preset-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* ---------- meter summary ---------- */
+  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; box-shadow: var(--shadow); }
+  .meter { background: var(--surface); padding: 20px 22px; }
+  .meter .m-label { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.08em; }
+  .meter .m-value {
+    font-family: "Big Shoulders Display", sans-serif; font-weight: 700; font-variant-numeric: tabular-nums;
+    font-size: 34px; line-height: 1; margin-top: 8px; color: var(--ink);
+  }
+  .meter .m-value .unit { font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 500; color: var(--ink-faint); margin-left: 4px; }
+  .meter.accent .m-value { color: var(--accent-ink); }
+  .meter .m-sub { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; }
+
+  /* ---------- table ---------- */
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13.3px; }
+  thead th {
+    text-align: left; font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: 10.8px;
+    letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-faint);
+    padding: 0 16px 10px 0; border-bottom: 1px solid var(--line-strong);
+  }
+  thead th.num, tbody td.num { text-align: right; }
+  tbody td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td.num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+  .call-name { font-weight: 600; }
+  .call-name .sub { display: block; font-weight: 400; color: var(--ink-faint); font-size: 11.8px; margin-top: 2px; }
+  tfoot td { padding: 12px 16px 0 0; font-weight: 700; border-top: 2px solid var(--ink); }
+  tfoot td.num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  .chip { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 3px; }
+  .chip.good { background: var(--good-soft); color: var(--good); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.critical { background: var(--critical-soft); color: var(--critical); }
+
+  /* ---------- bar compare ---------- */
+  .bars { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+  .bar-row { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 12px; }
+  .bar-row .b-label { font-size: 13px; font-weight: 600; }
+  .bar-row .b-label .sub { display: block; font-weight: 400; font-size: 11px; color: var(--ink-faint); }
+  .bar-track { background: var(--surface-2); border-radius: 3px; height: 22px; overflow: hidden; border: 1px solid var(--line); }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width .3s ease; }
+  .bar-row .b-value { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+
+  /* ---------- breakdown chars ---------- */
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .stack-item { display: flex; justify-content: space-between; gap: 12px; font-size: 12.8px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .stack-item:last-child { border-bottom: none; }
+  .stack-item .k { color: var(--ink-soft); }
+  .stack-item .v { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+  /* ---------- tiers ---------- */
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .tier { background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
+  .tier.mid { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+  .tier .t-name { font-family: "Big Shoulders Display", sans-serif; font-weight: 700; font-size: 20px; }
+  .tier .t-desc { font-size: 12.5px; color: var(--ink-soft); min-height: 32px; }
+  .tier .t-cost { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-faint); }
+  .tier .t-cost b { font-family: "Big Shoulders Display", sans-serif; font-size: 24px; font-weight: 700; color: var(--ink); display: block; }
+  .tier .t-price { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .tier .t-price .p-label { font-size: 11px; color: var(--ink-faint); }
+  .tier .t-price .p-value { font-family: "Big Shoulders Display", sans-serif; font-size: 28px; font-weight: 800; color: var(--accent-ink); }
+  .tier .t-price .p-value .per { font-family: "IBM Plex Sans"; font-size: 13px; font-weight: 500; color: var(--ink-faint); }
+
+  .margin-row { display: flex; align-items: center; gap: 12px; margin: 18px 0 4px; flex-wrap: wrap; }
+  .margin-row label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+  .margin-row input[type="range"] { width: 200px; }
+
+  footer.foot { margin-top: 52px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-faint); }
+  footer.foot p { margin: 4px 0; max-width: 68ch; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar-fill { transition: none; }
+  }
+
+  @media (max-width: 620px) {
+    .bar-row { grid-template-columns: 1fr; gap: 6px; }
+    .bar-row .b-value { text-align: left; }
+    thead th:nth-child(3), tbody td:nth-child(3) { display: none; }
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">ЕГЭ·ПРО · оценка расхода ИИ-репетитора</div>
+      <h1>Смета токенов</h1>
+      <p class="dek">Сколько токенов и денег тратит <strong>один ученик на один предмет</strong> в месяц — по реальной механике запросов в коде, а не на глаз. Все допущения ниже редактируемые: подставьте свои и цифры внизу пересчитаются сами.</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <span class="mark">обновлено</span>
+    <div>
+      <h3>Изображения теперь передаются ИИ — но не все одинаково дорого</h3>
+      <p><code>dbSafeTaskById</code> и <code>docker/api/taskImages.js</code> собирают вложения задания в промпт при подсказке/объяснении/чате (не для проверки сочинения — там смотреть не на что). Ключевая находка по банку: <strong>54% всех вложений — не фотографии, а SVG-рендер формул сервисом Wiris</strong>, и в них прямо в комментарии лежит исходный MathML — мы вытаскиваем его как обычный текст, это в 15–20 раз дешевле, чем гонять vision ради картинки с тремя символами. Настоящие фотографии/графики/карты (растр — оставшиеся ~45%, почти все у биологии/географии/истории) идут через vision, если модель это умеет: у Claude — всегда, у Qwen — только у <code>qwen-vl-*</code>, а не у настроенного сейчас <code>qwen-max</code>. Доля картинок и их тип (формула/фото) сильно разнится по предметам — учтено ниже отдельно на каждый.</p>
+    </div>
+  </div>
+
+  <!-- ============ MODULE 1 — как считается один вызов ============ -->
+  <div class="module">
+    <div class="module-head">
+      <div>
+        <div class="module-label">01 · механика</div>
+        <h2>Из чего складывается один запрос</h2>
+      </div>
+    </div>
+    <p class="note">Каждый тип обращения — отдельный HTTP-вызов к модели (Anthropic Claude или Qwen — переключаются в админке). Системная инструкция (политика репетитора) отправляется <strong>целиком в каждом запросе</strong> — контекста не помнит ничего, кроме истории чата, которую передаёт клиент.</p>
+
+    <div class="card card-pad" style="margin-top:16px;">
+      <div class="inputs-grid">
+        <div class="field">
+          <label for="subjSel">Предмет — для длины условия задания</label>
+          <select id="subjSel"></select>
+          <div class="hint">Влияет только на длину текста условия, которое подставляется в промпт</div>
+        </div>
+        <div class="field">
+          <label for="ratioR">Символов на 1 токен (кириллица)</label>
+          <div class="row"><input type="range" id="ratioR" min="1.8" max="3.5" step="0.1" value="2.5"><span class="val" id="ratioV"></span></div>
+          <div class="hint">Русский текст токенизируется хуже английского — ориентир 2.2–2.8</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-top:16px;">
+      <div class="module-head" style="margin-bottom:14px;">
+        <div>
+          <div class="module-label" style="color:var(--accent);">теперь передаются ИИ</div>
+          <div style="font-size:14.5px;font-weight:700;">Иллюстрации к заданию</div>
+        </div>
+        <div id="subjMediaTag" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);"></div>
+      </div>
+      <div class="inputs-grid">
+        <div class="field">
+          <label class="row" style="cursor:pointer;">
+            <input type="checkbox" id="visionOnR" checked style="width:16px;height:16px;accent-color:var(--accent);">
+            Провайдер/модель умеет vision
+          </label>
+          <div class="hint">Claude — да, у всех текущих моделей. Qwen — только qwen-vl-*, обычный qwen-max нет (см. taskImages.js)</div>
+        </div>
+        <div class="field">
+          <label for="avgImagesR">Картинок на задание с медиа</label>
+          <div class="row"><input type="range" id="avgImagesR" min="1" max="3" step="0.1" value="1.49"><span class="val" id="avgImagesV"></span></div>
+          <div class="hint">Измерено: avg(count) по public.task_media</div>
+        </div>
+        <div class="field">
+          <label for="avgRasterTokR">Токенов на растровую картинку (vision)</label>
+          <div class="row"><input type="range" id="avgRasterTokR" min="200" max="2000" step="10" value="926"><span class="val" id="avgRasterTokV"></span></div>
+          <div class="hint">По формуле Anthropic (Ш×В)/750 с учётом даунскейла до 1568px — измерено на 570 файлах, avg 1041×703px</div>
+        </div>
+        <div class="field">
+          <label for="avgFormulaTokR">Токенов на формулу (MathML-текст)</label>
+          <div class="row"><input type="range" id="avgFormulaTokR" min="10" max="150" step="5" value="50"><span class="val" id="avgFormulaTokV"></span></div>
+          <div class="hint">SVG-формулы Wiris разворачиваются в текст, а не отправляются как картинка — на порядок дешевле</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-pad" style="padding-bottom:6px;">
+        <div class="bars" id="barsWrap"></div>
+      </div>
+      <div class="table-scroll" style="padding:0 24px 20px;">
+        <table>
+          <thead>
+            <tr><th>Тип вызова</th><th class="num">Вход</th><th class="num">Выход (лимит)</th><th class="num">Итого / вызов</th></tr>
+          </thead>
+          <tbody id="perCallBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODULE 2 — допущения об использовании ============ -->
+  <div class="module">
+    <div class="module-head">
+      <div>
+        <div class="module-label">02 · предположения</div>
+        <h2>Сколько раз ученик это делает</h2>
+      </div>
+    </div>
+    <p class="note">Реального usage ещё нет (продукт не запущен) — это стартовые ориентиры. Двигайте ползунки под свою гипотезу, таблица и метры ниже пересчитаются мгновенно.</p>
+
+    <div class="card card-pad" style="margin-top:16px;">
+      <div class="inputs-grid">
+        <div class="field">
+          <label for="tasksR">Заданий в месяц на предмет</label>
+          <div class="row"><input type="range" id="tasksR" min="10" max="200" step="5" value="60"><span class="val" id="tasksV"></span></div>
+        </div>
+        <div class="field">
+          <label for="subjectsR">Предметов у одного ученика</label>
+          <div class="row"><input type="range" id="subjectsR" min="1" max="6" step="1" value="2"><span class="val" id="subjectsV"></span></div>
+        </div>
+        <div class="field">
+          <label for="hintShareR">Доля заданий, где просят подсказку</label>
+          <div class="row"><input type="range" id="hintShareR" min="0" max="100" step="5" value="35"><span class="val" id="hintShareV"></span></div>
+        </div>
+        <div class="field">
+          <label for="hintAvgR">Подсказок за такое задание (из 3)</label>
+          <div class="row"><input type="range" id="hintAvgR" min="1" max="3" step="0.1" value="1.6"><span class="val" id="hintAvgV"></span></div>
+        </div>
+        <div class="field">
+          <label for="chatShareR">Доля заданий с вопросом в чат</label>
+          <div class="row"><input type="range" id="chatShareR" min="0" max="100" step="5" value="15"><span class="val" id="chatShareV"></span></div>
+        </div>
+        <div class="field">
+          <label for="chatAvgR">Сообщений за такой чат</label>
+          <div class="row"><input type="range" id="chatAvgR" min="1" max="8" step="1" value="2"><span class="val" id="chatAvgV"></span></div>
+        </div>
+        <div class="field">
+          <label for="essaysR">Проверок сочинения в месяц (все предметы)</label>
+          <div class="row"><input type="range" id="essaysR" min="0" max="20" step="1" value="4"><span class="val" id="essaysV"></span></div>
+          <div class="hint">Обычно только рус/лит/общ/ист/англ — самый дорогой тип вызова</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODULE 3 — итог ============ -->
+  <div class="module">
+    <div class="module-head">
+      <div>
+        <div class="module-label">03 · итог</div>
+        <h2>Расход в месяц</h2>
+      </div>
+    </div>
+
+    <div class="meters" id="meters"></div>
+    <p class="note" id="insightLine" style="margin-top:10px;"></p>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Тип вызова</th><th class="num">Вызовов/мес</th><th class="num">Токенов/мес</th><th class="num">Цена/мес</th></tr>
+          </thead>
+          <tbody id="breakdownBody"></tbody>
+          <tfoot>
+            <tr><td>Итого на ученика</td><td class="num" id="totCalls"></td><td class="num" id="totTok"></td><td class="num" id="totCost"></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-top:16px;">
+      <div class="inputs-grid">
+        <div class="field">
+          <label>Провайдер — заготовка цены</label>
+          <div class="preset-btns">
+            <button class="preset-btn" id="presetAnthropic" type="button">Claude Sonnet</button>
+            <button class="preset-btn" id="presetQwen" type="button">Qwen-Max</button>
+          </div>
+          <div class="hint">Ориентир, не текущий прайс — сверьте на сайте провайдера перед тем, как закладывать в тариф</div>
+        </div>
+        <div class="field">
+          <label for="priceInR">$ за 1M входных токенов</label>
+          <div class="price-row"><span class="prefix">$</span><input type="number" id="priceInR" min="0" step="0.1" value="3.0"></div>
+        </div>
+        <div class="field">
+          <label for="priceOutR">$ за 1M выходных токенов</label>
+          <div class="price-row"><span class="prefix">$</span><input type="number" id="priceOutR" min="0" step="0.1" value="15.0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODULE 4 — тарифы ============ -->
+  <div class="module">
+    <div class="module-head">
+      <div>
+        <div class="module-label">04 · ориентир для тарифа</div>
+        <h2>Три профиля нагрузки</h2>
+      </div>
+    </div>
+    <p class="note">Те же формулы, три готовых профиля вместо ручного подбора: спокойная подготовка, активная и интенсивная (перед экзаменом). Себестоимость ИИ — это только один компонент тарифа, не вся цена подписки.</p>
+
+    <div class="margin-row">
+      <label for="marginR">Множитель себестоимости → цена</label>
+      <input type="range" id="marginR" min="1" max="10" step="0.5" value="4">
+      <span class="val" id="marginV" style="font-family:'IBM Plex Mono',monospace;font-weight:600;"></span>
+      <span style="font-size:11.5px;color:var(--ink-faint);">покрывает инфраструктуру, разбор/поддержку, маржу</span>
+    </div>
+
+    <div class="tiers" id="tiers"></div>
+  </div>
+
+  <!-- ============ MODULE 5 — проверка своих тарифов ============ -->
+  <div class="module">
+    <div class="module-head">
+      <div>
+        <div class="module-label">05 · docs/tarifs.md</div>
+        <h2>Ваши тарифы — выдержат ли себестоимость</h2>
+      </div>
+    </div>
+    <p class="note">Те же допущения из блока «02» (сколько заданий, подсказок, сообщений, сочинений в месяц), применённые к вашим четырём тарифам. Название и число предметов — как в <code>docs/tarifs.md</code>, цену/предметы можно поправить прямо тут, если тарифы поменяются.</p>
+
+    <div class="card card-pad" style="margin-top:16px;">
+      <div class="inputs-grid">
+        <div class="field">
+          <label for="rubRateR">Курс ₽ за $1</label>
+          <div class="row"><input type="range" id="rubRateR" min="60" max="130" step="1" value="97"><span class="val" id="rubRateV"></span></div>
+          <div class="hint">Ориентир — сверьте актуальный курс перед расчётом</div>
+        </div>
+        <div class="field">
+          <label for="freeCapR">Бесплатный тариф: запросов в день</label>
+          <div class="row"><input type="range" id="freeCapR" min="1" max="20" step="1" value="3"><span class="val" id="freeCapV"></span></div>
+          <div class="hint">Лимит из тарифа «Попробовать» — не из ползунков «02», у него свой профиль нагрузки</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Тариф</th><th class="num">Цена</th><th class="num">Предметов</th><th class="num">Себест. ИИ / мес</th><th class="num">Доля в цене</th><th>Вывод</th></tr>
+          </thead>
+          <tbody id="tarifsBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="note" id="tarifsInsight" style="margin-top:14px;"></p>
+  </div>
+
+  <footer class="foot">
+    <p><strong>Как читать эту смету.</strong> Длины системных промптов и текстов условий — измерены по коду и базе (docker/api/prompt.js, docker/api/server.js, реальные <code>statement</code> в public.tasks). Объём ответа модели, соотношение символов/токена и всё в блоке «02» — управляемые допущения, а не факты из кода: это ваша гипотеза о поведении ученика, которую сейчас проверить не на чем — продукт не запущен.</p>
+    <p>Себестоимость ИИ — обычно небольшая часть общей цены подписки. В неё стоит закладывать ещё: хостинг, оплату администратора/методиста, эквайринг, налоги, запас на пики нагрузки (экзаменационный сезон март–май).</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- измеренные факты (см. docker/api/prompt.js, server.js, БД) ----------
+  var POLICY_CHARS = 1673;         // POLICY_HEADER
+  var TASKBLOCK_BOILER = 180;      // обвязка "Контекст задания... ВАЖНО..."
+  var HINT_BOILER = 250;
+  var HINT_SCAFFOLD_AVG = 220;     // средняя длина одного уровня заготовки подсказки
+  var CHAT_BOILER = 120;
+  var CHAT_HISTORY_CHARS = 1000;   // ~4 предыдущих реплики к моменту типичного сообщения (кэп клиента — 8)
+  var ESSAY_SYS_CHARS = 2392;      // POLICY_HEADER + инструкции оценщика
+  var ESSAY_CRITERIA_CHARS = 400;
+  var ESSAY_TEXT_AVG_CHARS = 1200; // условие + текст сочинения ученика (мин. 150 слов у rus/r6)
+
+  var HINT_OUT = 320;   var HINT_CAP = 700;
+  var CHAT_OUT = 380;   var CHAT_CAP = 700;
+  var ESSAY_OUT = 1000; var ESSAY_CAP = 1500;
+
+  // реальные средние длины statement по предметам (символы, измерено в public.tasks)
+  // 4-е и 5-е число: доля заданий предмета с хотя бы одним вложением, и доля растровых картинок
+  // (не формул-SVG) среди этих вложений — измерено по public.task_media. У математики почти все
+  // "картинки" — это формулы (дёшево, текстом), у биологии/географии/истории — почти всегда
+  // настоящие картинки (дорого, vision).
+  var SUBJECTS = [
+    ["math", "Математика (профиль)", 186, 0.783, 0.112],
+    ["math_base", "Математика (база)", 219, 0.584, 0.251],
+    ["chem", "Химия", 328, 0.139, 0.312],
+    ["fiz", "Физика", 376, 0.488, 0.560],
+    ["geo", "География", 395, 0.286, 1.0],
+    ["eng", "Английский язык", 410, 0.057, 1.0],
+    ["bio", "Биология", 432, 0.431, 0.996],
+    ["soc", "Обществознание", 482, 0.041, 1.0],
+    ["lit", "Литература", 509, 0, 0],
+    ["rus", "Русский язык", 682, 0, 0],
+    ["hist", "История", 719, 0.342, 1.0]
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return Math.round(n).toLocaleString("ru-RU"); };
+  var fmt1 = function (n) { return (Math.round(n * 10) / 10).toLocaleString("ru-RU"); };
+  var money = function (n) {
+    // доллар с точкой-разделителем всегда, независимо от локали — "$7,57" рядом с рублёвым
+    // разделением тысяч читается как семьсот с лишним долларов, а не семь с копейками
+    if (n < 1) return "$" + n.toFixed(3);
+    var parts = n.toFixed(2).split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    return "$" + parts.join(".");
+  };
+
+  // ---------- populate subject select ----------
+  var subjSel = $("subjSel");
+  SUBJECTS.forEach(function (s, i) {
+    var opt = document.createElement("option");
+    opt.value = i; opt.textContent = s[1] + " · " + s[2] + " симв.";
+    subjSel.appendChild(opt);
+  });
+  subjSel.value = 0;
+
+  function readInputs() {
+    var subj = SUBJECTS[+subjSel.value];
+    return {
+      ratio: +$("ratioR").value,
+      statementChars: subj[2],
+      subjName: subj[1],
+      pctMedia: subj[3],
+      rasterShare: subj[4],
+      tasksPerMonth: +$("tasksR").value,
+      subjects: +$("subjectsR").value,
+      hintShare: +$("hintShareR").value,
+      hintAvg: +$("hintAvgR").value,
+      chatShare: +$("chatShareR").value,
+      chatAvg: +$("chatAvgR").value,
+      essaysPerMonth: +$("essaysR").value,
+      priceIn: +$("priceInR").value,
+      priceOut: +$("priceOutR").value,
+      margin: +$("marginR").value,
+      visionOn: $("visionOnR").checked,
+      avgImagesPerTask: +$("avgImagesR").value,
+      avgRasterTokens: +$("avgRasterTokR").value,
+      avgFormulaTokens: +$("avgFormulaTokR").value
+    };
+  }
+
+  function perCallEstimate(inp) {
+    var hintInChars = POLICY_CHARS + TASKBLOCK_BOILER + inp.statementChars + HINT_BOILER + HINT_SCAFFOLD_AVG;
+    var chatInChars = POLICY_CHARS + TASKBLOCK_BOILER + inp.statementChars + CHAT_BOILER + CHAT_HISTORY_CHARS;
+    var essayInChars = ESSAY_SYS_CHARS + ESSAY_CRITERIA_CHARS + ESSAY_TEXT_AVG_CHARS;
+
+    var hintIn = hintInChars / inp.ratio, chatIn = chatInChars / inp.ratio, essayIn = essayInChars / inp.ratio;
+
+    // ожидаемая добавка от вложений задания (мат.ожидание — не каждое задание с картинкой, поэтому
+    // умножаем на долю заданий предмета с медиа): формулы всегда текстом, растровые — только если
+    // vision включён у провайдера/модели (см. taskImages.js — иначе сервер их просто не отправляет)
+    var svgShare = 1 - inp.rasterShare;
+    var rasterTokAdd = inp.visionOn ? inp.rasterShare * inp.avgImagesPerTask * inp.avgRasterTokens : 0;
+    var formulaTokAdd = svgShare * inp.avgImagesPerTask * inp.avgFormulaTokens;
+    var mediaAddTok = inp.pctMedia * (rasterTokAdd + formulaTokAdd);
+
+    hintIn += mediaAddTok;
+    chatIn += mediaAddTok;
+    // сочинение проверяется без картинок (check_essay их не запрашивает — не по адресу для vision)
+
+    return {
+      hint: { inTok: hintIn, outTok: HINT_OUT, cap: HINT_CAP, inChars: hintInChars, mediaTok: mediaAddTok },
+      chat: { inTok: chatIn, outTok: CHAT_OUT, cap: CHAT_CAP, inChars: chatInChars, mediaTok: mediaAddTok },
+      essay: { inTok: essayIn, outTok: ESSAY_OUT, cap: ESSAY_CAP, inChars: essayInChars, mediaTok: 0 }
+    };
+  }
+
+  function render() {
+    var inp = readInputs();
+
+    $("ratioV").textContent = fmt1(inp.ratio);
+    $("tasksV").textContent = inp.tasksPerMonth;
+    $("subjectsV").textContent = inp.subjects;
+    $("hintShareV").textContent = inp.hintShare + "%";
+    $("hintAvgV").textContent = fmt1(inp.hintAvg);
+    $("chatShareV").textContent = inp.chatShare + "%";
+    $("chatAvgV").textContent = inp.chatAvg;
+    $("essaysV").textContent = inp.essaysPerMonth;
+    $("marginV").textContent = "×" + fmt1(inp.margin);
+    $("avgImagesV").textContent = fmt1(inp.avgImagesPerTask);
+    $("avgRasterTokV").textContent = fmt(inp.avgRasterTokens) + " ток.";
+    $("avgFormulaTokV").textContent = fmt(inp.avgFormulaTokens) + " ток.";
+    $("subjMediaTag").textContent = fmt1(inp.pctMedia * 100) + "% заданий с медиа · " + (inp.pctMedia > 0 ? fmt1(inp.rasterShare * 100) + "% из них — растр" : "медиа почти нет");
+
+    var per = perCallEstimate(inp);
+
+    // ---- module 1: per-call table + bars ----
+    var mediaNote = per.hint.mediaTok > 5 ? (" · +" + fmt(per.hint.mediaTok) + " ток. на иллюстрации") : "";
+    var perCallRows = [
+      ["Подсказка", "1 из 3 уровней, без истории чата" + mediaNote, per.hint, "good"],
+      ["Сообщение в чате", "включая «объясни тему» — до 8 реплик истории" + mediaNote, per.chat, "warn"],
+      ["Проверка сочинения", "структурированный ответ по критериям, без картинок", per.essay, "critical"]
+    ];
+    var maxTotal = Math.max(per.hint.inTok + per.hint.outTok, per.chat.inTok + per.chat.outTok, per.essay.inTok + per.essay.outTok);
+
+    $("perCallBody").innerHTML = perCallRows.map(function (r) {
+      var c = r[2], total = c.inTok + c.outTok;
+      return "<tr><td class='call-name'>" + r[0] + "<span class='sub'>" + r[1] + "</span></td>" +
+        "<td class='num'>" + fmt(c.inTok) + " ток.</td>" +
+        "<td class='num'>~" + fmt(c.outTok) + " <span style='color:var(--ink-faint)'>/ " + c.cap + "</span></td>" +
+        "<td class='num'><b>" + fmt(total) + " ток.</b></td></tr>";
+    }).join("");
+
+    var colorVar = { good: "var(--good)", warn: "var(--warn)", critical: "var(--critical)" };
+    $("barsWrap").innerHTML = perCallRows.map(function (r) {
+      var c = r[2], total = c.inTok + c.outTok;
+      var pct = Math.max(4, (total / maxTotal) * 100);
+      return "<div class='bar-row'>" +
+        "<div class='b-label'>" + r[0] + "<span class='sub'>1 вызов</span></div>" +
+        "<div class='bar-track'><div class='bar-fill' style='width:" + pct + "%;background:" + colorVar[r[3]] + "'></div></div>" +
+        "<div class='b-value'>" + fmt(total) + " ток.</div></div>";
+    }).join("");
+
+    // ---- module 3: monthly breakdown ----
+    var hintTasks = inp.tasksPerMonth * (inp.hintShare / 100);
+    var hintCalls = hintTasks * inp.hintAvg;
+    var chatTasks = inp.tasksPerMonth * (inp.chatShare / 100);
+    var chatCalls = chatTasks * inp.chatAvg;
+    var essayCalls = inp.essaysPerMonth;
+
+    var perSubjInTok = hintCalls * per.hint.inTok + chatCalls * per.chat.inTok;
+    var perSubjOutTok = hintCalls * per.hint.outTok + chatCalls * per.chat.outTok;
+
+    var totInTok = perSubjInTok * inp.subjects + essayCalls * per.essay.inTok;
+    var totOutTok = perSubjOutTok * inp.subjects + essayCalls * per.essay.outTok;
+    var totTok = totInTok + totOutTok;
+
+    var costHint = ((hintCalls * inp.subjects * per.hint.inTok) / 1e6) * inp.priceIn + ((hintCalls * inp.subjects * per.hint.outTok) / 1e6) * inp.priceOut;
+    var costChat = ((chatCalls * inp.subjects * per.chat.inTok) / 1e6) * inp.priceIn + ((chatCalls * inp.subjects * per.chat.outTok) / 1e6) * inp.priceOut;
+    var costEssay = ((essayCalls * per.essay.inTok) / 1e6) * inp.priceIn + ((essayCalls * per.essay.outTok) / 1e6) * inp.priceOut;
+    var totCost = costHint + costChat + costEssay;
+    var totCalls = hintCalls * inp.subjects + chatCalls * inp.subjects + essayCalls;
+
+    $("breakdownBody").innerHTML =
+      "<tr><td class='call-name'>Подсказки<span class='sub'>" + inp.subjects + " предм. × " + fmt1(hintCalls) + " выз.</span></td><td class='num'>" + fmt(hintCalls * inp.subjects) + "</td><td class='num'>" + fmt((hintCalls * inp.subjects) * (per.hint.inTok + per.hint.outTok)) + "</td><td class='num'>" + money(costHint) + "</td></tr>" +
+      "<tr><td class='call-name'>Чат<span class='sub'>" + inp.subjects + " предм. × " + fmt1(chatCalls) + " выз.</span></td><td class='num'>" + fmt(chatCalls * inp.subjects) + "</td><td class='num'>" + fmt((chatCalls * inp.subjects) * (per.chat.inTok + per.chat.outTok)) + "</td><td class='num'>" + money(costChat) + "</td></tr>" +
+      "<tr><td class='call-name'>Сочинения<span class='sub'>по всем предметам</span></td><td class='num'>" + fmt(essayCalls) + "</td><td class='num'>" + fmt(essayCalls * (per.essay.inTok + per.essay.outTok)) + "</td><td class='num'>" + money(costEssay) + "</td></tr>";
+
+    $("totCalls").textContent = fmt(totCalls) + " выз.";
+    $("totTok").textContent = fmt(totTok) + " ток.";
+    $("totCost").textContent = money(totCost);
+
+    $("meters").innerHTML =
+      "<div class='meter accent'><div class='m-label'>Токенов / мес</div><div class='m-value'>" + fmt(totTok / 1000) + "<span class='unit'>тыс.</span></div><div class='m-sub'>" + inp.subjects + " предм. · " + fmt(inp.tasksPerMonth * inp.subjects) + " заданий</div></div>" +
+      "<div class='meter accent'><div class='m-label'>Цена ИИ / мес</div><div class='m-value'>" + money(totCost).replace("$", "") + "<span class='unit'>USD</span></div><div class='m-sub'>≈ " + money(totCost / inp.subjects) + " на предмет</div></div>" +
+      "<div class='meter'><div class='m-label'>Полный цикл, 8 мес.</div><div class='m-value'>" + money(totCost * 8).replace("$", "") + "<span class='unit'>USD</span></div><div class='m-sub'>сентябрь → апрель</div></div>" +
+      "<div class='meter'><div class='m-label'>Учеников на $100 / мес</div><div class='m-value'>" + (totCost > 0 ? fmt(100 / totCost) : "—") + "<span class='unit'>чел.</span></div><div class='m-sub'>при текущей нагрузке на ученика</div></div>";
+
+    var refPrice = 8; // условный ориентир цены подписки — только чтобы показать масштаб
+    var sharePct = refPrice > 0 ? (totCost / refPrice) * 100 : 0;
+    $("insightLine").innerHTML = "<strong style='color:var(--ink)'>Себестоимость ИИ здесь — доли процента от разумной цены подписки:</strong> при " + money(totCost) + "/мес на ИИ и условном тарифе $" + refPrice + "/мес доля ИИ в цене — ~" + fmt1(sharePct) + "%. Тариф ограничивает не расход токенов, а всё остальное — хостинг, поддержку, разбор ошибок методистом.";
+
+    // ---- module 4: tiers ----
+    var tierDefs = [
+      { name: "Лёгкая", desc: "изредка сверяет ответы, подсказки берёт не всегда", mult: 0.55 },
+      { name: "Активная", desc: "текущие допущения выше — типичная подготовка", mult: 1 },
+      { name: "Интенсивная", desc: "апрель–май: больше заданий, чаще чат и сочинения", mult: 1.9 }
+    ];
+    $("tiers").innerHTML = tierDefs.map(function (t) {
+      var c = totCost * t.mult;
+      var price = c * inp.margin;
+      return "<div class='tier" + (t.name === "Активная" ? " mid" : "") + "'>" +
+        "<div class='t-name'>" + t.name + "</div>" +
+        "<div class='t-desc'>" + t.desc + "</div>" +
+        "<div class='t-cost'>Себестоимость ИИ<b>" + money(c) + " / мес</b></div>" +
+        "<div class='t-price'><div class='p-label'>Ориентир цены подписки</div><div class='p-value'>" + money(price) + "<span class='per'> / мес</span></div></div>" +
+        "</div>";
+    }).join("");
+
+    // ---- module 5: проверка тарифов из docs/tarifs.md ----
+    var rubRate = +$("rubRateR").value;
+    $("rubRateV").textContent = "₽" + rubRate;
+    var freeCap = +$("freeCapR").value;
+    $("freeCapV").textContent = freeCap;
+
+    var perSubjectCost = (costHint + costChat) / inp.subjects; // $/предмет/мес при допущениях блока «02»
+    var essayCostFlat = costEssay;
+    var freeCallCost = ((per.hint.inTok * inp.priceIn + per.hint.outTok * inp.priceOut) + (per.chat.inTok * inp.priceIn + per.chat.outTok * inp.priceOut)) / 2 / 1e6;
+    var freeCostMonthly = freeCap * 30 * freeCallCost;
+
+    var TARIFS = [
+      { name: "ВУЗ+", price: 4990, subjects: 5 },
+      { name: "ВУЗ", price: 3990, subjects: 4 },
+      { name: "АТТЕСТАТ", price: 1990, subjects: 2 },
+      { name: "Попробовать", price: 0, subjects: 2, free: true }
+    ];
+
+    var worstPct = 0;
+    $("tarifsBody").innerHTML = TARIFS.map(function (t) {
+      var costUsd = t.free ? freeCostMonthly : t.subjects * perSubjectCost + essayCostFlat;
+      var costRub = costUsd * rubRate;
+      var pct = t.price > 0 ? (costRub / t.price) * 100 : null;
+      if (pct !== null) worstPct = Math.max(worstPct, pct);
+      var verdict, chipClass;
+      if (t.free) { verdict = "убыток " + Math.round(costRub) + " ₽/мес — компенсируется платными"; chipClass = "warn"; }
+      else if (pct < 8) { verdict = "запас огромный"; chipClass = "good"; }
+      else if (pct < 20) { verdict = "запас есть"; chipClass = "good"; }
+      else if (pct < 40) { verdict = "заметная доля — считайте маржу внимательнее"; chipClass = "warn"; }
+      else { verdict = "ИИ съедает тариф"; chipClass = "critical"; }
+      return "<tr><td class='call-name'>" + t.name + "</td>" +
+        "<td class='num'>" + (t.price > 0 ? fmt(t.price) + " ₽" : "0 ₽") + "</td>" +
+        "<td class='num'>" + t.subjects + "</td>" +
+        "<td class='num'>" + money(costUsd) + " <span style='color:var(--ink-faint)'>(" + fmt(costRub) + " ₽)</span></td>" +
+        "<td class='num'>" + (pct === null ? "—" : fmt1(pct) + "%") + "</td>" +
+        "<td><span class='chip " + chipClass + "'>" + verdict + "</span></td></tr>";
+    }).join("");
+
+    $("tarifsInsight").innerHTML = "<strong style='color:var(--ink)'>Вывод:</strong> при текущих допущениях себестоимость ИИ не превышает ~" + fmt1(worstPct) + "% цены ни у одного платного тарифа — экономика выдерживает с большим запасом. Бесплатный тариф генерирует небольшой, но реальный убыток (" + money(freeCostMonthly) + "/мес на активного пользователя) — это нормально для воронки, если доля тех, кто никогда не переходит на платный, не станет доминирующей. В расчёте нет хостинга, поддержки, эквайринга и налогов — сверьте общую unit-экономику отдельно.";
+  }
+
+  // ---------- wiring ----------
+  ["subjSel", "ratioR", "tasksR", "subjectsR", "hintShareR", "hintAvgR", "chatShareR", "chatAvgR", "essaysR", "priceInR", "priceOutR", "marginR", "rubRateR", "freeCapR", "visionOnR", "avgImagesR", "avgRasterTokR", "avgFormulaTokR"]
+    .forEach(function (id) { $(id).addEventListener("input", render); });
+
+  $("presetAnthropic").addEventListener("click", function () { $("priceInR").value = 3.0; $("priceOutR").value = 15.0; $("visionOnR").checked = true; render(); });
+  $("presetQwen").addEventListener("click", function () { $("priceInR").value = 1.2; $("priceOutR").value = 4.8; $("visionOnR").checked = false; render(); });
+
+  render();
+})();
+</script>
