@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DIFF_LABEL, SUBJECTS, TASKS, taskById } from "../data/tasks";
+import { DIFF_LABEL, SUBJECTS, TASKS, taskById, type EgeTask } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { checkAnswer, formatClock, plural } from "../lib/utils";
+import { hydrateSubjectTasks, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
+import { callAiTutor } from "../lib/aiTutor";
+import { DEFAULT_FILTERS, filterTasks, loadTaskBankFilters } from "../lib/taskFilters";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import EssayView from "./EssayView";
@@ -9,16 +12,52 @@ import { Burst, Icon, Stamp, useToast } from "./ui";
 
 type Phase = "solve" | "wrong" | "correct" | "revealed";
 
+/** Тонкий диспетчер: находит задание (может быть ещё не подгружено — см. lib/dbTasks.ts) и
+ *  решает, куда рендерить — сюда, а не внутрь SolveViewRegular, чтобы условность (задание не
+ *  найдено / грузится / развёрнутый ответ) не превращалась в условный вызов хуков ниже. */
 export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v: View) => void }) {
+  useTasksVersion();
   const task = taskById(taskId);
+  const [checkedRemote, setCheckedRemote] = useState(false);
 
-  // задания с развёрнутым ответом ведут в отдельный флоу — SolveView для них хуков не вызывает
-  if (task && task.answerType === "essay") {
+  useEffect(() => {
+    if (task) return;
+    let cancelled = false;
+    hydrateTasksByIds([taskId]).finally(() => {
+      if (!cancelled) setCheckedRemote(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [task, taskId]);
+
+  if (!task) {
+    if (!checkedRemote) {
+      return (
+        <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+          <Icon name="refresh" size={28} className="animate-spin mx-auto text-ink/40" />
+          <p className="font-display mt-4 text-lg font-bold">Загружаем задание…</p>
+        </div>
+      );
+    }
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+        <p className="font-display text-xl font-bold">Задание не найдено</p>
+        <button onClick={() => onNav({ name: "bank" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">В банк заданий</button>
+      </div>
+    );
+  }
+
+  if (task.answerType === "essay") {
     const idx = TASKS.findIndex((t) => t.id === task.id);
     const nextTaskId = TASKS[(idx + 1) % TASKS.length].id;
     return <EssayView task={task} onNav={onNav} nextTaskId={nextTaskId} />;
   }
 
+  return <SolveViewRegular task={task} taskId={taskId} onNav={onNav} />;
+}
+
+function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: string; onNav: (v: View) => void }) {
   const { derived, addAttempt } = useProgress();
   const { push } = useToast();
   const [phase, setPhase] = useState<Phase>("solve");
@@ -29,14 +68,40 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
   const [examMode, setExamMode] = useState(false);
   const [examLeft, setExamLeft] = useState(300);
   const [hintsUsed, setHintsUsed] = useState(0);
+  // подсказки больше не готовый текст из импорта (там до трети случаев фактически выдавали ответ) —
+  // генерируются ИИ-репетитором по клику, каждый уровень отдельно и с кэшем на сессию решения
+  const [hintTexts, setHintTexts] = useState<(string | null)[]>([null, null, null]);
+  const [hintLoadingLevel, setHintLoadingLevel] = useState<number | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
   const [burstKey, setBurstKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const recordedRef = useRef(false);
 
-  const meta = task ? SUBJECTS[task.subject] : null;
-  const idx = task ? TASKS.findIndex((t) => t.id === task.id) : -1;
-  const nextTask = useMemo(() => TASKS[(idx + 1) % TASKS.length], [idx]);
+  const meta = SUBJECTS[task.subject];
+
+  // догружаем весь предмет в фоне — иначе после прямого захода на задание (например, после
+  // перезагрузки страницы — см. App.tsx) в TASKS есть только это одно задание, и список для
+  // «предыдущее/следующее» ниже был бы искусственно из одного элемента
+  useEffect(() => {
+    hydrateSubjectTasks(task.subject);
+  }, [task.subject]);
+
+  // список для переключения «предыдущее/следующее» — тот же фильтр, с которым ушли из банка
+  // заданий, если он относится к текущему предмету; иначе просто в рамках предмета решаемого
+  // задания (не по всей базе — так пролистывание остаётся осмысленным)
+  const scopedList = useMemo(() => {
+    const stored = loadTaskBankFilters();
+    const filters = stored.subject === task.subject ? stored : { ...DEFAULT_FILTERS, subject: task.subject };
+    return filterTasks(filters, derived);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.subject, derived]);
+  const scopedIdx = scopedList.findIndex((t) => t.id === task.id);
+  const prevInScope = scopedIdx > 0 ? scopedList[scopedIdx - 1] : null;
+  const nextInScope = scopedIdx >= 0 && scopedIdx < scopedList.length - 1 ? scopedList[scopedIdx + 1] : null;
+
+  const idx = TASKS.findIndex((t) => t.id === task.id);
+  const globalNextTask = useMemo(() => TASKS[(idx + 1) % TASKS.length], [idx]);
+  const nextTask = nextInScope ?? globalNextTask;
 
   // таймер
   useEffect(() => {
@@ -65,15 +130,6 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
     }
   }, [examLeft, examMode, phase, taskId, seconds, addAttempt, push]);
 
-  if (!task || !meta) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-24 text-center">
-        <p className="font-display text-xl font-bold">Задание не найдено</p>
-        <button onClick={() => onNav({ name: "bank" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">В банк заданий</button>
-      </div>
-    );
-  }
-
   const toggleExam = () => {
     if (examMode) return; // не даём выключить посреди режима
     setExamMode(true);
@@ -96,17 +152,14 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
       const firstTime = !derived.solvedIds.has(task.id);
       push(firstTime ? `Верно! +${task.points} ${plural(task.points, "первичный балл", "первичных балла", "первичных баллов")}` : "Верно! Задание закреплено", "ok");
     } else {
+      // разбор с готовым ответом больше не раскрывается автоматически после N неверных попыток —
+      // ученик либо пробует ещё раз, либо идёт к репетитору разбирать тему (см. подсказку ниже
+      // бланка ответа); полный разбор показывается только после верного ответа
       addAttempt({ taskId, given, correct: false, ts: Date.now(), seconds });
-      const next = wrongCount + 1;
-      setWrongCount(next);
-      if (next >= 2) {
-        setPhase("revealed");
-        push("Две попытки — открыт разбор. Загляни в тетрадь ошибок", "err");
-      } else {
-        setPhase("wrong");
-        setShakeKey((k) => k + 1);
-        push("Неверно. Есть ещё одна попытка", "err");
-      }
+      setWrongCount((n) => n + 1);
+      setPhase("wrong");
+      setShakeKey((k) => k + 1);
+      push("Неверно — попробуй ещё раз. Не получается — спроси репетитора справа, он объяснит тему", "err");
     }
   };
 
@@ -117,6 +170,8 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
     setWrongCount(0);
     setSeconds(0);
     setHintsUsed(0);
+    setHintTexts([null, null, null]);
+    setHintLoadingLevel(null);
     recordedRef.current = false;
     if (examMode) setExamLeft(300);
   };
@@ -125,17 +180,56 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
     onNav(v);
   };
 
+  const requestHint = async (level: number) => {
+    setHintsUsed((n) => Math.max(n, level));
+    if (hintTexts[level - 1] != null || hintLoadingLevel === level) return;
+    setHintLoadingLevel(level);
+    try {
+      const res = await callAiTutor(
+        { mode: "hint", message: "подсказка", taskId: task.id, hintLevel: level - 1, history: [] },
+        { mistakeTasks: [], solvedCount: derived.solvedIds.size }
+      );
+      setHintTexts((arr) => {
+        const copy = [...arr];
+        copy[level - 1] = res.text ?? "Не получилось получить подсказку — попробуй ещё раз.";
+        return copy;
+      });
+    } finally {
+      setHintLoadingLevel(null);
+    }
+  };
+
   const isOptionTask = !!task.options;
   const locked = phase === "correct" || phase === "revealed";
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-20">
+    <div className="mx-auto max-w-[1600px] px-4 pb-20">
       {/* верхняя панель */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button onClick={() => goTo({ name: "bank" })} className="link-slide flex items-center gap-2 text-sm font-bold text-ink2 hover:text-ink">
           <Icon name="arrowL" size={16} /> Банк заданий
         </button>
-        <span className="font-mono text-[12px] text-ink2">задание {idx + 1} из {TASKS.length}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => prevInScope && goTo({ name: "task", id: prevInScope.id })}
+            disabled={!prevInScope || examMode}
+            title={prevInScope ? `Предыдущее: ${prevInScope.topic}` : "Это первое задание в подборке"}
+            className="flex h-9 w-9 items-center justify-center rounded-sm border-2 border-ink bg-paper text-ink shadow-[2px_2px_0_0_rgba(21,23,46,0.9)] transition hover:bg-ink hover:text-paper active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none"
+          >
+            <Icon name="arrowL" size={16} />
+          </button>
+          <span className="font-mono text-[12px] font-bold text-ink2">
+            {scopedIdx >= 0 ? `${scopedIdx + 1} из ${scopedList.length}` : `${idx + 1} из ${TASKS.length}`}
+          </span>
+          <button
+            onClick={() => nextInScope && goTo({ name: "task", id: nextInScope.id })}
+            disabled={!nextInScope || examMode}
+            title={nextInScope ? `Следующее: ${nextInScope.topic}` : "Это последнее задание в подборке"}
+            className="flex h-9 w-9 items-center justify-center rounded-sm border-2 border-ink bg-paper text-ink shadow-[2px_2px_0_0_rgba(21,23,46,0.9)] transition hover:bg-ink hover:text-paper active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none"
+          >
+            <Icon name="arrowR" size={16} />
+          </button>
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <span className={`flex items-center gap-1.5 border-2 px-2.5 py-1 font-mono text-[13px] font-bold tabular-nums ${examMode && examLeft < 60 ? "border-red text-red" : "border-ink/25 text-ink"}`}>
             <Icon name="timer" size={14} />
@@ -150,7 +244,7 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
         </div>
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1.55fr_1fr]">
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.55fr_1fr]">
         {/* ─── лист задания ─── */}
         <div className="relative">
           <Burst trigger={burstKey} />
@@ -170,7 +264,9 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
               <span className={`font-display border-2 px-2 py-0.5 text-[11px] font-black ${meta.color}`} style={{ borderColor: "currentColor" }}>
                 {meta.name}
               </span>
-              <span className="rounded-sm border border-ink/25 px-2 py-0.5 font-mono text-[11px] text-ink2">№ {task.fipiId} в банке ФИПИ</span>
+              {task.section && (
+                <span className="rounded-sm border border-ink/25 px-2 py-0.5 text-[11px] font-semibold text-ink2">{task.section}</span>
+              )}
               <span className="rounded-sm border border-ink/25 px-2 py-0.5 font-mono text-[11px] text-ink2">задание №{task.egeNumber} ЕГЭ</span>
               <span className="ml-auto rounded-sm bg-ink px-2 py-0.5 font-mono text-[11px] font-bold text-hl">{task.points} п.б.</span>
             </div>
@@ -182,6 +278,14 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
                 <p key={i}>{p}</p>
               ))}
             </div>
+
+            {task.images && task.images.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {task.images.map((src, i) => (
+                  <img key={i} src={src} alt={`Иллюстрация к заданию ${i + 1}`} className="max-h-72 rounded-sm border-2 border-ink/15 object-contain" />
+                ))}
+              </div>
+            )}
 
             {/* варианты ответа */}
             {isOptionTask && (
@@ -243,7 +347,7 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
                 </div>
                 {phase === "wrong" && (
                   <p className="anim-rise mt-3 flex items-center gap-2 text-[13px] font-bold text-red">
-                    <Icon name="x" size={15} /> Неверно. Осталась одна попытка — перепроверь вычисления и условие.
+                    <Icon name="x" size={15} /> Неверно{wrongCount > 1 ? ` (попытка ${wrongCount})` : ""} — перепроверь вычисления и условие, или попроси подсказку у репетитора.
                   </p>
                 )}
                 {examMode && examLeft < 60 && phase === "solve" && (
@@ -301,13 +405,13 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
                       [1, 2, 3].map((h) => (
                         <button
                           key={h}
-                          onClick={() => setHintsUsed((n) => Math.max(n, h))}
+                          onClick={() => requestHint(h)}
                           disabled={hintsUsed >= h}
                           className={`border-2 px-2.5 py-1 text-[12px] font-bold transition ${
                             hintsUsed >= h ? "border-amber bg-amber/15 text-amber" : "border-ink/25 text-ink2 hover:border-amber hover:text-amber"
                           }`}
                         >
-                          {h}
+                          {hintLoadingLevel === h ? <Icon name="refresh" size={12} className="animate-spin" /> : h}
                         </button>
                       ))
                     )}
@@ -315,9 +419,14 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
                 </div>
                 {hintsUsed > 0 && !examMode && (
                   <div className="mt-3 space-y-2">
-                    {task.hints.slice(0, hintsUsed).map((hint, i) => (
+                    {Array.from({ length: hintsUsed }).map((_, i) => (
                       <p key={i} className="anim-rise flex gap-2.5 border-l-4 border-amber bg-amber/8 px-3 py-2 text-[13.5px] leading-relaxed text-ink/85">
-                        <span className="font-mono text-[12px] font-bold text-amber">{i + 1}/3</span> {hint}
+                        <span className="font-mono text-[12px] font-bold text-amber shrink-0">{i + 1}/3</span>
+                        {hintTexts[i] ?? (
+                          <span className="flex items-center gap-2 text-ink2">
+                            <Icon name="refresh" size={13} className="animate-spin" /> Репетитор придумывает подсказку…
+                          </span>
+                        )}
                       </p>
                     ))}
                   </div>

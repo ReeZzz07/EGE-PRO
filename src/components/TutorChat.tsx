@@ -26,6 +26,10 @@ const WELCOME: Msg = {
 export default function TutorChat({ contextTask, compact = false, onNavigate }: { contextTask?: EgeTask; compact?: boolean; onNavigate?: (dest: string) => void }) {
   const { derived } = useProgress();
   const [messages, setMessages] = useState<Msg[]>(() => {
+    // чат привязан к конкретному заданию (compact-режим в SolveView) — начинаем с чистого листа,
+    // а не с истории из предыдущего задания. Общая история в localStorage — только для отдельной
+    // страницы репетитора (/tutor, без contextTask), где это один продолжающийся разговор.
+    if (contextTask) return [WELCOME];
     try {
       const raw = localStorage.getItem(CHAT_KEY);
       if (raw) {
@@ -55,13 +59,14 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
       hintLevelRef.current = 0;
       // не дублируем контекстное сообщение, если оно уже последнее в истории
       const lastMsg = messagesRef.current[messagesRef.current.length - 1];
-      if (lastMsg && lastMsg.role === "bot" && lastMsg.text.includes(`№ ${contextTask.fipiId}`)) return;
+      if (lastMsg && lastMsg.role === "bot" && lastMsg.text.includes(`«${contextTask.topic}»`)) return;
       const meta = SUBJECTS[contextTask.subject];
+      const sectionNote = contextTask.section ? ` (раздел «${contextTask.section}»)` : "";
       setMessages((m) => [
         ...m,
         {
           role: "bot",
-          text: `📌 Работаем над заданием **№ ${contextTask.fipiId}** (банк ФИПИ) — «${contextTask.topic}», ${meta.name}.\n\nНачни с «**подсказка**» — дам первую наводку, не раскрывая решения. Или сразу «**объясни решение**».`,
+          text: `📌 Работаем над заданием${sectionNote} — «${contextTask.topic}», ${meta.name}.\n\nНачни с «**подсказка**» — дам первую наводку, не раскрывая решения. Или сразу «**объясни решение**».`,
           actions: ["Подсказка", "Объясни решение"],
         },
       ]);
@@ -69,15 +74,16 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
     if (!contextTask) ctxTaskRef.current = undefined;
   }, [contextTask]);
 
-  // сохранение (только когда не идёт стриминг)
+  // сохранение (только для общего чата на /tutor — привязанный к заданию не переживает переход
+  // на другое задание, поэтому его незачем и класть в общее хранилище)
   useEffect(() => {
-    if (busy) return;
+    if (busy || contextTask) return;
     try {
       localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
     } catch {
       /* ignore */
     }
-  }, [messages, busy]);
+  }, [messages, busy, contextTask]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -178,8 +184,8 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
           </div>
         </div>
         {contextTask && (
-          <span className="ml-auto hidden shrink-0 rounded-sm bg-night2 px-2 py-1 font-mono text-[11px] text-paper/70 sm:block">
-            № {contextTask.fipiId} · {contextTask.topic}
+          <span className="ml-auto hidden max-w-[45%] shrink-0 truncate rounded-sm bg-night2 px-2 py-1 text-[11px] text-paper/70 sm:block" title={`${contextTask.section ? contextTask.section + " · " : ""}${contextTask.topic}`}>
+            {contextTask.section ? `${contextTask.section} · ` : ""}{contextTask.topic}
           </span>
         )}
       </div>

@@ -3,6 +3,7 @@ import { TASKS, taskById, type Subject } from "../data/tasks";
 import { dateKey } from "./utils";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
+import { getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
 
 export interface Attempt {
   taskId: string;
@@ -45,7 +46,13 @@ function reducer(state: ProgressState, action: Action): ProgressState {
   }
 }
 
-/** Загружает попытки пользователя из Supabase и переносит туда локальные (гостевые), если это первый вход. */
+/** Загружает попытки пользователя из Supabase, переносит туда локальные (гостевые) при первом
+ *  входе — и на каждый вызов МЁРДЖИТ локальные и удалённые попытки объединением, а не заменой.
+ *  Раньше эта функция вызывалась на КАЖДОЙ перезагрузке страницы (не только при первом входе — ref
+ *  syncedUserId сбрасывается на каждый маунт) и подменяла state.attempts удалённой копией целиком.
+ *  Запись попытки в Supabase (см. addAttempt ниже) асинхронная и не блокирует UI — если сразу после
+ *  решения задания перезагрузить страницу, запрос insert мог не успеть завершиться, и такая замена
+ *  теряла самую свежую попытку целиком (а вместе с ней и стрик, который считается по датам попыток). */
 async function syncOnLogin(userId: string, local: Attempt[]): Promise<Attempt[]> {
   if (!supabase) return local;
   const migratedFlag = `ege-pro.migrated.${userId}`;
@@ -62,20 +69,25 @@ async function syncOnLogin(userId: string, local: Attempt[]): Promise<Attempt[]>
   if (!alreadyMigrated && local.length > 0) {
     const rows = local.map((a) => ({ user_id: userId, task_id: a.taskId, given: a.given, correct: a.correct, seconds: a.seconds, created_at: new Date(a.ts).toISOString() }));
     await supabase.from("attempts").insert(rows);
+  }
+  if (!alreadyMigrated) {
     try {
       localStorage.setItem(migratedFlag, "1");
     } catch {
       /* ignore */
     }
-    return [...remote, ...local];
   }
 
-  try {
-    localStorage.setItem(migratedFlag, "1");
-  } catch {
-    /* ignore */
+  const seen = new Set(local.map((a) => `${a.taskId}|${a.ts}`));
+  const merged = [...local];
+  for (const r of remote) {
+    const key = `${r.taskId}|${r.ts}`;
+    if (!seen.has(key)) {
+      merged.push(r);
+      seen.add(key);
+    }
   }
-  return remote.length ? remote : local;
+  return merged.sort((a, b) => a.ts - b.ts);
 }
 
 export interface Derived {
@@ -113,6 +125,16 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
   }, [state]);
 
+  // очки/статистика по предметам считаются через taskById() (см. derived ниже) — а после
+  // перезагрузки страницы TASKS снова пуст (банк грузится лениво по предмету, см. lib/dbTasks.ts).
+  // Без этого earnedPoints/perSubject показывали 0 или заниженные числа для всех задач, кроме
+  // той, что открыта прямо сейчас. Подгружаем ВСЕ когда-либо затронутые задания централизованно
+  // здесь, а не на каждой отдельной странице — тогда любой потребитель derived получает верные числа.
+  useEffect(() => {
+    const ids = [...new Set(state.attempts.map((a) => a.taskId))];
+    if (ids.length) hydrateTasksByIds(ids);
+  }, [state.attempts]);
+
   // при входе в настоящий (не гостевой) аккаунт — подгружаем и мигрируем попытки в Supabase
   useEffect(() => {
     if (isGuestMode || !profile || !isSupabaseConfigured) return;
@@ -121,6 +143,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     syncOnLogin(profile.id, state.attempts).then((merged) => dispatch({ type: "LOAD", attempts: merged }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, isGuestMode]);
+
+  const tasksVersion = useTasksVersion();
 
   const derived = useMemo<Derived>(() => {
     const solved = new Set<string>();
@@ -142,11 +166,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
 
     const perSubject = {} as Derived["perSubject"];
-    (["math", "rus", "inf", "fiz", "soc"] as Subject[]).forEach((s) => {
+    (["math", "rus", "inf", "fiz", "soc", "bio", "eng", "geo", "chem", "hist", "lit", "math_base"] as Subject[]).forEach((s) => {
       const tasks = TASKS.filter((t) => t.subject === s);
       const atts = state.attempts.filter((a) => taskById(a.taskId)?.subject === s);
       perSubject[s] = {
-        total: tasks.length,
+        total: getSubjectTotal(s),
         solved: tasks.filter((t) => solved.has(t.id)).length,
         attempts: atts.length,
         correct: atts.filter((a) => a.correct).length,
@@ -165,7 +189,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       perSubject,
       recent: [...state.attempts].sort((x, y) => y.ts - x.ts).slice(0, 8),
     };
-  }, [state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, tasksVersion]);
 
   const addAttempt = (attempt: Attempt) => {
     dispatch({ type: "ADD", attempt });

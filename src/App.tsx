@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Header, { ADMIN_ONLY_VIEWS, PROTECTED_VIEWS, landingSection, type View } from "./components/Header";
 import AdminContent from "./components/AdminContent";
 import Dashboard from "./components/Dashboard";
@@ -21,7 +21,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   return (
     <footer className="border-t-2 border-ink bg-night text-paper">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-[1600px] gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center border-2 border-hl text-hl">
@@ -39,12 +39,12 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
         </div>
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Предметы</p>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
             {Object.values(SUBJECTS).map((s) => (
               <li key={s.id}>
                 <button
-                  onClick={() => onNav(profile ? { name: "bank" } : { name: "onboarding", subject: s.id })}
-                  className="link-slide text-[13px] font-semibold text-paper/75 hover:text-paper"
+                  onClick={() => onNav(profile ? { name: "bank", subject: s.id } : { name: "onboarding", subject: s.id })}
+                  className="link-slide block w-full text-left text-[13px] font-semibold leading-snug text-paper/75 hover:text-paper break-words"
                 >
                   {s.name}
                 </button>
@@ -82,8 +82,8 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
                   </button>
                 </li>
                 <li>
-                  <button onClick={() => onNav({ name: "auth" })} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
-                    <Icon name="star" size={14} /> Войти
+                  <button onClick={() => onNav({ name: "auth", mode: "signup" })} className="link-slide flex items-center gap-2 font-semibold text-paper/75 hover:text-paper">
+                    <Icon name="star" size={14} /> Регистрация
                   </button>
                 </li>
               </ul>
@@ -95,18 +95,62 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
   );
 }
 
+const VIEW_KEY = "ege-pro.lastView.v1";
+/** Экраны, которые не имеет смысла восстанавливать после перезагрузки страницы (переходные/гостевые). */
+const NON_RESUMABLE_VIEWS: View["name"][] = ["landing", "auth", "onboarding", "session-summary"];
+
+function loadPersistedView(): View | null {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as View;
+    if (!v?.name || NON_RESUMABLE_VIEWS.includes(v.name)) return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+function persistView(v: View) {
+  try {
+    if (NON_RESUMABLE_VIEWS.includes(v.name)) localStorage.removeItem(VIEW_KEY);
+    else localStorage.setItem(VIEW_KEY, JSON.stringify(v));
+  } catch {
+    /* ignore */
+  }
+}
+
 function AppShell() {
-  const [view, setView] = useState<View>({ name: "landing" });
+  const [view, setViewRaw] = useState<View>({ name: "landing" });
   const { profile, loading } = useAuth();
+  const restoredRef = useRef(false);
+
+  // обновление страницы посреди задания/банка/статистики раньше всегда кидало на главную —
+  // не по кнопке пользователя, а просто потому что view нигде не сохранялся. Сохраняем и
+  // восстанавливаем при следующей загрузке (для авторизованных — см. эффект ниже).
+  const setView = (v: View) => {
+    persistView(v);
+    setViewRaw(v);
+  };
 
   useEffect(() => {
     if (view.name === "landing" && view.section) return; // Landing сама проскроллит к разделу
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, [view]);
 
-  // как только подгрузилась активная сессия — уводим с лендинга в кабинет
+  // как только подгрузилась активная сессия — уводим с лендинга в кабинет (или восстанавливаем
+  // тот экран, на котором пользователь был до перезагрузки страницы)
   useEffect(() => {
-    if (!loading && profile && view.name === "landing") setView({ name: "home" });
+    if (loading || !profile || view.name !== "landing") return;
+    if (!restoredRef.current) {
+      restoredRef.current = true;
+      const persisted = loadPersistedView();
+      if (persisted) {
+        setViewRaw(persisted);
+        return;
+      }
+    }
+    setViewRaw({ name: "home" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile]);
 
@@ -138,14 +182,14 @@ function AppShell() {
         {view.name === "landing" && (
           <Landing
             onStart={(subject) => setView({ name: "onboarding", subject })}
-            onLogin={() => setView({ name: "auth" })}
+            onLogin={() => setView({ name: "auth", mode: "login" })}
             scrollTo={view.section}
             scrollNonce={view.nonce}
           />
         )}
 
         {view.name === "auth" && (
-          <AuthScreen onSuccess={() => setView({ name: "home" })} />
+          <AuthScreen onSuccess={() => setView({ name: "home" })} initialMode={view.mode} />
         )}
 
         {view.name === "onboarding" && (
@@ -160,7 +204,7 @@ function AppShell() {
           profile ? <Dashboard onNav={setView} /> : <Landing onStart={(subject) => setView({ name: "onboarding", subject })} onLogin={() => setView({ name: "auth" })} />
         )}
 
-        {view.name === "bank" && <TaskBank onNav={setView} />}
+        {view.name === "bank" && <TaskBank onNav={setView} initialSubject={view.subject} />}
         {view.name === "task" && <SolveView key={view.id} taskId={view.id} onNav={setView} />}
         {view.name === "tutor" && <TutorView onNav={setView} />}
         {view.name === "mistakes" && <MistakesView onNav={setView} />}
