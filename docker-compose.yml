@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_local_pw
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/pg-init/entrypoint.sh:/docker-entrypoint-initdb.d/entrypoint.sh:ro
+      - ./docker/pg-init/0000_bootstrap.sql:/pg-init-extra/0000_bootstrap.sql:ro
+      - ./docker/pg-init/9999_grants.sql:/pg-init-extra/9999_grants.sql:ro
+      - ./supabase/migrations:/pg-init-migrations:ro
+    ports:
+      - "5544:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgrest:
+    image: postgrest/postgrest:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:authenticator_local_pw@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_change_me_please_32chars}
+      PGRST_JWT_ROLE_CLAIM_KEY: $.role
+      PGRST_OPENAPI_MODE: disabled
+      PGRST_DB_MAX_ROWS: 20000
+
+  api:
+    build: ./docker/api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8787
+      DATABASE_URL: postgres://postgres:postgres_local_pw@postgres:5432/postgres
+      JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_change_me_please_32chars}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      STORAGE_ROOT: /data/storage
+    volumes:
+      - storage_data:/data/storage
+
+  web:
+    image: node:20-slim
+    restart: unless-stopped
+    working_dir: /app
+    # Сборка (npm run build) — на ХОСТЕ, не здесь: bind-mount с Windows-диска в контейнер
+    # для чтения множества мелких файлов на порядок медленнее нативного (сборка внутри
+    # контейнера зависала на 2+ минуты при низкой загрузке CPU — упор в I/O через bind-mount,
+    # а не в вычисления). Контейнер только ставит зависимости и отдаёт уже готовый ./dist.
+    command: sh -c "npm install && npm run preview -- --host 0.0.0.0 --port 3000"
+    environment:
+      VITE_SUPABASE_URL: http://localhost:3100
+      VITE_SUPABASE_ANON_KEY: local-anon-key-unused
+      BACKEND_PROXY_HOST: api
+      HMR_CLIENT_PORT: 3100
+    volumes:
+      - .:/app
+      - web_node_modules:/app/node_modules
+    ports:
+      - "3100:3000"
+    depends_on:
+      - postgrest
+      - api
+
+volumes:
+  pgdata:
+  storage_data:
+  web_node_modules:
