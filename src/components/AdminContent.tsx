@@ -8,6 +8,7 @@ import AdminTaskReview from "./AdminTaskReview";
 import AdminAiSettings from "./AdminAiSettings";
 import AdminTaskImport from "./AdminTaskImport";
 import AdminTariffs from "./AdminTariffs";
+import AdminLegalDocs from "./AdminLegalDocs";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -66,7 +67,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "tariffs">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "tariffs" | "legal">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(DEFAULT_CONTENT.capabilities);
@@ -147,6 +148,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         >
           Тарифы
         </button>
+        <button
+          onClick={() => setTab("legal")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "legal" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Документы
+        </button>
       </div>
 
       {tab === "tasks" && (
@@ -170,6 +177,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       {tab === "tariffs" && (
         <div className="mt-6">
           <AdminTariffs />
+        </div>
+      )}
+
+      {tab === "legal" && (
+        <div className="mt-6">
+          <AdminLegalDocs />
         </div>
       )}
 

@@ -2,15 +2,18 @@ import { useState } from "react";
 import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { Icon } from "./ui";
+import type { View } from "./Header";
 
 export default function AuthScreen({
   compact = false,
   onSuccess,
   initialMode = "signup",
+  onNav,
 }: {
   compact?: boolean;
   onSuccess: () => void;
   initialMode?: "signup" | "login";
+  onNav: (v: View) => void;
 }) {
   const { signUp, signIn, isGuestMode } = useAuth();
   const [mode, setMode] = useState<"signup" | "login">(initialMode);
@@ -86,6 +89,19 @@ export default function AuthScreen({
           {busy ? "Секунду…" : mode === "signup" ? "Создать профиль" : "Войти"}
           {!busy && <Icon name="arrowR" size={16} />}
         </button>
+
+        {mode === "signup" && (
+          <p className="mt-3 text-center text-[11.5px] leading-relaxed text-ink2">
+            Создавая профиль, ты принимаешь{" "}
+            <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold text-ink2 hover:text-ink">
+              публичную оферту
+            </button>{" "}
+            и{" "}
+            <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide font-bold text-ink2 hover:text-ink">
+              политику конфиденциальности
+            </button>
+          </p>
+        )}
 
         <button onClick={() => { setMode(mode === "signup" ? "login" : "signup"); setError(null); }} className="link-slide mt-3 block text-center text-[12.5px] font-bold text-ink2 hover:text-ink">
           {mode === "signup" ? "Уже есть аккаунт? Войти" : "Впервые здесь? Создать профиль"}

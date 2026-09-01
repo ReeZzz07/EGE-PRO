@@ -251,3 +251,10 @@ html { scrollbar-width: thin; scrollbar-color: rgba(82, 86, 122, 0.45) transpare
   background: #fff;
   box-shadow: 0 0 0 4px rgba(36, 71, 233, 0.15);
 }
+
+/* печать документа (оферта/политика, см. LegalDoc.tsx) — только сам текст, без шапки/подвала/кнопок */
+@media print {
+  .app-header, footer, .no-print { display: none !important; }
+  body { background: #fff; }
+  .legal-doc-print { max-width: none; margin: 0; padding: 0; color: #000; }
+}

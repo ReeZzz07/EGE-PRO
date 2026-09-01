@@ -64,6 +64,19 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="12" cy="12" r="3" />
     </>
   ),
+  print: (
+    <>
+      <path d="M7 8.5V3.5h10v5" />
+      <path d="M6 17.5H4.5a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 4.5 8.5h15a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H18" />
+      <path d="M7 14h10v6.5H7z" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3.5v11M8 11l4 4 4-4" />
+      <path d="M4.5 16.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, className = "" }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {

@@ -18,6 +18,7 @@ export type View =
   | { name: "mock-exam" }
   | { name: "session-summary" }
   | { name: "tariffs" }
+  | { name: "legal"; doc: "offer" | "privacy" }
   | { name: "admin" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */

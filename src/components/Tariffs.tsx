@@ -117,6 +117,16 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       <p className="mt-8 text-center text-[12px] text-ink2">
         Оплата подключается позже — сейчас выбор тарифа применяется к аккаунту сразу, без списания денег.
       </p>
+      <p className="mt-2 text-center text-[12px] text-ink2">
+        Выбирая платный тариф, ты соглашаешься с{" "}
+        <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold text-ink2 hover:text-ink">
+          публичной офертой
+        </button>{" "}
+        и{" "}
+        <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide font-bold text-ink2 hover:text-ink">
+          политикой конфиденциальности
+        </button>
+      </p>
     </div>
   );
 }

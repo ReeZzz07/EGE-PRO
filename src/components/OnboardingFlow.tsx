@@ -3,6 +3,7 @@ import { SUBJECTS, type Subject } from "../data/tasks";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
 import { Icon, Reveal } from "./ui";
 import AuthScreen from "./AuthScreen";
+import type { View } from "./Header";
 
 type Step = "subject" | "quiz" | "auth" | "explainer";
 
@@ -51,10 +52,12 @@ export default function OnboardingFlow({
   initialSubject,
   onFinishToDiagnostic,
   onFinishToBank,
+  onNav,
 }: {
   initialSubject?: Subject;
   onFinishToDiagnostic: (subject: Subject) => void;
   onFinishToBank: () => void;
+  onNav: (v: View) => void;
 }) {
   const { profile, updateProfile } = useAuth();
   const [step, setStep] = useState<Step>(initialSubject ? "quiz" : "subject");
@@ -125,7 +128,7 @@ export default function OnboardingFlow({
       {step === "auth" && (
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 3 из 4</p>
-          <AuthScreen compact onSuccess={() => setStep("explainer")} />
+          <AuthScreen compact onSuccess={() => setStep("explainer")} onNav={onNav} />
         </Reveal>
       )}
 

@@ -17,6 +17,7 @@ import PlanView from "./components/PlanView";
 import MockExam from "./components/MockExam";
 import SessionSummary from "./components/SessionSummary";
 import Tariffs from "./components/Tariffs";
+import LegalDoc from "./components/LegalDoc";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
@@ -37,6 +38,10 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             Учебный проект: не является официальным ресурсом ФИПИ или Рособрнадзора.
           </p>
           <p className="mt-4 font-mono text-[11px] text-paper/40">© 2026 · сделано для тех, кто метит на 100 баллов</p>
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+            <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
+            <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>
+          </div>
         </div>
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Предметы</p>
@@ -190,7 +195,7 @@ function AppShell() {
         )}
 
         {view.name === "auth" && (
-          <AuthScreen onSuccess={() => setView({ name: "home" })} initialMode={view.mode} />
+          <AuthScreen onSuccess={() => setView({ name: "home" })} initialMode={view.mode} onNav={setView} />
         )}
 
         {view.name === "onboarding" && (
@@ -198,6 +203,7 @@ function AppShell() {
             initialSubject={view.subject}
             onFinishToDiagnostic={(subject) => setView({ name: "diagnostic", subject })}
             onFinishToBank={() => setView({ name: "bank" })}
+            onNav={setView}
           />
         )}
 
@@ -241,6 +247,7 @@ function AppShell() {
 
         {view.name === "session-summary" && <SessionSummary onNav={setView} />}
         {view.name === "tariffs" && <Tariffs onNav={setView} />}
+        {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
       <Footer onNav={setView} />
