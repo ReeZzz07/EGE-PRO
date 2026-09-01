@@ -85,6 +85,11 @@ body {
 }
 ::selection { background: var(--color-hl); color: var(--color-ink); }
 
+/* палец вместо стрелки на любом кликабельном элементе платформы — Tailwind v4 preflight
+   не выставляет cursor:pointer на <button> сам по себе, а компоненты используют голый
+   <button>/<a>/[role=button] почти везде вместо .btn */
+button:not(:disabled), a[href], [role="button"], label:has(input) { cursor: pointer; }
+
 /* --- тетрадная клетка --- */
 .gridpaper {
   background-image:
