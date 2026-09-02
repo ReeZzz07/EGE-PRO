@@ -30,9 +30,11 @@ export interface LandingContent {
   capabilities: CapabilityItem[];
   process: ProcessItem[];
   faq: FaqItem[];
+  /** строки в бегущей строке под первым экраном — фразы и формулы */
+  ticker: string[];
 }
 
-export const CONTENT_KEYS = ["hero", "capabilities", "process", "faq"] as const;
+export const CONTENT_KEYS = ["hero", "capabilities", "process", "faq", "ticker"] as const;
 export type ContentKey = (typeof CONTENT_KEYS)[number];
 
 /** Список доступных иконок для выбора в админке (см. src/components/ui.tsx PATHS) */
@@ -80,6 +82,10 @@ export const DEFAULT_CONTENT: LandingContent = {
       a: "Да, после регистрации план, диагностика и история попыток сохраняются в твоём аккаунте и доступны при следующем входе.",
     },
   ],
+  ticker: [
+    "Без готовых ответов", "log₂(x − 3) = 4", "Уровневые подсказки", "F = m·a", "Проверка по критериям",
+    "10101101₂ = 173₁₀", "Открытый банк ФИПИ", "P(A) = m/n", "Персональный план", "I = U/R", "Пробники как на экзамене",
+  ],
 };
 
 /** Загружает контент лендинга из Supabase; при отсутствии подключения/данных — честный локальный дефолт. */
@@ -93,6 +99,7 @@ export async function loadLandingContent(): Promise<LandingContent> {
     capabilities: (map.get("capabilities") as CapabilityItem[]) ?? DEFAULT_CONTENT.capabilities,
     process: (map.get("process") as ProcessItem[]) ?? DEFAULT_CONTENT.process,
     faq: (map.get("faq") as FaqItem[]) ?? DEFAULT_CONTENT.faq,
+    ticker: (map.get("ticker") as string[]) ?? DEFAULT_CONTENT.ticker,
   };
 }
 

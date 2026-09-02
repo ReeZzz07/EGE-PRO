@@ -4,11 +4,6 @@ import { DEFAULT_CONTENT, loadLandingContent, type LandingContent } from "../lib
 import { getEssayTaskTotal, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectTotal, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal, Stamp } from "./ui";
 
-const TICKER = [
-  "Без готовых ответов", "log₂(x − 3) = 4", "Уровневые подсказки", "F = m·a", "Проверка по критериям",
-  "10101101₂ = 173₁₀", "Открытый банк ФИПИ", "P(A) = m/n", "Персональный план", "I = U/R", "Пробники как на экзамене",
-];
-
 /** Разбивает заголовок на части вокруг выделяемой подстроки и оборачивает её в hl-подсветку. */
 function HeroTitle({ title, highlight }: { title: string; highlight: string }) {
   const idx = highlight ? title.indexOf(highlight) : -1;
@@ -143,19 +138,21 @@ export default function Landing({
       </section>
 
       {/* ─── бегущая строка ─── */}
-      <div className="mt-6 overflow-hidden border-y-2 border-ink bg-ink py-2" aria-hidden>
-        <div className="marquee-track gap-10 font-mono text-[13px] font-semibold text-paper/90">
-          {[0, 1].map((k) => (
-            <div key={k} className="flex shrink-0 gap-10">
-              {TICKER.map((f, i) => (
-                <span key={i} className="flex items-center gap-10">
-                  {f} <span className="text-hl">✦</span>
-                </span>
-              ))}
-            </div>
-          ))}
+      {content.ticker.length > 0 && (
+        <div className="mt-6 overflow-hidden border-y-2 border-ink bg-ink py-2" aria-hidden>
+          <div className="marquee-track gap-10 font-mono text-[13px] font-semibold text-paper/90">
+            {[0, 1].map((k) => (
+              <div key={k} className="flex shrink-0 gap-10">
+                {content.ticker.map((f, i) => (
+                  <span key={i} className="flex items-center gap-10">
+                    {f} <span className="text-hl">✦</span>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ─── Блок 2: быстрый выбор предмета ─── */}
       <section id="subjects" className="mt-14 scroll-mt-20">

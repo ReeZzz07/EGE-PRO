@@ -73,6 +73,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(DEFAULT_CONTENT.capabilities);
   const [process, setProcess] = useState<ProcessItem[]>(DEFAULT_CONTENT.process);
   const [faq, setFaq] = useState<FaqItem[]>(DEFAULT_CONTENT.faq);
+  const [ticker, setTicker] = useState<string[]>(DEFAULT_CONTENT.ticker);
 
   useEffect(() => {
     loadLandingContent().then((c) => {
@@ -80,11 +81,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       setCapabilities(c.capabilities);
       setProcess(c.process);
       setFaq(c.faq);
+      setTicker(c.ticker);
       setLoading(false);
     });
   }, []);
 
-  const save = async (key: "hero" | "capabilities" | "process" | "faq", data: unknown) => {
+  const save = async (key: "hero" | "capabilities" | "process" | "faq" | "ticker", data: unknown) => {
     if (!profile) return;
     const res = await saveLandingBlock(key, data, profile.id);
     if (res.error) push(res.error, "err");
@@ -289,6 +291,33 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
           ))}
           <button onClick={() => setFaq([...faq, { q: "Новый вопрос", a: "Ответ" }])} className="btn btn-ghost w-full justify-center px-4 py-2.5 text-[13px]">
             + Добавить вопрос
+          </button>
+        </SectionShell>
+      </div>
+
+      {/* ── ticker ── */}
+      <div className="mt-6">
+        <SectionShell
+          title="Бегущая строка"
+          hint="Фразы и формулы в полосе под первым экраном лендинга — каждая строка отдельным пунктом."
+          onSave={() => save("ticker", ticker)}
+          onReset={() => setTicker(DEFAULT_CONTENT.ticker)}
+        >
+          {ticker.map((t, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-5 shrink-0 font-mono text-[11px] font-bold text-ink2">#{i + 1}</span>
+              <input
+                value={t}
+                onChange={(e) => setTicker(ticker.map((x, j) => (j === i ? e.target.value : x)))}
+                className="input-blank flex-1 rounded-sm px-3 py-2 font-mono text-[13px]"
+              />
+              <button onClick={() => setTicker(ticker.filter((_, j) => j !== i))} className="btn btn-ghost px-2.5 py-2 text-[11px]">
+                <Icon name="trash" size={13} />
+              </button>
+            </div>
+          ))}
+          <button onClick={() => setTicker([...ticker, "Новая строка"])} className="btn btn-ghost w-full justify-center px-4 py-2.5 text-[13px]">
+            + Добавить строку
           </button>
         </SectionShell>
       </div>
