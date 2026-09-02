@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
+import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
@@ -22,6 +23,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [seo, setSeo] = useState(DEFAULT_SEO);
+  const [content, setContent] = useState<TariffsPageContent>(DEFAULT_TARIFFS_CONTENT);
 
   useEffect(() => {
     loadActiveTariffs().then((t) => {
@@ -29,6 +31,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       setLoading(false);
     });
     loadSeoSettings().then(setSeo);
+    loadTariffsContent().then(setContent);
   }, []);
 
   useDocumentHead({ ...seo.pages.tariffs, path: "/tariffs", ogImage: seo.ogImage });
@@ -51,14 +54,10 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   return (
     <div className="mx-auto max-w-5xl px-4 pb-20">
       <div className="mt-8 text-center sm:mt-12">
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">тарифы</p>
-        <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">Выбери, сколько предметов готовить</h1>
-        <p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink2">
-          Диагностика, план, задания из банка ФИПИ и ИИ-репетитор — на всех тарифах. Разница только в числе предметов и лимите обращений к репетитору.
-        </p>
-        {tariffs.some((t) => t.priceRub > 0) && (
-          <p className="mt-1 font-mono text-[11.5px] text-ink2">при поштучной покупке — от 1290 ₽/мес за предмет</p>
-        )}
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{content.eyebrow}</p>
+        <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">{content.title}</h1>
+        <p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink2">{content.subtitle}</p>
+        {tariffs.some((t) => t.priceRub > 0) && <p className="mt-1 font-mono text-[11.5px] text-ink2">{content.perSubjectNote}</p>}
       </div>
 
       {profile?.isAdmin && (
@@ -120,9 +119,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
         })}
       </div>
 
-      <p className="mt-8 text-center text-[12px] text-ink2">
-        Оплата подключается позже — сейчас выбор тарифа применяется к аккаунту сразу, без списания денег.
-      </p>
+      <p className="mt-8 text-center text-[12px] text-ink2">{content.paymentNote}</p>
       <p className="mt-2 text-center text-[12px] text-ink2">
         Выбирая платный тариф, ты соглашаешься с{" "}
         <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold text-ink2 hover:text-ink">

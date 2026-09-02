@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Домен-плейсхолдер (ege-pro.ru) — поправить на реальный при деплое, см. public/robots.txt
-     и src/lib/seo.ts. Только 4 URL, потому что только у них есть настоящий адрес — см.
-     src/lib/routes.ts: остальное приложение живёт за авторизацией на состоянии React. -->
+     и src/lib/seo.ts. Только маркетинговые страницы — оферта и политика конфиденциальности сюда
+     не входят (у них noindex, см. lib/legal.ts LEGAL_SEO и src/lib/useDocumentHead.ts): на трафик
+     из поиска не рассчитаны, на них попадают по прямой ссылке из футера/при регистрации. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ege-pro.ru/</loc>
@@ -12,15 +13,5 @@
     <loc>https://ege-pro.ru/tariffs</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://ege-pro.ru/oferta</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://ege-pro.ru/privacy</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
   </url>
 </urlset>

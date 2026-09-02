@@ -1,6 +1,11 @@
 // Настройки SEO (заголовки/описания публичных страниц + картинка для соцсетей) — та же таблица
 // content_blocks, что и остальной контент лендинга (публичное чтение, редактирует только админ),
-// новый ключ "seo". Читает и применяет их src/lib/useDocumentHead.ts на каждой публичной странице.
+// новый ключ "seo". Читает и применяет их src/lib/useDocumentHead.ts.
+//
+// Только Главная и Тарифы — реально маркетинговые страницы, ради которых есть смысл подбирать
+// заголовок/описание под поисковую выдачу. Оферта и политика конфиденциальности (см. lib/legal.ts,
+// LEGAL_SEO) на такой трафик не рассчитаны — на них попадают по ссылке из футера/при регистрации,
+// а не из поиска, поэтому у них фиксированные заголовки без формы в админке и noindex.
 import { supabase, isSupabaseConfigured } from "./supabase";
 
 // Домен ещё не куплен — плейсхолдер. Задаётся сборке через VITE_SITE_URL (.env), используется
@@ -9,7 +14,7 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 export const SITE_URL_PLACEHOLDER = "https://ege-pro.ru";
 export const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) || SITE_URL_PLACEHOLDER;
 
-export type SeoPageKey = "home" | "tariffs" | "offer" | "privacy";
+export type SeoPageKey = "home" | "tariffs";
 
 export interface SeoPageMeta {
   title: string;
@@ -25,8 +30,6 @@ export interface SeoSettings {
 export const SEO_PAGE_LABELS: Record<SeoPageKey, string> = {
   home: "Главная / лендинг",
   tariffs: "Тарифы",
-  offer: "Публичная оферта",
-  privacy: "Политика конфиденциальности",
 };
 
 export const DEFAULT_SEO: SeoSettings = {
@@ -41,14 +44,6 @@ export const DEFAULT_SEO: SeoSettings = {
       title: "Тарифы — ЕГЭ·ПРО",
       description: "Бесплатный и платные тарифы подготовки к ЕГЭ с ИИ-репетитором: банк заданий ФИПИ, персональный план, проверка сочинений по критериям.",
     },
-    offer: {
-      title: "Публичная оферта — ЕГЭ·ПРО",
-      description: "Публичная оферта на использование образовательной онлайн-платформы «ЕГЭ·ПРО».",
-    },
-    privacy: {
-      title: "Политика конфиденциальности — ЕГЭ·ПРО",
-      description: "Политика обработки персональных данных пользователей платформы «ЕГЭ·ПРО».",
-    },
   },
 };
 
@@ -62,8 +57,6 @@ export async function loadSeoSettings(): Promise<SeoSettings> {
     pages: {
       home: { ...DEFAULT_SEO.pages.home, ...saved.pages?.home },
       tariffs: { ...DEFAULT_SEO.pages.tariffs, ...saved.pages?.tariffs },
-      offer: { ...DEFAULT_SEO.pages.offer, ...saved.pages?.offer },
-      privacy: { ...DEFAULT_SEO.pages.privacy, ...saved.pages?.privacy },
     },
   };
 }

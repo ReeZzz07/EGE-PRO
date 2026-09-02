@@ -1,13 +1,15 @@
 // Заголовки/описания публичных страниц + картинка для соцсетей — public.content_blocks (ключ
 // "seo", тот же паттерн, что и остальной контент лендинга). Применяются на лету через
-// lib/useDocumentHead.ts на каждой из четырёх публичных страниц (см. lib/routes.ts).
+// lib/useDocumentHead.ts. Только Главная и Тарифы — единственные страницы, ради которых вообще
+// есть смысл подбирать текст под поисковую выдачу (см. комментарий в lib/seo.ts); у оферты и
+// политики конфиденциальности заголовки фиксированные в коде, см. lib/legal.ts, LEGAL_SEO.
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { DEFAULT_SEO, loadSeoSettings, saveSeoSettings, SEO_PAGE_LABELS, SITE_URL_PLACEHOLDER, type SeoPageKey, type SeoSettings } from "../lib/seo";
 import { Icon, useToast } from "./ui";
 
-const PAGE_PATH: Record<SeoPageKey, string> = { home: "/", tariffs: "/tariffs", offer: "/oferta", privacy: "/privacy" };
+const PAGE_PATH: Record<SeoPageKey, string> = { home: "/", tariffs: "/tariffs" };
 
 export default function AdminSeoSettings() {
   const { profile } = useAuth();
@@ -44,8 +46,9 @@ export default function AdminSeoSettings() {
     <div className="sheet p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">SEO</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
-        Заголовок вкладки браузера, описание для поисковика и превью для соцсетей — по одной публичной странице за раз. Применяется только к
-        четырём страницам с настоящим адресом (главная, тарифы, оферта, политика) — у остального приложения своих URL нет.
+        Заголовок вкладки браузера, описание для поисковика и превью для соцсетей — для главной и страницы тарифов, единственных страниц,
+        рассчитанных на трафик из поиска. У оферты и политики конфиденциальности заголовки фиксированы и не индексируются — на них попадают
+        по прямой ссылке, а не из поисковика.
       </p>
 
       {!isSupabaseConfigured && (

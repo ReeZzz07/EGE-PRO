@@ -2,9 +2,104 @@
 // (RLS в supabase/migrations/0009_tariffs.sql). Удаление тарифа, на котором ещё есть пользователи,
 // заблокировано внешним ключом profiles.tariff_id — deleteTariff() возвращает понятную ошибку.
 import { useEffect, useState } from "react";
+import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { loadAllTariffs, createTariff, updateTariff, deleteTariff, type Tariff, type TariffInput } from "../lib/tariffs";
+import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, saveTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { Icon, useToast } from "./ui";
+
+function TariffsPageTextCard() {
+  const { profile } = useAuth();
+  const { push } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [content, setContent] = useState<TariffsPageContent>(DEFAULT_TARIFFS_CONTENT);
+
+  useEffect(() => {
+    loadTariffsContent().then((c) => {
+      setContent(c);
+      setLoading(false);
+    });
+  }, []);
+
+  const save = async () => {
+    if (!profile) return;
+    setSaving(true);
+    const res = await saveTariffsContent(content, profile.id);
+    setSaving(false);
+    if (res.error) push(res.error, "err");
+    else push("Сохранено — обновится при следующем открытии страницы тарифов", "ok");
+  };
+
+  if (loading) {
+    return <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
+  }
+
+  return (
+    <div className="sheet p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold">Текст страницы тарифов</h2>
+          <p className="mt-1 text-[12.5px] text-ink2">Всё вокруг карточек тарифов — эйбрау над заголовком, заголовок, подзаголовок и заметки под карточками.</p>
+        </div>
+        <button onClick={() => setContent(DEFAULT_TARIFFS_CONTENT)} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+          <Icon name="refresh" size={14} /> К дефолту
+        </button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Эйбрау (маленькая надпись над заголовком)</span>
+          <input
+            value={content.eyebrow}
+            onChange={(e) => setContent((c) => ({ ...c, eyebrow: e.target.value }))}
+            className="input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13px]"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Заголовок</span>
+          <input
+            value={content.title}
+            onChange={(e) => setContent((c) => ({ ...c, title: e.target.value }))}
+            className="input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13.5px]"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Подзаголовок</span>
+          <textarea
+            value={content.subtitle}
+            onChange={(e) => setContent((c) => ({ ...c, subtitle: e.target.value }))}
+            rows={2}
+            className="input-blank mt-1.5 w-full resize-y rounded-sm px-3 py-2 text-[13px]"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">
+            Заметка про поштучную цену <span className="font-normal normal-case">— видна, только если среди активных тарифов есть хоть один платный</span>
+          </span>
+          <input
+            value={content.perSubjectNote}
+            onChange={(e) => setContent((c) => ({ ...c, perSubjectNote: e.target.value }))}
+            className="input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13px]"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Заметка про оплату (под карточками)</span>
+          <textarea
+            value={content.paymentNote}
+            onChange={(e) => setContent((c) => ({ ...c, paymentNote: e.target.value }))}
+            rows={2}
+            className="input-blank mt-1.5 w-full resize-y rounded-sm px-3 py-2 text-[13px]"
+          />
+        </label>
+      </div>
+
+      <button onClick={save} disabled={saving} className="btn btn-blue mt-4 px-5 py-2.5 text-[13px]">
+        <Icon name="check" size={14} /> {saving ? "Сохраняем…" : "Сохранить"}
+      </button>
+    </div>
+  );
+}
 
 const EMPTY_FORM: TariffInput = { id: "", name: "", badge: null, priceRub: 0, salePriceRub: null, subjectsCount: 1, dailyAiLimit: null, features: [], sortOrder: 0, isActive: true };
 
@@ -188,7 +283,9 @@ export default function AdminTariffs() {
   }
 
   return (
-    <div className="sheet p-5 sm:p-6">
+    <>
+    <TariffsPageTextCard />
+    <div className="sheet mt-6 p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">Тарифы</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
         Видны на публичной странице «Тарифы», если активны. Оплаты пока нет — выбор тарифа пользователем просто записывает код тарифа в профиль.
@@ -249,5 +346,6 @@ export default function AdminTariffs() {
         )}
       </div>
     </div>
+    </>
   );
 }

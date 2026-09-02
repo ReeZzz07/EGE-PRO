@@ -2,9 +2,8 @@
 // ведут сюда со страницы регистрации и со страницы тарифов, до входа в аккаунт). Текст редактирует
 // админ в AdminLegalDocs.tsx; здесь — только отображение + печать + скачивание PDF.
 import { useEffect, useState } from "react";
-import { loadLegalDoc, LEGAL_DOC_LABELS, type LegalDocKey, type LegalDoc as LegalDocData } from "../lib/legal";
+import { loadLegalDoc, LEGAL_DOC_LABELS, LEGAL_SEO, type LegalDocKey, type LegalDoc as LegalDocData } from "../lib/legal";
 import { downloadTextAsPdf } from "../lib/pdfExport";
-import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
@@ -14,7 +13,6 @@ export default function LegalDoc({ doc, onNav }: { doc: LegalDocKey; onNav: (v: 
   const [data, setData] = useState<LegalDocData | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [seo, setSeo] = useState(DEFAULT_SEO);
 
   useEffect(() => {
     setLoading(true);
@@ -24,11 +22,9 @@ export default function LegalDoc({ doc, onNav }: { doc: LegalDocKey; onNav: (v: 
     });
   }, [doc]);
 
-  useEffect(() => {
-    loadSeoSettings().then(setSeo);
-  }, []);
-
-  useDocumentHead({ ...seo.pages[doc], path: doc === "offer" ? "/oferta" : "/privacy", ogImage: seo.ogImage });
+  // фиксированные заголовки, без формы в админке, и noindex — эти страницы не рассчитаны на
+  // трафик из поиска (см. lib/seo.ts)
+  useDocumentHead({ ...LEGAL_SEO[doc], path: doc === "offer" ? "/oferta" : "/privacy", noindex: true });
 
   const downloadPdf = async () => {
     if (!data) return;

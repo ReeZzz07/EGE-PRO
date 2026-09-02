@@ -26,11 +26,26 @@ function upsertLink(rel: string, href: string) {
   el.setAttribute("href", href);
 }
 
-export function useDocumentHead({ title, description, path, ogImage }: { title: string; description: string; path: string; ogImage?: string }) {
+export function useDocumentHead({
+  title,
+  description,
+  path,
+  ogImage,
+  noindex,
+}: {
+  title: string;
+  description: string;
+  path: string;
+  ogImage?: string;
+  /** true — страница не для поисковой выдачи (см. lib/legal.ts, LEGAL_SEO): не в sitemap.xml,
+   *  сюда попадают по прямой ссылке, а не из поиска. Ссылки на ней всё равно можно обходить. */
+  noindex?: boolean;
+}) {
   useEffect(() => {
     const url = `${SITE_URL}${path}`;
     document.title = title;
     upsertMeta("name", "description", description);
+    upsertMeta("name", "robots", noindex ? "noindex, follow" : "index, follow");
     upsertLink("canonical", url);
     upsertMeta("property", "og:title", title);
     upsertMeta("property", "og:description", description);
@@ -43,5 +58,5 @@ export function useDocumentHead({ title, description, path, ogImage }: { title: 
       upsertMeta("name", "twitter:image", ogImage);
       upsertMeta("name", "twitter:card", "summary_large_image");
     }
-  }, [title, description, path, ogImage]);
+  }, [title, description, path, ogImage, noindex]);
 }
