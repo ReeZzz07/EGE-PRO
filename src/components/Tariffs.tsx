@@ -5,6 +5,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
+import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
+import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
 
@@ -19,13 +21,17 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [seo, setSeo] = useState(DEFAULT_SEO);
 
   useEffect(() => {
     loadActiveTariffs().then((t) => {
       setTariffs(t);
       setLoading(false);
     });
+    loadSeoSettings().then(setSeo);
   }, []);
+
+  useDocumentHead({ ...seo.pages.tariffs, path: "/tariffs", ogImage: seo.ogImage });
 
   const choose = async (t: Tariff) => {
     if (!profile) {

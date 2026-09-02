@@ -18,6 +18,7 @@ import MockExam from "./components/MockExam";
 import SessionSummary from "./components/SessionSummary";
 import Tariffs from "./components/Tariffs";
 import LegalDoc from "./components/LegalDoc";
+import { pathToView, viewToPath } from "./lib/routes";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
@@ -127,7 +128,9 @@ function persistView(v: View) {
 }
 
 function AppShell() {
-  const [view, setViewRaw] = useState<View>({ name: "landing" });
+  // Прямой заход по ссылке на публичный роут (/tariffs, /oferta, /privacy) должен показать именно
+  // его сразу, а не landing с последующим морганием — поэтому читаем URL уже в инициализаторе.
+  const [view, setViewRaw] = useState<View>(() => pathToView(window.location.pathname) ?? { name: "landing" });
   const { profile, loading } = useAuth();
   const restoredRef = useRef(false);
 
@@ -137,7 +140,34 @@ function AppShell() {
   const setView = (v: View) => {
     persistView(v);
     setViewRaw(v);
+    const path = viewToPath(v);
+    if (path !== window.location.pathname) window.history.pushState(null, "", path);
   };
+
+  // неизвестный путь при первой загрузке (не один из наших роутов) — контент уже landing
+  // (см. инициализатор выше), поправляем и адресную строку, чтобы не показывать чужой URL.
+  useEffect(() => {
+    if (!pathToView(window.location.pathname)) window.history.replaceState(null, "", "/");
+  }, []);
+
+  // кнопки «назад»/«вперёд» браузера — единственный случай, когда URL меняется В ОБХОД setView()
+  // выше, поэтому слушаем popstate напрямую, а не через react-router: адресную строку туда-сюда
+  // при обычной навигации внутри приложения не гоняем (см. viewToPath — большинство экранов не
+  // роутится, там просто нет пути, с которым можно было бы разойтись).
+  useEffect(() => {
+    const onPopState = () => {
+      const next = pathToView(window.location.pathname);
+      if (next) {
+        setViewRaw(next);
+      } else {
+        // неизвестный путь — не 404, а мягкий откат на главную
+        window.history.replaceState(null, "", "/");
+        setViewRaw({ name: "landing" });
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     if (view.name === "landing" && view.section) return; // Landing сама проскроллит к разделу

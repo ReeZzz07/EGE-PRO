@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { DEFAULT_CONTENT, loadLandingContent, type LandingContent } from "../lib/content";
 import { getEssayTaskTotal, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectTotal, useTasksVersion } from "../lib/dbTasks";
+import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
+import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
 
 /** Разбивает заголовок на части вокруг выделяемой подстроки и оборачивает её в hl-подсветку. */
@@ -29,16 +31,22 @@ export default function Landing({
   scrollNonce?: number;
 }) {
   const [content, setContent] = useState<LandingContent>(DEFAULT_CONTENT);
+  const [seo, setSeo] = useState(DEFAULT_SEO);
 
   useEffect(() => {
     let cancelled = false;
     loadLandingContent().then((c) => {
       if (!cancelled) setContent(c);
     });
+    loadSeoSettings().then((s) => {
+      if (!cancelled) setSeo(s);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useDocumentHead({ ...seo.pages.home, path: "/", ogImage: seo.ogImage });
 
   useEffect(() => {
     if (!scrollTo) return;

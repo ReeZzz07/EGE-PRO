@@ -4,7 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="ЕГЭ·ПРО — тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания из Открытого банка ФИПИ: математика, русский язык, информатика, физика, обществознание." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="%VITE_SITE_URL%/" />
     <title>ЕГЭ·ПРО — тренажёр с ИИ-репетитором</title>
+
+    <!-- Статические дефолты для превью в мессенджерах/соцсетях, которые не исполняют JS (то, что
+         реально исполняет JS — например Googlebot — увидит уже подставленные под текущую страницу
+         значения из src/lib/useDocumentHead.ts, редактируются в /admin → «Контент лендинга» → SEO). -->
+    <meta property="og:site_name" content="ЕГЭ·ПРО" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
+    <meta property="og:title" content="ЕГЭ·ПРО — тренажёр с ИИ-репетитором" />
+    <meta property="og:description" content="Тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания из Открытого банка ФИПИ, персональный план, проверка сочинений по критериям." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="ЕГЭ·ПРО — тренажёр с ИИ-репетитором" />
+    <meta name="twitter:description" content="Тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания из Открытого банка ФИПИ, персональный план, проверка сочинений по критериям." />
+
+    <meta name="theme-color" content="#15172e" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
