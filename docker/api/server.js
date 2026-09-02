@@ -10,7 +10,7 @@ import pg from "pg";
 import fs from "node:fs";
 import path from "node:path";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
-import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt } from "./prompt.js";
+import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, DEFAULT_POLICY } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
@@ -292,7 +292,21 @@ async function resolveAiSettings() {
   return ENV_FALLBACK_SETTINGS;
 }
 
-async function callClaudeEssayAssessor(settings, task, essayText) {
+/** Системный промпт (персона + правила + тон) — редактируется в /admin → «ИИ-репетитор»
+ * (public.app_settings, ключ ai_system_prompt), читается на КАЖДЫЙ запрос к /ai-tutor, так что
+ * правка в админке применяется сразу же, без рестарта контейнера — как и resolveAiSettings() выше. */
+async function resolveSystemPrompt() {
+  try {
+    const { rows } = await pool.query("select value from public.app_settings where key = 'ai_system_prompt'");
+    const text = rows[0]?.value?.text;
+    if (text && text.trim()) return text;
+  } catch (e) {
+    console.warn("не удалось прочитать системный промпт из app_settings, использую дефолт:", e?.message ?? e);
+  }
+  return DEFAULT_POLICY;
+}
+
+async function callClaudeEssayAssessor(settings, policy, task, essayText) {
   const criteria = task.criteria ?? [];
   const criteriaText = criteria.map((c) => `${c.code} (макс. ${c.max} балл${c.max === 1 ? "" : "ов"}): ${c.name}`).join("\n");
   const userMsg = `Задание (тема: «${task.topic}»):\n${task.statement.join("\n")}\n\nКритерии оценивания:\n${criteriaText}\n\nОтвет ученика:\n"""\n${essayText || "(пусто)"}\n"""\n\nОцени ответ по каждому критерию и вызови submit_assessment.`;
@@ -314,7 +328,7 @@ async function callClaudeEssayAssessor(settings, task, essayText) {
     },
   };
 
-  const input = await callTool(settings, buildEssaySystemPrompt(), userMsg, tool, 1500);
+  const input = await callTool(settings, buildEssaySystemPrompt(policy), userMsg, tool, 1500);
   const clipped = input.criteria.map((c) => {
     const meta = criteria.find((k) => k.code === c.code);
     const max = meta?.max ?? Math.round(c.score);
@@ -359,7 +373,7 @@ async function dbSafeTaskById(id) {
 }
 
 app.post("/ai-tutor", authMiddleware, async (req, res) => {
-  const settings = await resolveAiSettings();
+  const [settings, policy] = await Promise.all([resolveAiSettings(), resolveSystemPrompt()]);
   if (!settings.apiKey) return res.status(500).json({ error: "Ключ ИИ-провайдера не настроен — задай его в /admin → «ИИ-репетитор»" });
   const userId = req.user.sub;
   const body = req.body ?? {};
@@ -368,7 +382,7 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
 
     if (body.mode === "check_essay") {
       if (!task) return res.status(404).json({ error: "task not found" });
-      const assessment = await callClaudeEssayAssessor(settings, task, body.essayText ?? "");
+      const assessment = await callClaudeEssayAssessor(settings, policy, task, body.essayText ?? "");
       pool
         .query(
           `insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,$3,'user',$4), ($1,$2,$3,'assistant',$5)`,
@@ -378,7 +392,8 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
       return res.json({ assessment });
     }
 
-    const system = body.mode === "hint" ? buildHintPrompt(task, body.hintLevel ?? 0) : body.mode === "explain_topic" ? buildExplainPrompt(task) : buildChatPrompt(task);
+    const system =
+      body.mode === "hint" ? buildHintPrompt(policy, task, body.hintLevel ?? 0) : body.mode === "explain_topic" ? buildExplainPrompt(policy, task) : buildChatPrompt(policy, task);
     const history = (body.history ?? []).slice(-8);
 
     // иллюстрации к заданию — в промпт (формулы текстом всегда, картинки в vision, если провайдер

@@ -2,12 +2,74 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { loadAiSettings, saveAiSettings, DEFAULT_AI_SETTINGS, type AiProvider, type AiSettings } from "../lib/aiSettings";
+import { loadSystemPrompt, saveSystemPrompt, DEFAULT_SYSTEM_PROMPT } from "../lib/aiPrompt";
 import { Icon, useToast } from "./ui";
 
 const PROVIDERS: { id: AiProvider; label: string; hint: string }[] = [
   { id: "anthropic", label: "Anthropic (Claude)", hint: "console.anthropic.com — ключ вида sk-ant-…" },
   { id: "qwen", label: "Qwen (Alibaba Cloud)", hint: "DashScope/QwenCloud — ключ вида sk-… или sk-ws-…" },
 ];
+
+function SystemPromptCard() {
+  const { profile } = useAuth();
+  const { push } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [prompt, setPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+
+  useEffect(() => {
+    loadSystemPrompt().then((p) => {
+      setPrompt(p);
+      setLoading(false);
+    });
+  }, []);
+
+  const save = async () => {
+    if (!profile) return;
+    setSaving(true);
+    const res = await saveSystemPrompt(prompt, profile.id);
+    setSaving(false);
+    if (res.error) push(res.error, "err");
+    else push("Сохранено — со следующего же запроса ИИ-репетитор работает по новому промпту", "ok");
+  };
+
+  if (loading) {
+    return <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
+  }
+
+  return (
+    <div className="sheet mt-6 p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold">Системный промпт</h2>
+          <p className="mt-1 text-[12.5px] text-ink2">
+            Персона, разрешённые и запрещённые действия, тон общения. Подставляется первым блоком в{" "}
+            <strong className="text-ink">каждый</strong> запрос к модели — подсказки, объяснение темы, чат и проверку сочинений — поверх него
+            уже собирается контекст конкретного задания и инструкция для текущего режима.
+          </p>
+        </div>
+        <button onClick={() => setPrompt(DEFAULT_SYSTEM_PROMPT)} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+          <Icon name="refresh" size={14} /> К дефолту
+        </button>
+      </div>
+
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        rows={20}
+        className="input-blank mt-4 w-full resize-y rounded-sm px-3.5 py-2.5 font-mono text-[12.5px] leading-relaxed"
+      />
+      <p className="mt-2 text-[11.5px] text-ink2">
+        Осторожно с пунктом про запрет называть финальный ответ — это единственная строгая защита от прямой выдачи ответов; серверный
+        постфильтр дополнительно перехватывает буквальные утечки в режиме подсказок, но не спасает от других режимов.
+      </p>
+
+      <button onClick={save} disabled={saving || !prompt.trim()} className="btn btn-blue mt-4 px-5 py-2.5 text-[13px] disabled:opacity-50">
+        <Icon name="check" size={14} /> {saving ? "Сохраняем…" : "Сохранить"}
+      </button>
+    </div>
+  );
+}
 
 export default function AdminAiSettings() {
   const { profile } = useAuth();
@@ -38,6 +100,7 @@ export default function AdminAiSettings() {
   }
 
   return (
+    <>
     <div className="sheet p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">ИИ-репетитор: провайдер и ключ</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
@@ -117,5 +180,8 @@ export default function AdminAiSettings() {
         <Icon name="check" size={14} /> Сохранить
       </button>
     </div>
+
+    <SystemPromptCard />
+    </>
   );
 }
