@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { SUBJECTS, TASKS, type EgeTask, type Subject } from "../data/tasks";
 import { checkAnswer, formatClock } from "../lib/utils";
 import { useProgress } from "../lib/store";
+import { useAuth } from "../lib/auth";
+import { useEssayCheckAllowed } from "../lib/tariffs";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
 import { hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal } from "./ui";
@@ -14,6 +16,10 @@ const PART1_SECONDS_PER_TASK = 90;
 export default function MockExam({ subject, onFinish, onExit }: { subject: Subject; onFinish: () => void; onExit: () => void }) {
   const meta = SUBJECTS[subject];
   const { addAttempt } = useProgress();
+  const { profile } = useAuth();
+  // на бесплатном тарифе проверки сочинений нет (см. docker/api/server.js) — включать в пробник
+  // часть 2, которую всё равно не проверят, смысла нет, урезаем пробник до части 1
+  const essayAllowed = useEssayCheckAllowed(profile);
   const tasksVersion = useTasksVersion();
   const [phase, setPhase] = useState<Phase>("setup");
   const [idx, setIdx] = useState(0);
@@ -29,7 +35,7 @@ export default function MockExam({ subject, onFinish, onExit }: { subject: Subje
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const part1 = useMemo(() => TASKS.filter((t) => t.subject === subject && t.answerType !== "essay").slice(0, PART1_COUNT), [subject, tasksVersion]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const part2 = useMemo(() => TASKS.find((t) => t.subject === subject && t.answerType === "essay"), [subject, tasksVersion]);
+  const part2 = useMemo(() => (essayAllowed ? TASKS.find((t) => t.subject === subject && t.answerType === "essay") : undefined), [subject, tasksVersion, essayAllowed]);
   const allTasks: EgeTask[] = part2 ? [...part1, part2] : part1;
   const totalSeconds = part1.length * PART1_SECONDS_PER_TASK + (part2 ? PART2_SECONDS : 0);
   const current = allTasks[idx];
@@ -83,6 +89,11 @@ export default function MockExam({ subject, onFinish, onExit }: { subject: Subje
           <p className="mt-4 text-[13.5px] leading-relaxed text-ink2">
             Режим «как на экзамене»: строгий порядок, таймер, без подсказок ИИ-репетитора. Разбор откроется после завершения.
           </p>
+          {essayAllowed === false && (
+            <p className="mt-2 text-[12.5px] leading-relaxed text-ink2">
+              Часть 2 (развёрнутый ответ) с проверкой по критериям — на платных тарифах. Пробник ограничен частью 1.
+            </p>
+          )}
           {loadingBank && allTasks.length === 0 ? (
             <p className="mt-4 flex items-center gap-2 text-sm text-ink2">
               <Icon name="refresh" size={16} className="animate-spin" /> Загружаем банк по предмету…

@@ -4,6 +4,7 @@ import { SUBJECTS } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { useEssayCheckAllowed } from "../lib/tariffs";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
 import { Icon } from "./ui";
 import type { View } from "./Header";
@@ -41,6 +42,7 @@ async function persistSubmission(userId: string, task: EgeTask, draftNumber: num
 export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; onNav: (v: View) => void; nextTaskId: string }) {
   const { derived, addAttempt } = useProgress();
   const { profile, isGuestMode } = useAuth();
+  const essayAllowed = useEssayCheckAllowed(profile);
   const [phase, setPhase] = useState<Phase>("write");
   const [text, setText] = useState("");
   const [statusIdx, setStatusIdx] = useState(0);
@@ -58,6 +60,7 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
   }, [phase]);
 
   const submit = async () => {
+    if (!essayAllowed) return; // защита в глубину — кнопка и так скрыта, см. рендер ниже
     setPhase("checking");
     const mistakeTasks = [...derived.mistakeIds].map((id) => task.id === id ? task : undefined).filter((t): t is EgeTask => !!t);
     const res = await callAiTutor(
@@ -116,7 +119,22 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
           </div>
         )}
 
-        {phase === "write" && (
+        {essayAllowed === false && (
+          <div className="mt-6 border-t-2 border-dashed border-ink/25 pt-5">
+            <div className="border-2 border-blue/40 bg-blue/5 p-4">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-blue">Только на платных тарифах</p>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-ink/85">
+                Проверка развёрнутых ответов и сочинений по критериям ИИ-репетитором доступна на платных тарифах. На бесплатном — банк заданий с кратким
+                ответом, диагностика и план по-прежнему без ограничений.
+              </p>
+              <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-4 px-5 py-2.5 text-sm">
+                Смотреть тарифы <Icon name="arrowR" size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {essayAllowed && phase === "write" && (
           <div className="mt-6 border-t-2 border-dashed border-ink/25 pt-5">
             <label className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-ink2">
               Черновик {drafts.length > 0 ? `№ ${drafts.length + 1}` : ""}
@@ -142,7 +160,7 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
           </div>
         )}
 
-        {phase === "checking" && (
+        {essayAllowed && phase === "checking" && (
           <div className="mt-6 flex flex-col items-center gap-3 border-t-2 border-dashed border-ink/25 py-10 text-center">
             <div className="flex gap-1.5">
               <span className="typing-dot h-2 w-2 rounded-full bg-blue" />
@@ -153,7 +171,7 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
           </div>
         )}
 
-        {phase === "result" && current && (
+        {essayAllowed && phase === "result" && current && (
           <div className="anim-rise mt-6 border-t-2 border-dashed border-ink/25 pt-5">
             <div className="border-2 border-blue/40 bg-blue/5 p-4">
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-ink2">Предварительная оценка</p>

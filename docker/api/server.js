@@ -278,6 +278,45 @@ function leaksAnswer(text, taskId) {
   });
 }
 
+/** Тариф пользователя в разрезе, нужном ограничениям ИИ-репетитора ниже — один JOIN на оба
+ * случая (дневной лимит и доступность проверки сочинений), вместо двух запросов на запрос.
+ * Администраторы тариф игнорируют полностью (см. Tariffs.tsx) — не ограничены никогда, даже если
+ * у них почему-то записан free. */
+async function resolveUserTariffGate(userId) {
+  const { rows } = await pool.query(
+    `select p.is_admin, coalesce(t.price_rub, 0) as price_rub, t.daily_ai_limit
+     from public.profiles p
+     left join public.tariffs t on t.id = p.tariff_id
+     where p.id = $1`,
+    [userId]
+  );
+  const row = rows[0];
+  if (!row) return { isAdmin: false, priceRub: 0, dailyAiLimit: null };
+  return { isAdmin: row.is_admin, priceRub: row.price_rub, dailyAiLimit: row.daily_ai_limit };
+}
+
+/** Сколько раз сегодня (по UTC) пользователь уже обращался к репетитору в режимах
+ * hint/explain_topic/chat — реальные обращения; проверку сочинений (check_essay) не считаем,
+ * у неё свой гейт (см. ниже), это не то, что подразумевается под "обращением к ИИ-репетитору"
+ * в описании тарифов. */
+async function countTodayTutorMessages(userId) {
+  const { rows } = await pool.query(
+    `select count(*)::int as n from public.ai_messages
+     where user_id = $1 and role = 'user' and mode in ('hint', 'explain_topic', 'chat')
+       and created_at >= date_trunc('day', now())`,
+    [userId]
+  );
+  return rows[0].n;
+}
+
+/** Дневной лимит ИИ-обращений тарифа пользователя (public.tariffs.daily_ai_limit) — null у
+ * безлимитных тарифов. */
+async function checkDailyAiLimit(gate, userId) {
+  if (gate.isAdmin || gate.dailyAiLimit == null) return { limited: false };
+  const used = await countTodayTutorMessages(userId);
+  return { limited: used >= gate.dailyAiLimit };
+}
+
 /** Настройка провайдера/ключа — читается из БД (админка → вкладка "ИИ-репетитор"), .env — запасной
  * вариант, если админ ещё ничего не сохранил. Читаем на каждый запрос — правки в админке применяются
  * сразу, без рестарта контейнера. */
@@ -379,9 +418,19 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
   const body = req.body ?? {};
   try {
     const task = body.taskId ? safeTaskById(body.taskId) ?? (await dbSafeTaskById(body.taskId)) : undefined;
+    const gate = await resolveUserTariffGate(userId);
 
     if (body.mode === "check_essay") {
       if (!task) return res.status(404).json({ error: "task not found" });
+      if (!gate.isAdmin && gate.priceRub <= 0) {
+        // как и лимит ниже — 200 с готовым текстом, а не ошибка, чтобы клиент не ушёл в офлайн-
+        // фолбэк молча и не выдал вместо этого шаблонную заглушку "оценки". assessment не шлём —
+        // EssayView.tsx/MockExam.tsx это уже умеют трактовать как "оценки нет".
+        return res.json({
+          text: "Проверка сочинений и развёрнутых ответов по критериям доступна на платных тарифах — открой любой из них на странице «Тарифы».",
+          tierBlocked: true,
+        });
+      }
       const assessment = await callClaudeEssayAssessor(settings, policy, task, body.essayText ?? "");
       pool
         .query(
@@ -390,6 +439,18 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
         )
         .catch((e) => console.warn("audit log failed", e));
       return res.json({ assessment });
+    }
+
+    const limitCheck = await checkDailyAiLimit(gate, userId);
+    if (limitCheck.limited) {
+      // 200, а не 429 — это штатный, ожидаемый ответ репетитора, а не сбой: клиент (lib/aiTutor.ts)
+      // при ошибке молча уходит в офлайн-фолбэк с шаблонными подсказками, что скрыло бы от ученика
+      // сам факт исчерпания лимита. В ai_messages не пишем — это не настоящее обращение к модели,
+      // не в счёт свежей попытки.
+      return res.json({
+        text: "Дневной лимит обращений к ИИ-репетитору исчерпан — приходи завтра, или открой безлимит с тарифа от 1990 ₽/мес на странице «Тарифы».",
+        limitReached: true,
+      });
     }
 
     const system =
@@ -428,6 +489,20 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
     res.json({ text });
   } catch (e) {
     console.error(e);
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+/** Текущий остаток дневной квоты ИИ-репетитора — чтобы честно показать ограничение free-тарифа
+ * ДО того, как ученик в него упрётся (см. TutorChat.tsx), а не только постфактум сообщением из
+ * /ai-tutor выше. limited:false — тариф безлимитный или это админ, remaining можно не смотреть. */
+app.get("/ai-tutor/quota", authMiddleware, async (req, res) => {
+  try {
+    const gate = await resolveUserTariffGate(req.user.sub);
+    if (gate.isAdmin || gate.dailyAiLimit == null) return res.json({ limited: false });
+    const used = await countTodayTutorMessages(req.user.sub);
+    res.json({ limited: true, limit: gate.dailyAiLimit, used, remaining: Math.max(0, gate.dailyAiLimit - used) });
+  } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
 });

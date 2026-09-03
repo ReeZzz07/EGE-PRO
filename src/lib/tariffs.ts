@@ -1,6 +1,7 @@
 // Тарифы подписки — public.tariffs (supabase/migrations/0009_tariffs.sql). Публичное чтение
 // активных тарифов доступно всем (в т.ч. гостям), запись — только администраторам.
 // Оплаты нет: selectTariff() — просто запись tariff_id в профиль (см. комментарий в миграции).
+import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
 
 export interface Tariff {
@@ -109,4 +110,37 @@ export async function deleteTariff(id: string): Promise<{ error?: string }> {
     return { error: error.message };
   }
   return {};
+}
+
+/** Доступна ли пользователю проверка сочинений/развёрнутых ответов ИИ-репетитором — только платные
+ *  тарифы (price_rub > 0) и админы, которые тариф игнорируют вообще. null, пока не загрузилось.
+ *  Это только UI-гейт (не пускать писать сочинение, которое всё равно не проверят) — настоящая
+ *  защита на сервере, см. docker/api/server.js (resolveUserTariffGate, ответ с tierBlocked). */
+export function useEssayCheckAllowed(profile: { isAdmin?: boolean; tariffId?: string } | null): boolean | null {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const isAdmin = profile?.isAdmin ?? false;
+  const tariffId = profile?.tariffId;
+
+  useEffect(() => {
+    if (!profile) {
+      setAllowed(false);
+      return;
+    }
+    if (isAdmin) {
+      setAllowed(true);
+      return;
+    }
+    let cancelled = false;
+    loadActiveTariffs().then((tariffs) => {
+      if (cancelled) return;
+      const t = tariffs.find((x) => x.id === tariffId);
+      setAllowed(!!t && t.priceRub > 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!profile, isAdmin, tariffId]);
+
+  return allowed;
 }

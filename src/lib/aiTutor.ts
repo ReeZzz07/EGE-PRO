@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { supabase, isSupabaseConfigured, apiFetch } from "./supabase";
 import { taskById, type EgeTask, type Subject } from "../data/tasks";
 import { getTutorReply, type TutorCtx } from "../data/tutor";
 
@@ -40,6 +40,34 @@ export interface AiTutorResponse {
   assessment?: EssayAssessment;
   /** true, если ответ сгенерирован локальным офлайн-fallback, а не настоящей LLM */
   offline: boolean;
+  /** true — это не настоящий ответ модели, а шаблонное сообщение об исчерпанном дневном лимите
+   *  тарифа (см. docker/api/server.js, checkDailyAiLimit) — text уже содержит готовый текст. */
+  limitReached?: boolean;
+  /** true — проверка сочинений недоступна на бесплатном тарифе (см. docker/api/server.js) — text
+   *  содержит готовое сообщение об этом, assessment не приходит. */
+  tierBlocked?: boolean;
+}
+
+export interface AiQuota {
+  /** false — тариф безлимитный (или это админ), remaining/limit смотреть незачем */
+  limited: boolean;
+  limit?: number;
+  used?: number;
+  remaining?: number;
+}
+
+/** Остаток дневной квоты ИИ-репетитора — чтобы честно показать ограничение free-тарифа ДО того,
+ *  как ученик в него упрётся (см. TutorChat.tsx), а не только постфактум сообщением из
+ *  callAiTutor (limitReached). Гостевой/офлайн режим — лимитов нет, показывать нечего. */
+export async function loadAiQuota(): Promise<AiQuota> {
+  if (!isSupabaseConfigured) return { limited: false };
+  try {
+    const resp = await apiFetch("/ai-tutor/quota");
+    if (!resp.ok) return { limited: false };
+    return (await resp.json()) as AiQuota;
+  } catch {
+    return { limited: false };
+  }
 }
 
 /** Единая точка вызова ИИ-репетитора: настоящий edge function, если Supabase подключён, иначе честный офлайн-фолбэк. */

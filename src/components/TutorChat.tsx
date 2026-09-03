@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { EgeTask } from "../data/tasks";
 import { taskById, SUBJECTS } from "../data/tasks";
 import { useProgress } from "../lib/store";
-import { callAiTutor, type AiMode } from "../lib/aiTutor";
+import { callAiTutor, loadAiQuota, type AiMode, type AiQuota } from "../lib/aiTutor";
 import { TutorText } from "./ui";
 
 const HINT_RE = /(подсказ|намек|намеёк|помоги решить|направь)/i;
@@ -43,6 +43,12 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
   });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [quota, setQuota] = useState<AiQuota>({ limited: false });
+  const refreshQuota = () => loadAiQuota().then(setQuota);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    refreshQuota();
+  }, []);
   const messagesRef = useRef(messages);
   useEffect(() => {
     messagesRef.current = messages;
@@ -158,6 +164,7 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
       const replyText = res.text ?? "Не получилось получить ответ — попробуй ещё раз.";
       const delay = 450 + Math.min(900, replyText.length * 4);
       setTimeout(() => streamIn({ text: replyText, actions: res.actions, bumpHint: isHintReq }), delay);
+      if (!res.limitReached) refreshQuota(); // при limitReached квота и так уже 0 — не гоняем лишний запрос
     });
   };
 
@@ -180,7 +187,19 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
         <div className="min-w-0">
           <div className="font-display text-[13px] font-bold uppercase tracking-wide">ИИ-репетитор</div>
           <div className="text-[11px] text-paper/60">
-            {busy ? "печатает…" : "онлайн · знает банк ФИПИ"}
+            {busy ? (
+              "печатает…"
+            ) : quota.limited ? (
+              <button
+                onClick={() => onNavigate?.("tariffs")}
+                title="Безлимитный ИИ-репетитор — на платных тарифах"
+                className={`underline decoration-dotted underline-offset-2 hover:text-hl ${quota.remaining === 0 ? "font-bold text-amber" : ""}`}
+              >
+                бесплатный тариф · осталось {quota.remaining} из {quota.limit} на сегодня
+              </button>
+            ) : (
+              "онлайн · знает банк ФИПИ"
+            )}
           </div>
         </div>
         {contextTask && (
