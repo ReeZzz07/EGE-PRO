@@ -248,32 +248,34 @@ function AppShell() {
         {view.name === "stats" && <StatsView onNav={setView} />}
 
         {view.name === "diagnostic" && (
-          <DiagnosticView subject={view.subject} onFinish={() => setView({ name: "plan" })} onSkip={() => setView({ name: "bank" })} />
+          <DiagnosticView subject={view.subject} onFinish={() => setView({ name: "plan", subject: view.subject })} onSkip={() => setView({ name: "bank" })} />
         )}
 
-        {view.name === "plan" && (
-          profile?.primarySubject ? (
-            <PlanView subject={profile.primarySubject} onStartTraining={(taskId) => setView({ name: "task", id: taskId })} onSkipToBank={() => setView({ name: "bank" })} />
+        {view.name === "plan" && (() => {
+          const subject = view.subject ?? profile?.primarySubject;
+          return subject ? (
+            <PlanView subject={subject} onStartTraining={(taskId) => setView({ name: "task", id: taskId })} onSkipToBank={() => setView({ name: "bank" })} />
           ) : (
             <div className="mx-auto max-w-xl px-4 py-16 text-center">
               <p className="font-display text-xl font-bold">План пока не построен</p>
               <p className="mt-2 text-[13.5px] text-ink2">Пройди короткий онбординг и диагностику — тогда появится персональный план.</p>
               <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать</button>
             </div>
-          )
-        )}
+          );
+        })()}
 
-        {view.name === "mock-exam" && (
-          profile?.primarySubject ? (
-            <MockExam subject={profile.primarySubject} onFinish={() => setView({ name: "session-summary" })} onExit={() => setView({ name: "home" })} />
+        {view.name === "mock-exam" && (() => {
+          const subject = view.subject ?? profile?.primarySubject;
+          return subject ? (
+            <MockExam subject={subject} onFinish={() => setView({ name: "session-summary" })} onExit={() => setView({ name: "home" })} />
           ) : (
             <div className="mx-auto max-w-xl px-4 py-16 text-center">
               <p className="font-display text-xl font-bold">Сначала выбери предмет</p>
-              <p className="mt-2 text-[13.5px] text-ink2">Пробник строится по предмету из онбординга.</p>
+              <p className="mt-2 text-[13.5px] text-ink2">Пробник строится по одному из твоих предметов.</p>
               <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать онбординг</button>
             </div>
-          )
-        )}
+          );
+        })()}
 
         {view.name === "session-summary" && <SessionSummary onNav={setView} />}
         {view.name === "tariffs" && <Tariffs onNav={setView} />}

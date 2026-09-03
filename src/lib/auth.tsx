@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { addProfileSubject, loadProfileSubjects } from "./profileSubjects";
 import type { Subject } from "../data/tasks";
 
 export type Grade = "10" | "11" | "grad";
@@ -13,8 +14,12 @@ export interface Profile {
   examYear?: number;
   goal?: Goal;
   dailyMinutes?: number;
-  /** предмет, выбранный на онбординге — основа для диагностики/плана */
+  /** предмет, выбранный на онбординге — остаётся "предметом по умолчанию" везде, где явно не
+   *  выбран другой (см. subjects ниже) */
   primarySubject?: Subject;
+  /** все активные предметы ученика (public.profile_subjects), включая primarySubject — сколько их
+   *  может быть, ограничивает тариф (subjectsCount). Пусто, пока не загрузилось. */
+  subjects: Subject[];
   /** timestamp завершения онбординга (квиз + «как это работает») */
   onboardedAt?: number;
   /** доступ к админке управления контентом лендинга (раздел 2.4 ТЗ, узкий срез) */
@@ -37,6 +42,9 @@ interface AuthCtx {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
+  /** перечитать profile.subjects из БД — вызывать после addProfileSubject/removeProfileSubject
+   *  (см. lib/profileSubjects.ts), эти функции сами по себе локальный profile не трогают. */
+  refreshSubjects: () => Promise<void>;
 }
 
 const GUEST_KEY = "ege-pro.guest-profile.v1";
@@ -77,7 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function loadProfile(userId: string, fallbackEmail: string, fallbackName: string) {
-      const { data } = await supabase!.from("profiles").select("*").eq("id", userId).maybeSingle();
+      const [{ data }, subjects] = await Promise.all([
+        supabase!.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        loadProfileSubjects(userId),
+      ]);
       if (cancelled) return;
       if (data) {
         setProfile({
@@ -89,12 +100,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           goal: data.goal ?? undefined,
           dailyMinutes: data.daily_minutes ?? undefined,
           primarySubject: data.primary_subject ?? undefined,
+          subjects,
           onboardedAt: data.onboarded_at ? new Date(data.onboarded_at).getTime() : undefined,
           isAdmin: data.is_admin ?? false,
           tariffId: data.tariff_id ?? "free",
         });
       } else {
-        setProfile({ id: userId, name: fallbackName, email: fallbackEmail });
+        setProfile({ id: userId, name: fallbackName, email: fallbackEmail, subjects });
       }
       setLoading(false);
     }
@@ -119,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, name: string): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) {
-      const p: Profile = { id: "guest-" + Date.now(), name, email };
+      const p: Profile = { id: "guest-" + Date.now(), name, email, subjects: [] };
       saveGuestProfile(p);
       setProfile(p);
       return {};
@@ -128,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { error: error.message };
     if (data.user) {
       // профиль создастся триггером handle_new_user; подстрахуемся локальным значением сразу
-      setProfile({ id: data.user.id, name, email });
+      setProfile({ id: data.user.id, name, email, subjects: [] });
     }
     return {};
   };
@@ -173,11 +185,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           tariff_id: patch.tariffId,
         })
         .eq("id", profile.id);
+
+      // онбординг задаёт primarySubject один раз — это и есть "добавить первый предмет"
+      // (см. lib/profileSubjects.ts); дальше пользователь добавляет остальные сам на дашборде.
+      if (patch.primarySubject && !profile.subjects.includes(patch.primarySubject)) {
+        const res = await addProfileSubject(profile.id, patch.primarySubject);
+        if (!res.error) setProfile((prev) => (prev ? { ...prev, subjects: [...prev.subjects, patch.primarySubject!] } : prev));
+      }
     }
   };
 
+  const refreshSubjects = async () => {
+    if (!isSupabaseConfigured || !supabase || !profile) return;
+    const subjects = await loadProfileSubjects(profile.id);
+    setProfile((prev) => (prev ? { ...prev, subjects } : prev));
+  };
+
   return (
-    <AuthCtx.Provider value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, updateProfile }}>
+    <AuthCtx.Provider value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, updateProfile, refreshSubjects }}>
       {children}
     </AuthCtx.Provider>
   );

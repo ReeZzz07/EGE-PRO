@@ -1,12 +1,108 @@
 import { SUBJECTS, TASKS, tasksOf, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
-import { loadStudyPlan } from "../lib/planStorage";
-import { useEffect, useMemo } from "react";
+import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
+import { addProfileSubject } from "../lib/profileSubjects";
+import { useEffect, useMemo, useState } from "react";
 import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
 import { getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
-import { Icon, ProgressRing, Reveal } from "./ui";
+import { Icon, ProgressRing, Reveal, useToast } from "./ui";
+
+/** «Мои предметы» — тарифы обещают "N предметов на выбор" (public.tariffs.subjectsCount), эта
+ *  секция и есть то самое место, где предмет реально добавляется (см. lib/profileSubjects.ts).
+ *  Лимит по тарифу проверяет БД (триггер enforce_subject_limit) — здесь просто показываем её ответ. */
+function MySubjectsSection({ onNav }: { onNav: (v: View) => void }) {
+  const { profile, refreshSubjects } = useAuth();
+  const { push } = useToast();
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState<Subject | null>(null);
+  const subjects = profile?.subjects ?? [];
+  const pickable = (Object.keys(SUBJECTS) as Subject[]).filter((s) => !subjects.includes(s));
+
+  const addSubject = async (s: Subject) => {
+    if (!profile) return;
+    setBusy(s);
+    const res = await addProfileSubject(profile.id, s);
+    setBusy(null);
+    if (res.error) {
+      push(res.error, "err");
+      return;
+    }
+    await refreshSubjects();
+    setAdding(false);
+    push(`Добавлено: ${SUBJECTS[s].name}`, "ok");
+  };
+
+  return (
+    <section className="mt-14">
+      <Reveal>
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">мои предметы</p>
+        <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Над чем готовишься</h2>
+      </Reveal>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {subjects.map((s) => {
+          const meta = SUBJECTS[s];
+          const hasDiagnostic = !!loadDiagnosticResult(s);
+          return (
+            <div key={s} className="sheet flex h-full flex-col p-5">
+              <span className={`font-display inline-block w-fit border-2 border-ink px-2 py-0.5 text-[11px] font-black ${meta.color}`}>{meta.short}</span>
+              <h3 className="font-display mt-3 text-lg font-bold leading-tight">{meta.name}</h3>
+              <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-ink2">{meta.desc}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {hasDiagnostic ? (
+                  <>
+                    <button onClick={() => onNav({ name: "plan", subject: s })} className="btn btn-ink px-3.5 py-2 text-[12.5px]">План</button>
+                    <button onClick={() => onNav({ name: "mock-exam", subject: s })} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+                      <Icon name="timer" size={14} /> Пробник
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => onNav({ name: "diagnostic", subject: s })} className="btn btn-ink px-3.5 py-2 text-[12.5px]">
+                    <Icon name="target" size={14} /> Пройти диагностику
+                  </button>
+                )}
+                <button onClick={() => onNav({ name: "bank", subject: s })} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">Банк</button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* добавить ещё предмет — до лимита тарифа, дальше честно предлагаем тариф побольше */}
+        <div className="sheet flex h-full flex-col border-dashed border-ink/30 p-5">
+          {adding ? (
+            pickable.length > 0 ? (
+              <>
+                <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Выбери предмет</p>
+                <div className="mt-3 grid flex-1 grid-cols-2 gap-2 content-start">
+                  {pickable.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => addSubject(s)}
+                      disabled={busy !== null}
+                      className={`rounded-sm border-2 px-2 py-2 text-left text-[12px] font-bold transition disabled:opacity-40 ${SUBJECTS[s].color} border-ink/15 hover:border-ink/40`}
+                    >
+                      {busy === s ? "Добавляем…" : SUBJECTS[s].short}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setAdding(false)} className="btn btn-ghost mt-3 justify-center px-3.5 py-2 text-[12.5px]">Отмена</button>
+              </>
+            ) : (
+              <p className="flex-1 text-[13px] leading-relaxed text-ink2">Уже все предметы платформы добавлены 🎉</p>
+            )
+          ) : (
+            <button onClick={() => setAdding(true)} className="flex h-full w-full flex-col items-center justify-center gap-2 py-6 text-ink2 transition hover:text-ink">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-ink/30 text-lg">+</span>
+              <span className="text-[13px] font-bold">Добавить предмет</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 const TICKER = [
   "∑ 1/n² = π²/6", "E = mc²", "sin²α + cos²α = 1", "logₐb = ln b / ln a", "(a+b)² = a² + 2ab + b²", "V = 4/3·πr³",
@@ -204,6 +300,8 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
           </section>
         </Reveal>
       )}
+
+      <MySubjectsSection onNav={onNav} />
 
       {/* ─── тренажёр по предметам ─── */}
       <section className="mt-14">

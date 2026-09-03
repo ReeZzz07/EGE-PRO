@@ -14,8 +14,8 @@ export type View =
   | { name: "stats" }
   | { name: "task"; id: string }
   | { name: "diagnostic"; subject: Subject }
-  | { name: "plan" }
-  | { name: "mock-exam" }
+  | { name: "plan"; subject?: Subject }
+  | { name: "mock-exam"; subject?: Subject }
   | { name: "session-summary" }
   | { name: "tariffs" }
   | { name: "legal"; doc: "offer" | "privacy" }
