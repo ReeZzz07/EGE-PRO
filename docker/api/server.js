@@ -6,14 +6,15 @@ import cors from "cors";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import pg from "pg";
 import fs from "node:fs";
 import path from "node:path";
+import { pool } from "./db.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, DEFAULT_POLICY } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
+import { resolveUserTariffGate, countTodayTutorMessages, checkDailyAiLimit, isEssayCheckAllowed } from "./tariffGate.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -22,8 +23,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const ENV_FALLBACK_SETTINGS = { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY || "", model: process.env.ANTHROPIC_MODEL || "", baseUrl: "" };
 const STORAGE_ROOT = process.env.STORAGE_ROOT || "/data/storage";
 if (!JWT_SECRET) throw new Error("JWT_SECRET не задан");
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 fs.mkdirSync(STORAGE_ROOT, { recursive: true });
 
@@ -278,45 +277,6 @@ function leaksAnswer(text, taskId) {
   });
 }
 
-/** Тариф пользователя в разрезе, нужном ограничениям ИИ-репетитора ниже — один JOIN на оба
- * случая (дневной лимит и доступность проверки сочинений), вместо двух запросов на запрос.
- * Администраторы тариф игнорируют полностью (см. Tariffs.tsx) — не ограничены никогда, даже если
- * у них почему-то записан free. */
-async function resolveUserTariffGate(userId) {
-  const { rows } = await pool.query(
-    `select p.is_admin, coalesce(t.price_rub, 0) as price_rub, t.daily_ai_limit
-     from public.profiles p
-     left join public.tariffs t on t.id = p.tariff_id
-     where p.id = $1`,
-    [userId]
-  );
-  const row = rows[0];
-  if (!row) return { isAdmin: false, priceRub: 0, dailyAiLimit: null };
-  return { isAdmin: row.is_admin, priceRub: row.price_rub, dailyAiLimit: row.daily_ai_limit };
-}
-
-/** Сколько раз сегодня (по UTC) пользователь уже обращался к репетитору в режимах
- * hint/explain_topic/chat — реальные обращения; проверку сочинений (check_essay) не считаем,
- * у неё свой гейт (см. ниже), это не то, что подразумевается под "обращением к ИИ-репетитору"
- * в описании тарифов. */
-async function countTodayTutorMessages(userId) {
-  const { rows } = await pool.query(
-    `select count(*)::int as n from public.ai_messages
-     where user_id = $1 and role = 'user' and mode in ('hint', 'explain_topic', 'chat')
-       and created_at >= date_trunc('day', now())`,
-    [userId]
-  );
-  return rows[0].n;
-}
-
-/** Дневной лимит ИИ-обращений тарифа пользователя (public.tariffs.daily_ai_limit) — null у
- * безлимитных тарифов. */
-async function checkDailyAiLimit(gate, userId) {
-  if (gate.isAdmin || gate.dailyAiLimit == null) return { limited: false };
-  const used = await countTodayTutorMessages(userId);
-  return { limited: used >= gate.dailyAiLimit };
-}
-
 /** Настройка провайдера/ключа — читается из БД (админка → вкладка "ИИ-репетитор"), .env — запасной
  * вариант, если админ ещё ничего не сохранил. Читаем на каждый запрос — правки в админке применяются
  * сразу, без рестарта контейнера. */
@@ -422,7 +382,7 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
 
     if (body.mode === "check_essay") {
       if (!task) return res.status(404).json({ error: "task not found" });
-      if (!gate.isAdmin && gate.priceRub <= 0) {
+      if (!isEssayCheckAllowed(gate)) {
         // как и лимит ниже — 200 с готовым текстом, а не ошибка, чтобы клиент не ушёл в офлайн-
         // фолбэк молча и не выдал вместо этого шаблонную заглушку "оценки". assessment не шлём —
         // EssayView.tsx/MockExam.tsx это уже умеют трактовать как "оценки нет".
