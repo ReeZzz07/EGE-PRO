@@ -17,8 +17,13 @@ export function checkAnswer(given: string, accepted: string[]): boolean {
   return accepted.some((a) => {
     const n = normalizeAnswer(a);
     if (n === g) return true;
-    // «1,3» ≡ «13» для ответов-наборов цифр
-    const digitsOnly = (s: string) => s.replace(/[^0-9a-zа-я.-]/g, "");
+    // «1,3» ≡ «13» для ответов-наборов цифр (задания с множественным выбором в БД хранятся как
+    // слитные строки цифр вроде «145», без разделителей) — но только когда сам эталонный ответ
+    // не десятичная дробь: normalizeAnswer уже превратил запятую в точку, и если бы мы стирали
+    // точку всегда, «13» ошибочно засчитался бы верным для дроби «1.3» (эталонных ответов с
+    // точкой в БД ~2300, в основном математика/физика/химия — реальный риск, не теоретический).
+    if (n.includes(".")) return false;
+    const digitsOnly = (s: string) => s.replace(/[^0-9a-zа-я-]/g, "");
     return digitsOnly(n) === digitsOnly(g);
   });
 }
