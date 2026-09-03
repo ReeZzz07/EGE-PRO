@@ -19,3 +19,9 @@ class IntersectionObserverStub {
 }
 // @ts-expect-error — упрощённый стаб, не реализует весь интерфейс IntersectionObserver
 globalThis.IntersectionObserver = IntersectionObserverStub;
+
+// jsdom не реализует Element.scrollIntoView (см. TutorChat.tsx — автоскролл ленты сообщений
+// к последнему при каждом апдейте) — та же история, что и с IntersectionObserver выше.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

@@ -12,7 +12,7 @@ import { Icon, ProgressRing, Reveal, useToast } from "./ui";
 /** «Мои предметы» — тарифы обещают "N предметов на выбор" (public.tariffs.subjectsCount), эта
  *  секция и есть то самое место, где предмет реально добавляется (см. lib/profileSubjects.ts).
  *  Лимит по тарифу проверяет БД (триггер enforce_subject_limit) — здесь просто показываем её ответ. */
-function MySubjectsSection({ onNav }: { onNav: (v: View) => void }) {
+export function MySubjectsSection({ onNav }: { onNav: (v: View) => void }) {
   const { profile, refreshSubjects } = useAuth();
   const { push } = useToast();
   const [adding, setAdding] = useState(false);
