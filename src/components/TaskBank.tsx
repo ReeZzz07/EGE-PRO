@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DIFF_LABEL, SUBJECTS, TASKS, type EgeTask, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { plural } from "../lib/utils";
-import { hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
+import { getAvailableSubjects, hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import { DEFAULT_FILTERS, filterTasks, loadTaskBankFilters, saveTaskBankFilters, type TaskStatus } from "../lib/taskFilters";
 import type { View } from "./Header";
 import { Icon, Reveal } from "./ui";
@@ -100,7 +100,9 @@ export default function TaskBank({ onNav, initialSubject }: { onNav: (v: View) =
           >
             Все предметы
           </button>
-          {Object.values(SUBJECTS).map((s) => (
+          {getAvailableSubjects().map((id) => {
+            const s = SUBJECTS[id];
+            return (
             <button
               key={s.id}
               onClick={() => setSubject(subject === s.id ? "all" : s.id)}
@@ -110,7 +112,8 @@ export default function TaskBank({ onNav, initialSubject }: { onNav: (v: View) =
             >
               <span className={subject === s.id ? "text-hl" : s.color}>{s.short}</span> {s.name}
             </button>
-          ))}
+            );
+          })}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -160,7 +163,7 @@ export default function TaskBank({ onNav, initialSubject }: { onNav: (v: View) =
         <div className="sheet mt-6 flex flex-col items-center px-6 py-16 text-center">
           <Icon name="search" size={40} className="text-ink/25" />
           <p className="font-display mt-4 text-lg font-bold">Ничего не нашлось</p>
-          <p className="mt-1 max-w-sm text-sm text-ink2">Попробуй сбросить фильтры или изменить запрос — в банке {TASKS.length} заданий по {Object.keys(SUBJECTS).length} предметам.</p>
+          <p className="mt-1 max-w-sm text-sm text-ink2">Попробуй сбросить фильтры или изменить запрос — в банке {TASKS.length} заданий по {getAvailableSubjects().length} предметам.</p>
           <button
             onClick={() => { setSubject("all"); setDiff(0); setStatus("all"); setQuery(""); }}
             className="btn btn-ghost mt-5 px-4 py-2 text-sm"

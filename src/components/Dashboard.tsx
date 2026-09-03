@@ -5,7 +5,7 @@ import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
 import { addProfileSubject } from "../lib/profileSubjects";
 import { useEffect, useMemo, useState } from "react";
 import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
-import { getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
+import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, useToast } from "./ui";
 
@@ -18,7 +18,7 @@ function MySubjectsSection({ onNav }: { onNav: (v: View) => void }) {
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<Subject | null>(null);
   const subjects = profile?.subjects ?? [];
-  const pickable = (Object.keys(SUBJECTS) as Subject[]).filter((s) => !subjects.includes(s));
+  const pickable = getAvailableSubjects().filter((s) => !subjects.includes(s));
 
   const addSubject = async (s: Subject) => {
     if (!profile) return;
@@ -241,7 +241,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               </div>
             </div>
             <div className="mt-4 space-y-2">
-              {(Object.keys(SUBJECTS) as Subject[]).map((s) => {
+              {getAvailableSubjects().map((s) => {
                 const st = derived.perSubject[s];
                 const pct = st.total ? st.solved / st.total : 0;
                 return (
@@ -318,7 +318,8 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
         </Reveal>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(Object.values(SUBJECTS)).map((s, idx) => {
+          {getAvailableSubjects().map((id, idx) => {
+            const s = SUBJECTS[id];
             const st = derived.perSubject[s.id];
             const pct = st.total ? Math.round((st.solved / st.total) * 100) : 0;
             const cls = idx === 0 ? "sm:col-span-2" : "";

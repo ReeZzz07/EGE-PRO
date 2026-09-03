@@ -9,6 +9,7 @@ import { Icon, ToastProvider } from "./components/ui";
 import { ProgressProvider } from "./lib/store";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { SUBJECTS } from "./data/tasks";
+import { getAvailableSubjects, useTasksVersion } from "./lib/dbTasks";
 import Landing from "./components/Landing";
 import OnboardingFlow from "./components/OnboardingFlow";
 import AuthScreen from "./components/AuthScreen";
@@ -22,6 +23,7 @@ import { pathToView, viewToPath } from "./lib/routes";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
+  useTasksVersion();
   return (
     <footer className="border-t-2 border-ink bg-night text-paper">
       <div className="mx-auto grid max-w-[1600px] gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
@@ -47,7 +49,9 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Предметы</p>
           <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
-            {Object.values(SUBJECTS).map((s) => (
+            {getAvailableSubjects().map((id) => {
+              const s = SUBJECTS[id];
+              return (
               <li key={s.id}>
                 <button
                   onClick={() => onNav(profile ? { name: "bank", subject: s.id } : { name: "onboarding", subject: s.id })}
@@ -56,7 +60,8 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
                   {s.name}
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
         <div>

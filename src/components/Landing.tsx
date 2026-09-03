@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { DEFAULT_CONTENT, loadLandingContent, type LandingContent } from "../lib/content";
-import { getEssayTaskTotal, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectTotal, useTasksVersion } from "../lib/dbTasks";
+import { getAvailableSubjects, getEssayTaskTotal, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectTotal, useTasksVersion } from "../lib/dbTasks";
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
@@ -55,6 +55,7 @@ export default function Landing({
   }, [scrollTo, scrollNonce]);
 
   useTasksVersion();
+  const availableSubjects = getAvailableSubjects();
 
   // Иллюстративный образец для лендинга — не тянем из банка (гость видит эту страницу до того,
   // как банк вообще подгрузился), поэтому просто фиксированный пример «как выглядит задание».
@@ -108,7 +109,7 @@ export default function Landing({
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 border-t-2 border-dashed border-ink/20 pt-5">
               {[
                 [String(getGlobalTaskTotal()), "заданий в банке"],
-                [String(Object.keys(SUBJECTS).length), "предметов"],
+                [String(availableSubjects.length), "предметов"],
                 [String(getGlobalPointsTotal()), "первичных баллов"],
                 [String(getEssayTaskTotal()), "заданий с развёрнутым ответом"],
               ].map(([v, l]) => (
@@ -167,10 +168,12 @@ export default function Landing({
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1</p>
           <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">С какого предмета начнём?</h2>
-          <p className="mt-1.5 max-w-xl text-[13.5px] text-ink2">Скоро добавим остальные предметы. Начни с любого из {Object.keys(SUBJECTS).length} — дальше сможешь тренировать все.</p>
+          <p className="mt-1.5 max-w-xl text-[13.5px] text-ink2">Скоро добавим остальные предметы. Начни с любого из {availableSubjects.length} — дальше сможешь тренировать все.</p>
         </Reveal>
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Object.values(SUBJECTS).map((s, i) => (
+          {availableSubjects.map((id, i) => {
+            const s = SUBJECTS[id];
+            return (
             <Reveal key={s.id} delay={i * 60}>
               <button onClick={() => onStart(s.id)} className="sheet card-lift group flex w-full items-center gap-3 p-4 text-left">
                 <span className={`font-display flex h-11 w-11 shrink-0 items-center justify-center border-2 border-ink text-[12px] font-black ${s.color}`}>{s.short}</span>
@@ -182,7 +185,8 @@ export default function Landing({
                 <Icon name="arrowR" size={16} className="shrink-0 text-ink2 transition group-hover:translate-x-0.5 group-hover:text-ink" />
               </button>
             </Reveal>
-          ))}
+            );
+          })}
         </div>
       </section>
 

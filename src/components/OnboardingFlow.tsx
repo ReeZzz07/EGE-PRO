@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
+import { getAvailableSubjects, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal } from "./ui";
 import AuthScreen from "./AuthScreen";
 import type { View } from "./Header";
@@ -60,6 +61,7 @@ export default function OnboardingFlow({
   onNav: (v: View) => void;
 }) {
   const { profile, updateProfile } = useAuth();
+  useTasksVersion();
   const [step, setStep] = useState<Step>(initialSubject ? "quiz" : "subject");
   const [subject, setSubject] = useState<Subject | undefined>(initialSubject);
   const [grade, setGrade] = useState<Grade | null>(null);
@@ -90,7 +92,9 @@ export default function OnboardingFlow({
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1 из 4</p>
           <h1 className="font-display mt-1 text-2xl font-black">Выбери предмет</h1>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {Object.values(SUBJECTS).map((s) => (
+            {getAvailableSubjects().map((id) => {
+              const s = SUBJECTS[id];
+              return (
               <button
                 key={s.id}
                 onClick={() => { setSubject(s.id); setStep("quiz"); }}
@@ -99,7 +103,8 @@ export default function OnboardingFlow({
                 <span className={`font-display flex h-10 w-10 shrink-0 items-center justify-center border-2 border-ink text-[12px] font-black ${s.color}`}>{s.short}</span>
                 <span className="text-[14px] font-bold">{s.name}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
         </Reveal>
       )}

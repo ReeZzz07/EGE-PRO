@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { SUBJECTS, taskById, type Subject } from "../data/tasks";
+import { SUBJECTS, taskById } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
-import { getGlobalPointsTotal, getGlobalTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
+import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import { Icon, Reveal } from "./ui";
@@ -161,7 +161,7 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
           <div className="sheet p-6">
             <h2 className="font-display text-lg font-bold">Прогресс по предметам</h2>
             <div className="mt-5 space-y-5">
-              {(Object.keys(SUBJECTS) as Subject[]).map((s) => {
+              {getAvailableSubjects().map((s) => {
                 const meta = SUBJECTS[s];
                 const st = derived.perSubject[s];
                 const pct = st.total ? Math.round((st.solved / st.total) * 100) : 0;

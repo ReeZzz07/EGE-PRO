@@ -242,3 +242,14 @@ export function getGlobalTaskTotal(): number {
 /** Все коды предметов — удобно для перебора (Object.keys(SUBJECTS) даёт то же самое, экспортируем
  *  здесь просто чтобы не тащить SUBJECTS туда, где нужны только id). */
 export const ALL_SUBJECTS = Object.keys(SUBJECTS) as Subject[];
+
+/** Предметы, которые реально можно выбрать/показать: с заданиями в банке (getSubjectTotal > 0).
+ *  Пока агрегаты не подгрузились (subjectAggsLoaded === false) или бэкенд не подключён — отдаём
+ *  все предметы как есть, чтобы не мигать пустым списком на первом рендере; список сужается сам
+ *  собой, как только придут реальные цифры (см. bump() в loadSubjectAggregates). Так предмет без
+ *  исходников (сейчас — «Информатика») просто не показывается для выбора нигде в интерфейсе, а
+ *  появится сам собой, как только для него импортируют задания — код трогать не придётся. */
+export function getAvailableSubjects(): Subject[] {
+  if (!isSupabaseConfigured || !subjectAggsLoaded) return ALL_SUBJECTS;
+  return ALL_SUBJECTS.filter((s) => getSubjectTotal(s) > 0);
+}
