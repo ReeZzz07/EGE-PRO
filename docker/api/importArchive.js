@@ -36,20 +36,24 @@ function stripHtml(html) {
     .trim();
 }
 
+// Двоеточие после маркера — обязательное, не "\s*:?": иначе search()/split() ловят слово
+// "ответ"/"источник"/"элементы ключа" где угодно в обычном тексте пояснения (например "...чтобы
+// получить верный ответ, подставь...") как будто это разметка поля, и обрубают explanation/answer
+// не там — см. docker/api/test/importArchive.test.js, тест на этот класс ошибки.
 function parseShortAnswer(answerHtml) {
   let text = stripHtml(answerHtml);
-  text = text.split(/Источник\s*:?/i)[0];
-  const idx = text.search(/Ответ\s*:?/i);
+  text = text.split(/Источник\s*:/i)[0];
+  const idx = text.search(/Ответ\s*:/i);
   if (idx === -1) return { answer: null, explanation: text.trim() || null };
-  const explanation = text.slice(0, idx).replace(/^Решение\s*:?/i, "").trim();
-  const answerRaw = text.slice(idx).replace(/^Ответ\s*:?/i, "").trim();
+  const explanation = text.slice(0, idx).replace(/^Решение\s*:/i, "").trim();
+  const answerRaw = text.slice(idx).replace(/^Ответ\s*:/i, "").trim();
   return { answer: answerRaw || null, explanation: explanation || null };
 }
 
 function parseCriteria(answerHtml) {
   let text = stripHtml(answerHtml);
-  text = text.split(/Источник\s*:?/i)[0];
-  const m = text.split(/Элементы ключа\s*:?/i);
+  text = text.split(/Источник\s*:/i)[0];
+  const m = text.split(/Элементы ключа\s*:/i);
   const body = m.length > 1 ? m[1] : text;
   const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
   const byNum = new Map();
