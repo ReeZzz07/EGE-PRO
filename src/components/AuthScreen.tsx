@@ -20,6 +20,8 @@ export default function AuthScreen({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +29,7 @@ export default function AuthScreen({
     setError(null);
     if (mode === "signup" && !name.trim()) return setError("Укажи имя — так к тебе будет обращаться репетитор.");
     if (!email.trim() || !password.trim()) return setError("Заполни email и пароль.");
+    if (mode === "signup" && password !== confirmPassword) return setError("Пароли не совпадают.");
     setBusy(true);
     const result = mode === "signup" ? await signUp(email.trim(), password, name.trim()) : await signIn(email.trim(), password);
     setBusy(false);
@@ -68,15 +71,48 @@ export default function AuthScreen({
           </div>
           <div>
             <label className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Пароль</label>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
-              placeholder="Минимум 6 символов"
-            />
+            <div className="relative mt-1.5">
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type={showPassword ? "text" : "password"}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                className="input-blank w-full rounded-sm px-3.5 py-2.5 pr-10 text-sm"
+                placeholder="Минимум 6 символов"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-ink2 hover:text-ink"
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+              >
+                <Icon name={showPassword ? "eyeOff" : "eye"} size={16} />
+              </button>
+            </div>
           </div>
+          {mode === "signup" && (
+            <div>
+              <label className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Повтори пароль</label>
+              <div className="relative mt-1.5">
+                <input
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  className="input-blank w-full rounded-sm px-3.5 py-2.5 pr-10 text-sm"
+                  placeholder="Ещё раз тот же пароль"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-ink2 hover:text-ink"
+                  aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                >
+                  <Icon name={showPassword ? "eyeOff" : "eye"} size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -103,7 +139,7 @@ export default function AuthScreen({
           </p>
         )}
 
-        <button onClick={() => { setMode(mode === "signup" ? "login" : "signup"); setError(null); }} className="link-slide mt-3 block text-center text-[12.5px] font-bold text-ink2 hover:text-ink">
+        <button onClick={() => { setMode(mode === "signup" ? "login" : "signup"); setError(null); setConfirmPassword(""); }} className="link-slide mt-3 block text-center text-[12.5px] font-bold text-ink2 hover:text-ink">
           {mode === "signup" ? "Уже есть аккаунт? Войти" : "Впервые здесь? Создать профиль"}
         </button>
 
