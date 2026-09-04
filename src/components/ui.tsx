@@ -238,27 +238,47 @@ export function useToast() {
 }
 
 /* ─────────── Разметка текста репетитора (**жирный**, • маркеры) ─────────── */
+/** Разбивает строку на текст/**bold** сегменты — общая логика для обычных строк и заголовков. */
+function inlineFormat(body: string): ReactNode[] {
+  const parts = body.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return parts.map((p, j) =>
+    p.startsWith("**") && p.endsWith("**") ? (
+      <strong key={j} className="font-extrabold">
+        {p.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={j}>{p}</span>
+    )
+  );
+}
+
+/** Лёгкий markdown-lite рендер ответов ИИ-репетитора (чат + подсказки в SolveView): модель время
+ *  от времени отвечает не голым текстом, а с "###"-заголовками, списками через "•"/"-" и **bold** —
+ *  без разбора это выглядело сырым текстом с видимыми решётками/звёздочками. Не полноценный
+ *  markdown (кода/ссылок/таблиц не бывает в этих ответах по построению промпта), нарочно минимально. */
 export function TutorText({ text, light = false }: { text: string; light?: boolean }) {
-  const lines = text.split("\n");
+  const lines = text.split("\n").filter((l) => l.trim() !== "");
+  const textCls = light ? "text-paper/85" : "text-ink/85";
   return (
     <div className="space-y-1.5">
       {lines.map((line, i) => {
-        const isBullet = line.trim().startsWith("•");
-        const body = line.trim().replace(/^•\s*/, "");
-        const parts = body.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-        const content = parts.map((p, j) =>
-          p.startsWith("**") && p.endsWith("**") ? (
-            <strong key={j} className="font-extrabold">
-              {p.slice(2, -2)}
-            </strong>
-          ) : (
-            <span key={j}>{p}</span>
-          )
-        );
+        const trimmed = line.trim();
+        const heading = trimmed.match(/^#{1,6}\s+(.+)/);
+        if (heading) {
+          return (
+            <p key={i} className={`font-bold ${light ? "text-paper" : "text-ink"}`}>
+              {inlineFormat(heading[1])}
+            </p>
+          );
+        }
+        // "• " и "- " — оба часто встречаются как маркер списка у модели; нумерация вида "1)"
+        // намеренно не трогаем — это цифры пунктов самого задания в тексте, а не список подсказки.
+        const isBullet = /^[•-]\s/.test(trimmed);
+        const body = trimmed.replace(/^[•-]\s*/, "");
         return (
-          <p key={i} className={isBullet ? `flex gap-2 ${light ? "text-paper/85" : "text-ink/85"}` : light ? "text-paper/85" : "text-ink/85"}>
+          <p key={i} className={isBullet ? `flex gap-2 ${textCls}` : textCls}>
             {isBullet && <span className={`mt-[0.5em] h-1.5 w-1.5 shrink-0 rotate-45 ${light ? "bg-hl" : "bg-blue"}`} />}
-            <span>{content}</span>
+            <span>{inlineFormat(body)}</span>
           </p>
         );
       })}

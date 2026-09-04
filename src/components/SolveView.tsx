@@ -8,7 +8,7 @@ import { DEFAULT_FILTERS, filterTasks, loadTaskBankFilters } from "../lib/taskFi
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import EssayView from "./EssayView";
-import { Burst, Icon, Stamp, useToast } from "./ui";
+import { Burst, Icon, Stamp, TutorText, useToast } from "./ui";
 
 type Phase = "solve" | "wrong" | "correct" | "revealed";
 
@@ -420,14 +420,16 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
                 {hintsUsed > 0 && !examMode && (
                   <div className="mt-3 space-y-2">
                     {Array.from({ length: hintsUsed }).map((_, i) => (
-                      <p key={i} className="anim-rise flex gap-2.5 border-l-4 border-amber bg-amber/8 px-3 py-2 text-[13.5px] leading-relaxed text-ink/85">
+                      <div key={i} className="anim-rise flex gap-2.5 border-l-4 border-amber bg-amber/8 px-3 py-2 text-[13.5px] leading-relaxed">
                         <span className="font-mono text-[12px] font-bold text-amber shrink-0">{i + 1}/3</span>
-                        {hintTexts[i] ?? (
+                        {hintTexts[i] != null ? (
+                          <TutorText text={hintTexts[i]!} />
+                        ) : (
                           <span className="flex items-center gap-2 text-ink2">
                             <Icon name="refresh" size={13} className="animate-spin" /> Репетитор придумывает подсказку…
                           </span>
                         )}
-                      </p>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -440,7 +442,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
         </div>
 
         {/* ─── репетитор ─── */}
-        <aside className="min-w-0">
+        <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
           <p className="font-mono mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.25em] text-ink2">
             <Icon name="chat" size={14} /> репетитор рядом
           </p>
