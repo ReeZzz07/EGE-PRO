@@ -19,11 +19,19 @@ interface ProgressState {
 
 type Action = { type: "ADD"; attempt: Attempt } | { type: "CLEAR_TASK"; taskId: string } | { type: "RESET" } | { type: "LOAD"; attempts: Attempt[] };
 
-const KEY = "ege-pro.attempts.v1";
+/** Только для гостевого режима (Supabase не настроен) — там на весь браузер один профиль
+ *  (см. GUEST_KEY в lib/auth.tsx), так что один общий ключ безопасен. */
+const GUEST_KEY = "ege-pro.attempts.v1";
+/** Попытки реального аккаунта — свой ключ на пользователя. Раньше все попытки лежали под
+ *  одним общим GUEST_KEY независимо от того, кто вошёл — на одном браузере (в т.ч. при QA
+ *  тестовыми аккаунтами) попытки предыдущего/чужого пользователя утекали в текущего: сразу
+ *  видны в счётчике ошибок, а при первом входе ещё и мигрировались в Supabase под чужим user_id
+ *  (см. syncOnLogin). */
+const userAttemptsKey = (userId: string) => `ege-pro.attempts.${userId}.v1`;
 
-function load(): ProgressState {
+function load(key: string): ProgressState {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     if (raw) return JSON.parse(raw) as ProgressState;
   } catch {
     /* ignore */
@@ -113,17 +121,20 @@ interface Ctx {
 const ProgressCtx = createContext<Ctx | null>(null);
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined as unknown as ProgressState, load);
+  const [state, dispatch] = useReducer(reducer, undefined as unknown as ProgressState, () =>
+    isSupabaseConfigured ? { attempts: [] } : load(GUEST_KEY)
+  );
   const { profile, isGuestMode } = useAuth();
   const syncedUserId = useRef<string | null>(null);
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(state));
+      if (isGuestMode) localStorage.setItem(GUEST_KEY, JSON.stringify(state));
+      else if (profile) localStorage.setItem(userAttemptsKey(profile.id), JSON.stringify(state));
     } catch {
       /* ignore */
     }
-  }, [state]);
+  }, [state, isGuestMode, profile?.id]);
 
   // очки/статистика по предметам считаются через taskById() (см. derived ниже) — а после
   // перезагрузки страницы TASKS снова пуст (банк грузится лениво по предмету, см. lib/dbTasks.ts).
@@ -135,13 +146,20 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     if (ids.length) hydrateTasksByIds(ids);
   }, [state.attempts]);
 
-  // при входе в настоящий (не гостевой) аккаунт — подгружаем и мигрируем попытки в Supabase
+  // при входе в настоящий (не гостевой) аккаунт — подгружаем и мигрируем попытки в Supabase.
+  // Локальный кэш читаем строго из ключа ЭТОГО userId (не из текущего state — тот в момент
+  // смены пользователя ещё может содержать попытки предыдущего вошедшего на этом браузере).
   useEffect(() => {
-    if (isGuestMode || !profile || !isSupabaseConfigured) return;
-    if (syncedUserId.current === profile.id) return;
-    syncedUserId.current = profile.id;
-    syncOnLogin(profile.id, state.attempts).then((merged) => dispatch({ type: "LOAD", attempts: merged }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (isGuestMode) return;
+    const nextId = profile?.id ?? null;
+    if (syncedUserId.current === nextId) return;
+    syncedUserId.current = nextId;
+    if (!nextId) {
+      dispatch({ type: "LOAD", attempts: [] });
+      return;
+    }
+    const local = load(userAttemptsKey(nextId)).attempts;
+    syncOnLogin(nextId, local).then((merged) => dispatch({ type: "LOAD", attempts: merged }));
   }, [profile?.id, isGuestMode]);
 
   const tasksVersion = useTasksVersion();
