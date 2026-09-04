@@ -204,49 +204,52 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-20">
-      {/* верхняя панель */}
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <button onClick={() => goTo({ name: "bank" })} className="link-slide flex items-center gap-2 text-sm font-bold text-ink2 hover:text-ink">
-          <Icon name="arrowL" size={16} /> Банк заданий
-        </button>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => prevInScope && goTo({ name: "task", id: prevInScope.id })}
-            disabled={!prevInScope || examMode}
-            title={prevInScope ? `Предыдущее: ${prevInScope.topic}` : "Это первое задание в подборке"}
-            className="flex h-9 w-9 items-center justify-center rounded-sm border-2 border-ink bg-paper text-ink shadow-[2px_2px_0_0_rgba(21,23,46,0.9)] transition hover:bg-ink hover:text-paper active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none"
-          >
-            <Icon name="arrowL" size={16} />
-          </button>
-          <span className="font-mono text-[12px] font-bold text-ink2">
-            {scopedIdx >= 0 ? `${scopedIdx + 1} из ${scopedList.length}` : `${idx + 1} из ${TASKS.length}`}
-          </span>
-          <button
-            onClick={() => nextInScope && goTo({ name: "task", id: nextInScope.id })}
-            disabled={!nextInScope || examMode}
-            title={nextInScope ? `Следующее: ${nextInScope.topic}` : "Это последнее задание в подборке"}
-            className="flex h-9 w-9 items-center justify-center rounded-sm border-2 border-ink bg-paper text-ink shadow-[2px_2px_0_0_rgba(21,23,46,0.9)] transition hover:bg-ink hover:text-paper active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none"
-          >
-            <Icon name="arrowR" size={16} />
-          </button>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <span className={`flex items-center gap-1.5 border-2 px-2.5 py-1 font-mono text-[13px] font-bold tabular-nums ${examMode && examLeft < 60 ? "border-red text-red" : "border-ink/25 text-ink"}`}>
-            <Icon name="timer" size={14} />
-            {examMode ? formatClock(examLeft) : formatClock(seconds)}
-          </span>
-          {!examMode && phase === "solve" && (
-            <button onClick={toggleExam} className="btn btn-ghost px-3 py-1.5 text-[12px]" title="5 минут на задание, без подсказок">
-              <Icon name="timer" size={14} /> Экзамен-режим
-            </button>
-          )}
-          {examMode && <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-red">экзамен</span>}
-        </div>
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.55fr_1fr]">
+      {/* mt-6 — теперь на самой сетке, а не на шапке-хлебных крошках: та переехала внутрь левой
+          колонки (см. ниже). Иначе правая колонка (aside с чатом, см. lg:sticky lg:top-16 ниже)
+          на первой отрисовке стартовала на ~100px ниже своей же "прилипшей" позиции — прилипшая
+          высота (calc(100vh-6rem), см. TutorChat.tsx) в этой точке уже не помещалась и обрезала
+          низ чата экраном (реальный баг, поймано на скриншоте пользователя). */}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.55fr_1fr]">
         {/* ─── лист задания ─── */}
         <div className="relative">
+          <div className="mb-5 flex flex-wrap items-center gap-3">
+            <button onClick={() => goTo({ name: "bank" })} className="link-slide flex items-center gap-2 text-sm font-bold text-ink2 hover:text-ink">
+              <Icon name="arrowL" size={16} /> Банк заданий
+            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => prevInScope && goTo({ name: "task", id: prevInScope.id })}
+                disabled={!prevInScope || examMode}
+                title={prevInScope ? `Предыдущее: ${prevInScope.topic}` : "Это первое задание в подборке"}
+                className="flex h-9 w-9 items-center justify-center rounded-sm border-2 border-ink bg-paper text-ink shadow-[2px_2px_0_0_rgba(21,23,46,0.9)] transition hover:bg-ink hover:text-paper active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none"
+              >
+                <Icon name="arrowL" size={16} />
+              </button>
+              <span className="font-mono text-[12px] font-bold text-ink2">
+                {scopedIdx >= 0 ? `${scopedIdx + 1} из ${scopedList.length}` : `${idx + 1} из ${TASKS.length}`}
+              </span>
+              <button
+                onClick={() => nextInScope && goTo({ name: "task", id: nextInScope.id })}
+                disabled={!nextInScope || examMode}
+                title={nextInScope ? `Следующее: ${nextInScope.topic}` : "Это последнее задание в подборке"}
+                className="flex h-9 w-9 items-center justify-center rounded-sm border-2 border-ink bg-paper text-ink shadow-[2px_2px_0_0_rgba(21,23,46,0.9)] transition hover:bg-ink hover:text-paper active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none"
+              >
+                <Icon name="arrowR" size={16} />
+              </button>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <span className={`flex items-center gap-1.5 border-2 px-2.5 py-1 font-mono text-[13px] font-bold tabular-nums ${examMode && examLeft < 60 ? "border-red text-red" : "border-ink/25 text-ink"}`}>
+                <Icon name="timer" size={14} />
+                {examMode ? formatClock(examLeft) : formatClock(seconds)}
+              </span>
+              {!examMode && phase === "solve" && (
+                <button onClick={toggleExam} className="btn btn-ghost px-3 py-1.5 text-[12px]" title="5 минут на задание, без подсказок">
+                  <Icon name="timer" size={14} /> Экзамен-режим
+                </button>
+              )}
+              {examMode && <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-red">экзамен</span>}
+            </div>
+          </div>
           <Burst trigger={burstKey} />
           {phase === "correct" && (
             <div className="pointer-events-none absolute right-4 top-4 z-20">
@@ -442,7 +445,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
         </div>
 
         {/* ─── репетитор ─── */}
-        <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+        <aside className="min-w-0 lg:sticky lg:top-16 lg:self-start">
           <p className="font-mono mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.25em] text-ink2">
             <Icon name="chat" size={14} /> репетитор рядом
           </p>

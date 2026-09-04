@@ -172,7 +172,21 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
   const showChips = last?.role === "bot" && !last.streaming && last.actions && !busy;
 
   return (
-    <div className={`flex flex-col overflow-hidden rounded-md border-2 border-night bg-night text-paper ${compact ? "h-[480px]" : "h-[600px] sm:h-[640px]"}`}>
+    // lg:h — начиная с десктопного брейкпоинта чат заполняет доступную высоту экрана вместо
+    // фиксированных px выше (см. SolveView.tsx/MistakesStats.tsx — там же родительский aside
+    // прилипает через lg:top-16=4rem). Важно: высота считается НЕ от top-16 (это только позиция
+    // ПОСЛЕ прилипания при скролле) — на первой отрисовке (scrollY=0) sticky-элемент ещё стоит в
+    // обычном потоке ниже своей будущей прилипшей позиции (там, где он окажется в разметке
+    // страницы), и именно от ЭТОЙ, более низкой стартовой точки нельзя допускать переполнения вниз
+    // за экран — иначе низ чата обрежется, как и было (реальный баг с этого же расчёта). Отсюда
+    // больший запас (8.5rem, а не 4rem top + небольшой зазор): проверено вживую на реальной
+    // странице с хлебными крошками ВНУТРИ левой колонки (см. SolveView.tsx) — при таком запасе
+    // низ чата не уходит за экран ни в начальном, ни в прилипшем состоянии.
+    <div
+      className={`flex flex-col overflow-hidden rounded-md border-2 border-night bg-night text-paper ${
+        compact ? "h-[480px]" : "h-[600px] sm:h-[640px]"
+      } lg:h-[calc(100vh-8.5rem)]`}
+    >
       {/* шапка */}
       <div className="gridpaper-dark flex items-center gap-3 border-b border-white/10 px-4 py-3">
         <div className="relative">

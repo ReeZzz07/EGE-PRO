@@ -288,7 +288,7 @@ export function TutorView({ onNav }: { onNav: (v: View) => void }) {
             Открыть задание и решать вместе <Icon name="arrowR" size={16} />
           </button>
         </div>
-        <Reveal className="lg:sticky lg:top-20 lg:self-start">
+        <Reveal className="lg:sticky lg:top-16 lg:self-start">
           <TutorChat onNavigate={(d) => onNav({ name: d } as View)} />
         </Reveal>
       </div>
