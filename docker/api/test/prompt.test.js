@@ -25,6 +25,33 @@ test("buildHintPrompt: подставляет заготовку нужного 
   assert.match(buildHintPrompt("policy", task, 2), /x - 1 = 2\^3/);
 });
 
+// Словесная просьба "не пересказывай заготовку" оказалась ненадёжной на практике: модель всё
+// равно почти дословно повторяла вердикты из заготовки (см. живую проверку при разработке этого
+// правила — подсказка 2-го уровня раскрыла вердикт сразу по двум пунктам, несмотря на инструкцию).
+// Поэтому защита теперь механическая: заготовка с ≥2 пунктами вида "N) ... верно/неверно" вообще
+// не попадает в текст промпта — модели физически нечего пересказывать.
+test("buildHintPrompt: заготовка с вердиктами по ≥2 пунктам — САМ ТЕКСТ заготовки не попадает в промпт вообще", () => {
+  const leakyScaffold = "1) Утверждение раз – верно, потому что... 2) Утверждение два – неверно, потому что...";
+  const leakyTask = { ...task, hints: [task.hints[0], task.hints[1], leakyScaffold] };
+  const prompt = buildHintPrompt("policy", leakyTask, 2);
+  assert.doesNotMatch(prompt, /Утверждение раз/);
+  assert.doesNotMatch(prompt, /Утверждение два/);
+  assert.match(prompt, /не передаём/i);
+  assert.match(prompt, /НЕ перечисляй вердикт по каждому суждению подряд/i);
+});
+
+test("buildHintPrompt: заготовка с вердиктом ровно по 1 пункту — не считается утечкой, передаётся как обычно", () => {
+  const oneItemScaffold = "1) Утверждение раз – верно, потому что так устроена система.";
+  const oneItemTask = { ...task, hints: [task.hints[0], task.hints[1], oneItemScaffold] };
+  const prompt = buildHintPrompt("policy", oneItemTask, 2);
+  assert.match(prompt, /Утверждение раз/);
+});
+
+test("DEFAULT_POLICY: запрещает построчный разбор верно/неверно для заданий «выберите верные суждения»", () => {
+  assert.match(DEFAULT_POLICY, /выберите верные суждения/i);
+  assert.match(DEFAULT_POLICY, /построчный разбор всего списка — это и есть финальный ответ/i);
+});
+
 test("buildHintPrompt: уровень зажимается сверху до последней (третьей) заготовки — не падает на выходе за границы", () => {
   assert.match(buildHintPrompt("policy", task, 5), /x - 1 = 2\^3/);
   assert.match(buildHintPrompt("policy", task, 99), /x - 1 = 2\^3/);

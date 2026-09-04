@@ -87,16 +87,22 @@ function stripHtml(html) {
     .trim();
 }
 
+// Двоеточие после маркера — обязательное, не "\s*:?": иначе search()/split() ловят слово
+// "ответ"/"источник"/"элементы ключа" где угодно в обычном тексте пояснения (например внутри
+// слова "соответствует") как будто это разметка поля, и обрубают explanation/answer не там.
+// Это реально произошло при первом импорте банка — см. репарацию battle-tested regex в
+// docker/api/importArchive.js (тот же баг, тот же фикс, продублировано намеренно — см. комментарий
+// в начале файла) и одноразовый скрипт восстановления ~3100 испорченных ответов в БД.
 /** short: "...Решение:...Ответ: X...Источник: ..." → {answer, explanation} */
 function parseShortAnswer(answerHtml) {
   let text = stripHtml(answerHtml);
-  text = text.split(/Источник\s*:?/i)[0];
-  const idx = text.search(/Ответ\s*:?/i);
+  text = text.split(/Источник\s*:/i)[0];
+  const idx = text.search(/Ответ\s*:/i);
   if (idx === -1) return { answer: null, explanation: text.trim() || null };
-  const explanation = text.slice(0, idx).replace(/^Решение\s*:?/i, "").trim();
+  const explanation = text.slice(0, idx).replace(/^Решение\s*:/i, "").trim();
   const answerRaw = text
     .slice(idx)
-    .replace(/^Ответ\s*:?/i, "")
+    .replace(/^Ответ\s*:/i, "")
     .trim();
   return { answer: answerRaw || null, explanation: explanation || null };
 }
@@ -104,8 +110,8 @@ function parseShortAnswer(answerHtml) {
 /** full: "...Элементы ключа:\n1) ...;\n2) ... ИЛИ\n2) ...;\nИсточник: ..." → [{code,name,max}] */
 function parseCriteria(answerHtml) {
   let text = stripHtml(answerHtml);
-  text = text.split(/Источник\s*:?/i)[0];
-  const m = text.split(/Элементы ключа\s*:?/i);
+  text = text.split(/Источник\s*:/i)[0];
+  const m = text.split(/Элементы ключа\s*:/i);
   const body = m.length > 1 ? m[1] : text;
   const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
   const byNum = new Map();
