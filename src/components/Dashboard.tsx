@@ -5,7 +5,7 @@ import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
 import { addProfileSubject } from "../lib/profileSubjects";
 import { useEffect, useMemo, useState } from "react";
 import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
-import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, getSubjectsPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
+import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, useToast } from "./ui";
 
@@ -127,9 +127,14 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   // supabase/migrations/0015), остальные — через "Мои предметы" на странице тарифов
   const connectedSubjects = profile?.subjects ?? [];
   // "личный зачёт" ниже — только подключённые предметы, не вся платформа (см. StatsView для той
-  // же логики и объяснения); "все N заданий"/"там N баллов ждут тебя" дальше по странице — это
-  // витрина всего банка (приглашение исследовать), их не трогаем.
+  // же логики и объяснения); "там N баллов ждут тебя" в пустой тетради ошибок дальше по странице —
+  // это витрина всего банка (приглашение исследовать другие предметы), его не трогаем. А вот "все N
+  // заданий" над карточками предметов раньше тоже показывал весь банк — рядом с карточками только
+  // подключённых предметов это читалось как ошибка в счётчике, а не приглашение, поэтому здесь
+  // считаем только по факту подключённого (см. Landing.tsx — там как раз должен быть весь банк,
+  // это витрина платформы для гостя).
   const personalPointsTotal = profile?.isAdmin || isGuestMode ? getGlobalPointsTotal() : getSubjectsPointsTotal(connectedSubjects);
+  const personalTaskTotal = profile?.isAdmin || isGuestMode ? getGlobalTaskTotal() : getSubjectsTaskTotal(connectedSubjects);
   const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
   const exam = useMemo(examTarget, []);
   const cd = useCountdown(exam.date);
@@ -318,7 +323,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Тренажёр по предметам</h2>
             </div>
             <button onClick={() => onNav({ name: "bank" })} className="link-slide hidden items-center gap-2 text-sm font-bold text-ink sm:flex">
-              все {getGlobalTaskTotal()} заданий <Icon name="arrowR" size={16} />
+              все {personalTaskTotal} заданий <Icon name="arrowR" size={16} />
             </button>
           </div>
         </Reveal>
