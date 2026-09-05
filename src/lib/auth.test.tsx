@@ -409,3 +409,33 @@ describe("useAuth", () => {
     expect(() => renderHook(() => useAuth())).toThrow(/outside provider/i);
   });
 });
+
+// primarySubject хранится отдельной колонкой в profiles и в норме всегда входит в subjects (см.
+// updateProfile), но на практике встречались аккаунты, где это разошлось — предмет по умолчанию
+// указывал на то, чего нет среди подключённых (см. Dashboard.tsx/App.tsx/SessionSummary.tsx).
+describe("effectivePrimarySubject", () => {
+  it("primarySubject есть среди subjects — берём его", async () => {
+    const { effectivePrimarySubject } = await loadAuthGuest();
+    expect(effectivePrimarySubject({ primarySubject: "rus", subjects: ["rus", "math_base"] })).toBe("rus");
+  });
+
+  it("primarySubject не входит в subjects (десинхронизация) — берём первый подключённый", async () => {
+    const { effectivePrimarySubject } = await loadAuthGuest();
+    expect(effectivePrimarySubject({ primarySubject: "bio", subjects: ["rus", "math_base"] })).toBe("rus");
+  });
+
+  it("primarySubject не задан — берём первый подключённый", async () => {
+    const { effectivePrimarySubject } = await loadAuthGuest();
+    expect(effectivePrimarySubject({ subjects: ["fiz"] })).toBe("fiz");
+  });
+
+  it("подключённых предметов нет — undefined", async () => {
+    const { effectivePrimarySubject } = await loadAuthGuest();
+    expect(effectivePrimarySubject({ subjects: [] })).toBeUndefined();
+  });
+
+  it("профиль не загружен — undefined", async () => {
+    const { effectivePrimarySubject } = await loadAuthGuest();
+    expect(effectivePrimarySubject(null)).toBeUndefined();
+  });
+});

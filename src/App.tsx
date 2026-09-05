@@ -7,7 +7,7 @@ import SolveView from "./components/SolveView";
 import { MistakesView, StatsView, TutorView } from "./components/MistakesStats";
 import { Icon, ToastProvider } from "./components/ui";
 import { ProgressProvider } from "./lib/store";
-import { AuthProvider, useAuth } from "./lib/auth";
+import { AuthProvider, effectivePrimarySubject, useAuth } from "./lib/auth";
 import { SUBJECTS } from "./data/tasks";
 import { getAvailableSubjects, useTasksVersion } from "./lib/dbTasks";
 import Landing from "./components/Landing";
@@ -264,7 +264,7 @@ function AppShell() {
         )}
 
         {view.name === "plan" && (() => {
-          const subject = view.subject ?? profile?.primarySubject;
+          const subject = view.subject ?? effectivePrimarySubject(profile);
           return subject ? (
             <PlanView subject={subject} onStartTraining={(taskId) => setView({ name: "task", id: taskId })} onSkipToBank={() => setView({ name: "bank" })} />
           ) : (
@@ -286,7 +286,7 @@ function AppShell() {
               />
             );
           }
-          const subject = view.subject ?? profile?.primarySubject;
+          const subject = view.subject ?? effectivePrimarySubject(profile);
           return subject ? (
             <MockExam subject={subject} onFinish={() => setView({ name: "session-summary" })} onExit={() => setView({ name: "home" })} />
           ) : (

@@ -1,10 +1,11 @@
-import { SUBJECTS, TASKS, tasksOf, type Subject } from "../data/tasks";
+import { SUBJECTS, TASKS, taskById, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
-import { useAuth } from "../lib/auth";
+import { effectivePrimarySubject, useAuth } from "../lib/auth";
 import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
+import { pickTaskOfDay } from "../lib/taskOfDay";
 import { addProfileSubject } from "../lib/profileSubjects";
 import { useEffect, useMemo, useState } from "react";
-import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
+import { formatClock, plural, useCountdown, useScramble } from "../lib/utils";
 import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, useToast } from "./ui";
@@ -121,11 +122,11 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
   useTasksVersion();
   const { profile, isGuestMode } = useAuth();
-  const primarySubject = profile?.primarySubject;
   // раньше здесь показывались ВСЕ предметы платформы, а не только подключённые ученику — теперь
   // рус + математика (базовая или профильная) подключаются автоматически при регистрации (см.
   // supabase/migrations/0015), остальные — через "Мои предметы" на странице тарифов
   const connectedSubjects = profile?.subjects ?? [];
+  const primarySubject = effectivePrimarySubject(profile);
   // "личный зачёт" ниже — только подключённые предметы, не вся платформа (см. StatsView для той
   // же логики и объяснения); "там N баллов ждут тебя" в пустой тетради ошибок дальше по странице —
   // это витрина всего банка (приглашение исследовать другие предметы), его не трогаем. А вот "все N
@@ -140,21 +141,32 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const cd = useCountdown(exam.date);
   const title = useScramble(`ЕГЭ·${exam.year}`);
 
-  // «задание дня» и «личный зачёт» показываются в рамках выбранного предмета пользователя —
-  // догружаем его банк в фоне, если он ещё не открывался в этой сессии (см. lib/dbTasks.ts).
+  // "задания дня" — по одному на КАЖДЫЙ подключённый предмет (см. pickTaskOfDay ниже), поэтому
+  // догружаем банк всех подключённых, а не только primarySubject, как раньше.
   useEffect(() => {
-    if (primarySubject) hydrateSubjectTasks(primarySubject);
-  }, [primarySubject]);
+    connectedSubjects.forEach(hydrateSubjectTasks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectedSubjects.join(",")]);
 
   const subjStats = primarySubject ? derived.perSubject[primarySubject] : null;
   const total = subjStats ? subjStats.total : TASKS.length;
   const solved = subjStats ? subjStats.solved : derived.solvedIds.size;
   const progress = total ? solved / total : 0;
 
-  const subjectPool = primarySubject ? tasksOf(primarySubject) : TASKS;
-  const todayTask = subjectPool.length ? subjectPool[dayIndex(subjectPool.length)] : undefined;
-  const todayTaskLoading = !todayTask && !!primarySubject && isSubjectLoading(primarySubject);
-  const mistakes = [...derived.mistakeIds].slice(0, 3);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tasksOfDay = useMemo(
+    () =>
+      connectedSubjects.map((s) => ({
+        subject: s,
+        task: pickTaskOfDay(s, derived.mistakeIds, derived.solvedIds),
+        loading: isSubjectLoading(s),
+      })),
+    [connectedSubjects.join(","), derived.mistakeIds, derived.solvedIds]
+  );
+  // "на реванш" — тоже только по подключённым предметам: ошибка по давно отключённому предмету
+  // (см. effectivePrimarySubject в lib/auth.tsx — тот же класс "хвостов" от предмета не по тарифу)
+  // не должна маячить в списке того, что предлагается пересдать прямо сейчас.
+  const mistakes = [...derived.mistakeIds].filter((id) => connectedSubjects.includes(taskById(id)?.subject as Subject)).slice(0, 3);
 
   // превью «на реванш» ссылается на задания по id — после перезагрузки страницы их может не быть
   // в TASKS, если предмет не открывался в этой сессии; догружаем точечно (см. lib/dbTasks.ts)
@@ -288,12 +300,12 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
       </div>
 
       {/* ─── план на сегодня (раздел 8.1 ТЗ) ─── */}
-      {plan && profile?.primarySubject && (
+      {plan && primarySubject && (
         <Reveal>
           <section className="mt-8 border-2 border-blue/40 bg-blue/5 p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-blue">план на сегодня · {SUBJECTS[profile.primarySubject].name}</p>
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-blue">план на сегодня · {SUBJECTS[primarySubject].name}</p>
                 <ul className="mt-2 space-y-1">
                   {plan.today.map((item, i) => (
                     <li key={i} className="text-[13.5px] leading-relaxed text-ink/85">• {item.label}</li>
@@ -387,37 +399,48 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
         </div>
       </section>
 
-      {/* ─── задание дня + ошибки ─── */}
+      {/* ─── задания дня + ошибки ─── */}
       <section className="mt-16 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Reveal>
           <div className="sheet sheet-margin h-full p-6 pl-14 sm:pl-16">
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-red">раздел 02 · задание дня</p>
-              {todayTask && <span className={`font-mono text-[11px] font-bold ${SUBJECTS[todayTask.subject].color}`}>№ {todayTask.fipiId}</span>}
-            </div>
-            {todayTask ? (
-              <>
-                <h3 className="font-display mt-3 text-xl font-bold leading-snug">{todayTask.topic}</h3>
-                <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-ink2">{todayTask.statement[0]}</p>
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] font-semibold text-ink2">
-                  <span className="rounded-sm border border-ink/20 px-2 py-0.5">{SUBJECTS[todayTask.subject].name}</span>
-                  <span className="rounded-sm border border-ink/20 px-2 py-0.5">{todayTask.points} первичный {plural(todayTask.points, "балл", "балла", "баллов")}</span>
-                  <span className="rounded-sm border border-ink/20 px-2 py-0.5">{derived.solvedIds.has(todayTask.id) ? "уже решено ✓" : "ещё не решено"}</span>
-                </div>
-                <div className="mt-5">
-                  <button onClick={() => onNav({ name: "task", id: todayTask.id })} className="btn btn-ink px-5 py-2.5 text-sm">
-                    Решать <Icon name="arrowR" size={16} />
-                  </button>
-                </div>
-              </>
-            ) : todayTaskLoading ? (
-              <p className="mt-4 flex items-center gap-2 text-sm text-ink2">
-                <Icon name="refresh" size={16} className="animate-spin" /> Загружаем банк по твоему предмету…
-              </p>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-red">
+              раздел 02 · {tasksOfDay.length > 1 ? "задания дня" : "задание дня"}
+            </p>
+            {tasksOfDay.length === 0 ? (
+              <p className="mt-4 text-sm text-ink2">Пройди онбординг, чтобы выбрать предмет — тогда здесь появятся задания дня.</p>
             ) : (
-              <p className="mt-4 text-sm text-ink2">
-                {primarySubject ? "Пока нет заданий по этому предмету — загляни в банк заданий." : "Пройди онбординг, чтобы выбрать предмет — тогда здесь появится задание дня."}
-              </p>
+              <div className="mt-4 space-y-4">
+                {tasksOfDay.map(({ subject: s, task, loading }) => {
+                  const meta = SUBJECTS[s];
+                  return (
+                    <div key={s} className="border-t border-dashed border-ink/15 pt-4 first:border-0 first:pt-0">
+                      {task ? (
+                        <>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`font-mono text-[10.5px] font-bold ${meta.color}`}>{meta.name}</span>
+                            <span className="font-mono text-[11px] text-ink2">№ {task.fipiId}</span>
+                          </div>
+                          <h3 className="font-display mt-1.5 text-lg font-bold leading-snug">{task.topic}</h3>
+                          <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink2">{task.statement[0]}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] font-semibold text-ink2">
+                            <span className="rounded-sm border border-ink/20 px-2 py-0.5">{task.points} первичный {plural(task.points, "балл", "балла", "баллов")}</span>
+                            <span className="rounded-sm border border-ink/20 px-2 py-0.5">{derived.solvedIds.has(task.id) ? "уже решено ✓" : "ещё не решено"}</span>
+                          </div>
+                          <button onClick={() => onNav({ name: "task", id: task.id })} className="btn btn-ink mt-3 px-4 py-2 text-[13px]">
+                            Решать <Icon name="arrowR" size={14} />
+                          </button>
+                        </>
+                      ) : loading ? (
+                        <p className="flex items-center gap-2 text-sm text-ink2">
+                          <Icon name="refresh" size={16} className="animate-spin" /> Загружаем банк по предмету «{meta.name}»…
+                        </p>
+                      ) : (
+                        <p className="text-sm text-ink2">{meta.name}: пока нет заданий — загляни в банк заданий.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </Reveal>

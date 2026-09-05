@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { taskById } from "../data/tasks";
 import { useProgress } from "../lib/store";
-import { useAuth } from "../lib/auth";
+import { effectivePrimarySubject, useAuth } from "../lib/auth";
 import { loadStudyPlan } from "../lib/planStorage";
 import { dateKey, plural } from "../lib/utils";
 import { Icon, Reveal } from "./ui";
@@ -16,7 +16,8 @@ export default function SessionSummary({ onNav }: { onNav: (v: View) => void }) 
   const correctCount = todayAttempts.filter((a) => a.correct).length;
   const mistakesReviewed = new Set(todayAttempts.filter((a) => !a.correct).map((a) => a.taskId)).size;
 
-  const plan = profile?.primarySubject ? loadStudyPlan(profile.primarySubject) : null;
+  const primarySubject = effectivePrimarySubject(profile);
+  const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
 
   return (
     <div className="mx-auto max-w-xl px-4 py-16">

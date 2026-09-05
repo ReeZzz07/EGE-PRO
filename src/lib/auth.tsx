@@ -32,6 +32,17 @@ export interface Profile {
   avatarUrl?: string;
 }
 
+/** primarySubject в норме всегда входит в subjects (см. updateProfile ниже), но на практике
+ *  встречались аккаунты, где это разошлось — профиль указывал предмет, которого нет среди
+ *  подключённых, и разделы, использующие "предмет по умолчанию" (Dashboard, план, Экзамен-режим
+ *  без явно выбранного предмета), показывали контент по чужому, неподключённому предмету. Единая
+ *  проверка вместо profile?.primarySubject напрямую — везде, где нужен предмет по умолчанию. */
+export function effectivePrimarySubject(profile: Pick<Profile, "primarySubject" | "subjects"> | null | undefined): Subject | undefined {
+  if (!profile) return undefined;
+  if (profile.primarySubject && profile.subjects.includes(profile.primarySubject)) return profile.primarySubject;
+  return profile.subjects[0];
+}
+
 interface AuthResult {
   error?: string;
 }
