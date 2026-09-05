@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useEssayCheckAllowed } from "../lib/tariffs";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
 import { hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
+import { convertByFraction, isGradeSubject, loadLatestScoreScale, type ScorePoint } from "../lib/scoreScale";
 import { Icon, Reveal } from "./ui";
 
 type Phase = "setup" | "running" | "grading" | "result";
@@ -26,6 +27,11 @@ export default function MockExam({ subject, onFinish, onExit }: { subject: Subje
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [essayAssessment, setEssayAssessment] = useState<EssayAssessment | null>(null);
+  const [scoreScale, setScoreScale] = useState<{ year: number; scale: ScorePoint[] } | null>(null);
+
+  useEffect(() => {
+    loadLatestScoreScale(subject).then(setScoreScale);
+  }, [subject]);
 
   useEffect(() => {
     hydrateSubjectTasks(subject);
@@ -175,8 +181,25 @@ export default function MockExam({ subject, onFinish, onExit }: { subject: Subje
     const primary = shortPoints + essayPoints;
     const maxPrimary = part1.reduce((s, t) => s + t.points, 0) + (part2 ? part2.points : 0);
     const fraction = maxPrimary ? primary / maxPrimary : 0;
-    const secMin = Math.max(0, Math.round(20 + fraction * 72 - 7));
-    const secMax = Math.min(100, Math.round(20 + fraction * 72 + 7));
+
+    // пробник — это 6 заданий части 1 (+ иногда сочинение), а не полный вариант, так что сырой
+    // балл сюда напрямую не подставить: реальная шкала рассчитана на диапазон 0..maxPrimary
+    // настоящего экзамена. Берём долю верного и смотрим, куда она попадает на реальной (нелинейной)
+    // шкале — ±0.1 к доле вместо фиксированного "±7", чтобы разброс сам подстраивался под форму
+    // конкретной шкалы (см. lib/scoreScale.ts). Если админ ещё не завёл шкалу для предмета —
+    // старая грубая линейная прикидка лучше, чем совсем ничего не показать.
+    let secMin: number;
+    let secMax: number;
+    if (scoreScale) {
+      const lo = convertByFraction(scoreScale.scale, fraction - 0.1) ?? 0;
+      const hi = convertByFraction(scoreScale.scale, fraction + 0.1) ?? lo;
+      secMin = Math.min(lo, hi);
+      secMax = Math.max(lo, hi);
+    } else {
+      secMin = Math.max(0, Math.round(20 + fraction * 72 - 7));
+      secMax = Math.min(100, Math.round(20 + fraction * 72 + 7));
+    }
+    const gradeMode = isGradeSubject(subject);
     const mistakes = part1.filter((t) => !checkAnswer(answers[t.id] ?? "", t.answers));
 
     return (
@@ -187,8 +210,11 @@ export default function MockExam({ subject, onFinish, onExit }: { subject: Subje
           <div className="sheet mt-5 p-5">
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Первичные баллы</p>
             <p className="font-display mt-1 text-3xl font-black">{primary} <span className="text-base font-bold text-ink2">из {maxPrimary}</span></p>
-            <p className="mt-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Ориентировочный тестовый балл</p>
-            <p className="font-display mt-1 text-2xl font-black text-blue">{secMin}–{secMax}</p>
+            <p className="mt-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">
+              {gradeMode ? "Ориентировочная оценка" : "Ориентировочный тестовый балл"}
+            </p>
+            <p className="font-display mt-1 text-2xl font-black text-blue">{secMin === secMax ? secMin : `${secMin}–${secMax}`}</p>
+            {scoreScale && <p className="mt-1 font-mono text-[10px] text-ink2">по шкале {scoreScale.year} года</p>}
           </div>
           {essayAssessment && (
             <div className="sheet mt-4 p-5">
