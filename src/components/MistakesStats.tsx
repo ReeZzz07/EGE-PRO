@@ -3,7 +3,7 @@ import { SUBJECTS, taskById } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
-import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
+import { getGlobalPointsTotal, getGlobalTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import { Icon, Reveal } from "./ui";
@@ -113,9 +113,11 @@ export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
 export function StatsView({ onNav }: { onNav: (v: View) => void }) {
   const { derived, resetAll } = useProgress();
   useTasksVersion();
-  const { isGuestMode } = useAuth();
+  const { profile, isGuestMode } = useAuth();
   const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const atts = derived.attempts;
+  const connectedSubjects = profile?.subjects ?? [];
   const hours = Math.floor(derived.totalTimeSec / 3600);
   const mins = Math.floor((derived.totalTimeSec % 3600) / 60);
 
@@ -160,8 +162,17 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
         <Reveal>
           <div className="sheet p-6">
             <h2 className="font-display text-lg font-bold">Прогресс по предметам</h2>
+            {connectedSubjects.length === 0 && (
+              <p className="mt-3 text-[13px] leading-relaxed text-ink2">
+                Пока нет ни одного подключённого предмета — загляни в{" "}
+                <button onClick={() => onNav({ name: "subjects" })} className="link-slide font-bold text-ink hover:text-blue">
+                  «Мои предметы»
+                </button>
+                .
+              </p>
+            )}
             <div className="mt-5 space-y-5">
-              {getAvailableSubjects().map((s) => {
+              {connectedSubjects.map((s) => {
                 const meta = SUBJECTS[s];
                 const st = derived.perSubject[s];
                 const pct = st.total ? Math.round((st.solved / st.total) * 100) : 0;
@@ -239,8 +250,19 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
           {confirming ? (
             <span className="flex items-center gap-2">
               <span className="text-[13px] font-bold text-red">Точно стереть всё?</span>
-              <button onClick={() => { resetAll(); setConfirming(false); }} className="btn btn-red px-4 py-2 text-[12px]">Да, стереть</button>
-              <button onClick={() => setConfirming(false)} className="btn btn-ghost px-4 py-2 text-[12px]">Отмена</button>
+              <button
+                onClick={async () => {
+                  setResetting(true);
+                  await resetAll();
+                  setResetting(false);
+                  setConfirming(false);
+                }}
+                disabled={resetting}
+                className="btn btn-red px-4 py-2 text-[12px]"
+              >
+                {resetting ? "Стираем…" : "Да, стереть"}
+              </button>
+              <button onClick={() => setConfirming(false)} disabled={resetting} className="btn btn-ghost px-4 py-2 text-[12px]">Отмена</button>
             </span>
           ) : (
             <button onClick={() => setConfirming(true)} className="btn btn-ghost px-4 py-2 text-[12px]">

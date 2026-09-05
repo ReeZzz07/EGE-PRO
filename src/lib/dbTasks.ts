@@ -211,25 +211,39 @@ export async function hydrateSubjectTasks(subject: Subject): Promise<void> {
   }
 }
 
+/** Заявки hydrateTasksByIds, которые уже в полёте — Statistics/тетрадь ошибок/store.tsx все зовут
+ *  эту функцию своим отдельным эффектом при первом рендере, нередко с пересекающимися id. Раньше
+ *  "уже загружено?" проверялось один раз ДО await, тем же снимком existingIds после ответа сервера
+ *  и вставлялось в TASKS — если параллельный вызов успевал вставить тот же id, пока этот ждал сеть,
+ *  проверка по устаревшему снимку её не видела, и задание задваивалось в TASKS (см. также
+ *  hydrateSubjectTasks ниже — там existingIds уже и так пересчитывается после await, отсюда и
+ *  асимметрия, которую здесь чиним). */
+const pendingTaskIds = new Set<string>();
+
 /** Точечная подгрузка конкретных заданий по id — нужна, когда пользователь возвращается к уже
  *  решённому/ошибочному заданию (тетрадь ошибок, статистика), а его предмет ещё не был открыт
  *  в этой сессии (после перезагрузки страницы TASKS снова пуст). */
 export async function hydrateTasksByIds(ids: string[]): Promise<void> {
   if (!isSupabaseConfigured || !supabase) return;
   const existingIds = new Set(TASKS.map((t) => t.id));
-  const missing = [...new Set(ids)].filter((id) => !existingIds.has(id));
+  const missing = [...new Set(ids)].filter((id) => !existingIds.has(id) && !pendingTaskIds.has(id));
   if (!missing.length) return;
+  missing.forEach((id) => pendingTaskIds.add(id));
   try {
     const { data, error } = await supabase.from("tasks").select(SELECT_COLS).in("id", missing);
     if (error || !data) return;
+    // пересчитываем на момент вставки, а не по снимку до запроса — see комментарий у pendingTaskIds
+    const freshIds = new Set(TASKS.map((t) => t.id));
     for (const row of data as unknown as DbTaskRow[]) {
-      if (existingIds.has(row.id)) continue;
+      if (freshIds.has(row.id)) continue;
       TASKS.push(toEgeTask(row));
-      existingIds.add(row.id);
+      freshIds.add(row.id);
     }
     bump();
   } catch (e) {
     console.warn("Не удалось догрузить задания по id:", e);
+  } finally {
+    missing.forEach((id) => pendingTaskIds.delete(id));
   }
 }
 

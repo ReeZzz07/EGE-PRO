@@ -114,8 +114,11 @@ interface Ctx {
   state: ProgressState;
   derived: Derived;
   addAttempt: (a: Attempt) => void;
-  clearTask: (taskId: string) => void;
-  resetAll: () => void;
+  /** локально убирает попытки по задаче сразу; на бэкенде (не гостевой режим) — тоже, без этого
+   *  задание при следующей синхронизации с сервером возвращалось бы в тетрадь как ни в чём не бывало. */
+  clearTask: (taskId: string) => Promise<void>;
+  /** то же самое для полного сброса — см. комментарий у clearTask выше. */
+  resetAll: () => Promise<void>;
 }
 
 const ProgressCtx = createContext<Ctx | null>(null);
@@ -222,12 +225,28 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const clearTask = async (taskId: string) => {
+    dispatch({ type: "CLEAR_TASK", taskId });
+    if (!isGuestMode && supabase && profile) {
+      const { error } = await supabase.from("attempts").delete().eq("user_id", profile.id).eq("task_id", taskId);
+      if (error) console.warn("Не удалось убрать попытки из Supabase:", error.message);
+    }
+  };
+
+  const resetAll = async () => {
+    dispatch({ type: "RESET" });
+    if (!isGuestMode && supabase && profile) {
+      const { error } = await supabase.from("attempts").delete().eq("user_id", profile.id);
+      if (error) console.warn("Не удалось стереть попытки в Supabase:", error.message);
+    }
+  };
+
   const value: Ctx = {
     state,
     derived,
     addAttempt,
-    clearTask: (taskId) => dispatch({ type: "CLEAR_TASK", taskId }),
-    resetAll: () => dispatch({ type: "RESET" }),
+    clearTask,
+    resetAll,
   };
 
   return <ProgressCtx.Provider value={value}>{children}</ProgressCtx.Provider>;
