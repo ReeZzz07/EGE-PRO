@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
-import { getAvailableSubjects, useTasksVersion } from "../lib/dbTasks";
+import { useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal } from "./ui";
 import AuthScreen from "./AuthScreen";
 import type { View } from "./Header";
@@ -90,19 +90,27 @@ export default function OnboardingFlow({
       {step === "subject" && (
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1 из 4</p>
-          <h1 className="font-display mt-1 text-2xl font-black">Выбери предмет</h1>
+          <h1 className="font-display mt-1 text-2xl font-black">Какая математика тебе нужна?</h1>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
+            Русский язык и математику — обязательные для всех экзамены — мы уже подключили. Осталось выбрать уровень
+            математики: профильная нужна для поступления на специальности, где она в списке вступительных; базовая —
+            если она там не понадобится.
+          </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {getAvailableSubjects().map((id) => {
+            {(["math_base", "math"] as const).map((id) => {
               const s = SUBJECTS[id];
               return (
-              <button
-                key={s.id}
-                onClick={() => { setSubject(s.id); setStep("quiz"); }}
-                className="sheet card-lift flex items-center gap-3 p-4 text-left"
-              >
-                <span className={`font-display flex h-10 w-10 shrink-0 items-center justify-center border-2 border-ink text-[12px] font-black ${s.color}`}>{s.short}</span>
-                <span className="text-[14px] font-bold">{s.name}</span>
-              </button>
+                <button
+                  key={id}
+                  onClick={() => { setSubject(id); setStep("quiz"); }}
+                  className="sheet card-lift flex items-start gap-3 p-4 text-left"
+                >
+                  <span className={`font-display flex h-10 w-10 shrink-0 items-center justify-center border-2 border-ink text-[12px] font-black ${s.color}`}>{s.short}</span>
+                  <span>
+                    <span className="block text-[14px] font-bold">{id === "math_base" ? "Базовая" : "Профильная"}</span>
+                    <span className="mt-0.5 block text-[12px] leading-snug text-ink2">{s.desc}</span>
+                  </span>
+                </button>
               );
             })}
           </div>

@@ -122,6 +122,10 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   useTasksVersion();
   const { profile } = useAuth();
   const primarySubject = profile?.primarySubject;
+  // раньше здесь показывались ВСЕ предметы платформы, а не только подключённые ученику — теперь
+  // рус + математика (базовая или профильная) подключаются автоматически при регистрации (см.
+  // supabase/migrations/0015), остальные — через "Мои предметы" на странице тарифов
+  const connectedSubjects = profile?.subjects ?? [];
   const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
   const exam = useMemo(examTarget, []);
   const cd = useCountdown(exam.date);
@@ -241,7 +245,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               </div>
             </div>
             <div className="mt-4 space-y-2">
-              {getAvailableSubjects().map((s) => {
+              {connectedSubjects.map((s) => {
                 const st = derived.perSubject[s];
                 const pct = st.total ? st.solved / st.total : 0;
                 return (
@@ -301,8 +305,6 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
         </Reveal>
       )}
 
-      <MySubjectsSection onNav={onNav} />
-
       {/* ─── тренажёр по предметам ─── */}
       <section className="mt-14">
         <Reveal>
@@ -317,8 +319,18 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
           </div>
         </Reveal>
 
+        {connectedSubjects.length === 0 && (
+          <p className="mt-6 text-[13.5px] leading-relaxed text-ink2">
+            Пока нет ни одного подключённого предмета — загляни в{" "}
+            <button onClick={() => onNav({ name: "tariffs" })} className="link-slide font-bold text-ink hover:text-blue">
+              «Мои предметы»
+            </button>{" "}
+            на странице тарифов.
+          </p>
+        )}
+
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {getAvailableSubjects().map((id, idx) => {
+          {connectedSubjects.map((id, idx) => {
             const s = SUBJECTS[id];
             const st = derived.perSubject[s.id];
             const pct = st.total ? Math.round((st.solved / st.total) * 100) : 0;

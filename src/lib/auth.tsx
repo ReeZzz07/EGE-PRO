@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
-import { addProfileSubject, loadProfileSubjects } from "./profileSubjects";
+import { addProfileSubject, loadProfileSubjects, removeProfileSubject } from "./profileSubjects";
 import type { Subject } from "../data/tasks";
 
 export type Grade = "10" | "11" | "grad";
@@ -166,12 +166,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateProfile = async (patch: Partial<Profile>) => {
+    const previousPrimarySubject = profile?.primarySubject;
     setProfile((prev) => {
       const next = prev ? { ...prev, ...patch } : null;
       if (next && !isSupabaseConfigured) saveGuestProfile(next);
       return next;
     });
     if (isSupabaseConfigured && supabase && profile) {
+      let primarySubjectToWrite = patch.primarySubject;
+
+      // онбординг задаёт primarySubject один раз — это и есть "добавить первый предмет"
+      // (см. lib/profileSubjects.ts); дальше пользователь добавляет остальные сам на дашборде.
+      // Русский и математика базового уровня подключаются автоматически при регистрации (триггер
+      // handle_new_user, см. supabase/migrations/0015) — если на онбординге выбрана профильная
+      // математика, это не "ещё один предмет", а замена базовой: сначала освобождаем её место,
+      // иначе упрёмся в лимит предметов тарифа, пытаясь добавить профильную поверх базовой.
+      if (patch.primarySubject && !profile.subjects.includes(patch.primarySubject)) {
+        const swappingMathLevel = patch.primarySubject === "math" && profile.subjects.includes("math_base");
+        if (swappingMathLevel) await removeProfileSubject(profile.id, "math_base");
+        const res = await addProfileSubject(profile.id, patch.primarySubject);
+        if (res.error) {
+          // не удалось подключить выбранный предмет (лимит тарифа — например, на лендинге выбран
+          // элективный предмет для онбординга, а рус+база уже заняли оба места на бесплатном
+          // тарифе) — не пишем primary_subject на несуществующий предмет и откатываем то, что уже
+          // оптимистично применили в setProfile выше
+          primarySubjectToWrite = previousPrimarySubject;
+          setProfile((prev) => (prev ? { ...prev, primarySubject: previousPrimarySubject } : prev));
+        } else {
+          setProfile((prev) => {
+            if (!prev) return prev;
+            const withoutOldMath = swappingMathLevel ? prev.subjects.filter((s) => s !== "math_base") : prev.subjects;
+            return { ...prev, subjects: [...withoutOldMath, patch.primarySubject!] };
+          });
+        }
+      }
+
       await supabase
         .from("profiles")
         .update({
@@ -180,18 +209,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           exam_year: patch.examYear,
           goal: patch.goal,
           daily_minutes: patch.dailyMinutes,
-          primary_subject: patch.primarySubject,
+          primary_subject: primarySubjectToWrite,
           onboarded_at: patch.onboardedAt ? new Date(patch.onboardedAt).toISOString() : undefined,
           tariff_id: patch.tariffId,
         })
         .eq("id", profile.id);
-
-      // онбординг задаёт primarySubject один раз — это и есть "добавить первый предмет"
-      // (см. lib/profileSubjects.ts); дальше пользователь добавляет остальные сам на дашборде.
-      if (patch.primarySubject && !profile.subjects.includes(patch.primarySubject)) {
-        const res = await addProfileSubject(profile.id, patch.primarySubject);
-        if (!res.error) setProfile((prev) => (prev ? { ...prev, subjects: [...prev.subjects, patch.primarySubject!] } : prev));
-      }
     }
   };
 

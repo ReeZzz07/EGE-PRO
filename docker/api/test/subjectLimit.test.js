@@ -19,9 +19,18 @@ async function addSubject(userId, subject) {
   await pool.query(`insert into public.profile_subjects (user_id, subject) values ($1, $2)`, [userId, subject]);
 }
 
+// createTestUser теперь тоже получает рус+база автоматически (триггер handle_new_user, см.
+// supabase/migrations/0015_default_subjects_on_signup.sql) — этот файл проверяет сам триггер
+// лимита в изоляции, со своим собственным контролируемым набором предметов, поэтому сбрасываем
+// автоподключённые перед каждым сценарием.
+async function resetSubjects(userId) {
+  await pool.query(`delete from public.profile_subjects where user_id = $1`, [userId]);
+}
+
 test("enforce_subject_limit: free (лимит 2) — третий предмет отклоняется", async () => {
   const userId = await createTestUser({ tariffId: "free" });
   try {
+    await resetSubjects(userId);
     await addSubject(userId, "math");
     await addSubject(userId, "rus");
     await assert.rejects(() => addSubject(userId, "fiz"), /лимит предметов/i);
@@ -33,6 +42,7 @@ test("enforce_subject_limit: free (лимит 2) — третий предмет
 test("enforce_subject_limit: vuz-plus (лимит 5) — пятый проходит, шестой отклоняется", async () => {
   const userId = await createTestUser({ tariffId: "vuz-plus" });
   try {
+    await resetSubjects(userId);
     for (const s of ["math", "rus", "fiz", "chem", "bio"]) await addSubject(userId, s);
     await assert.rejects(() => addSubject(userId, "hist"), /лимит предметов/i);
   } finally {
@@ -43,6 +53,7 @@ test("enforce_subject_limit: vuz-plus (лимит 5) — пятый проход
 test("enforce_subject_limit: админ обходит лимит тарифа полностью", async () => {
   const userId = await createTestUser({ isAdmin: true, tariffId: "free" });
   try {
+    await resetSubjects(userId);
     for (const s of ["math", "rus", "fiz", "chem", "bio", "hist"]) await addSubject(userId, s);
     const { rows } = await pool.query(`select count(*)::int as n from public.profile_subjects where user_id = $1`, [userId]);
     assert.equal(rows[0].n, 6);
@@ -54,6 +65,7 @@ test("enforce_subject_limit: админ обходит лимит тарифа �
 test("enforce_subject_limit: один и тот же предмет дважды — конфликт уникальности, не лимита", async () => {
   const userId = await createTestUser({ tariffId: "free" });
   try {
+    await resetSubjects(userId);
     await addSubject(userId, "math");
     await assert.rejects(() => addSubject(userId, "math"), /duplicate key|unique/i);
   } finally {

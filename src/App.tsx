@@ -230,7 +230,10 @@ function AppShell() {
         )}
 
         {view.name === "auth" && (
-          <AuthScreen onSuccess={() => setView({ name: "home" })} initialMode={view.mode} onNav={setView} />
+          // регистрация (в отличие от входа) обязана пройти онбординг — иначе видит "0 предметов"
+          // с одной надписью "Пройди онбординг", хотя рус+база уже подключены автоматически
+          // (см. supabase/migrations/0015) и осталось только заполнить анкету
+          <AuthScreen onSuccess={(usedMode) => setView(usedMode === "signup" ? { name: "onboarding" } : { name: "home" })} initialMode={view.mode} onNav={setView} />
         )}
 
         {view.name === "onboarding" && (

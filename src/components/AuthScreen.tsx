@@ -11,7 +11,9 @@ export default function AuthScreen({
   onNav,
 }: {
   compact?: boolean;
-  onSuccess: () => void;
+  /** какой режим реально сработал — пользователь мог открыть форму как вход, но переключиться
+   *  на регистрацию (и наоборот) до отправки, initialMode тут не подскажет */
+  onSuccess: (mode: "signup" | "login") => void;
   initialMode?: "signup" | "login";
   onNav: (v: View) => void;
 }) {
@@ -34,7 +36,7 @@ export default function AuthScreen({
     const result = mode === "signup" ? await signUp(email.trim(), password, name.trim()) : await signIn(email.trim(), password);
     setBusy(false);
     if (result.error) setError(result.error);
-    else onSuccess();
+    else onSuccess(mode);
   };
 
   return (

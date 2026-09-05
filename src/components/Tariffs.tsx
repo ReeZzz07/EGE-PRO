@@ -9,6 +9,7 @@ import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, useToast } from "./ui";
+import { MySubjectsSection } from "./Dashboard";
 import type { View } from "./Header";
 
 function money(rub: number): string {
@@ -118,6 +119,10 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
           );
         })}
       </div>
+
+      {/* управление предметами живёт здесь, а не на главной — лимит "N предметов на выбор" как
+          раз то, что решается на этой странице (см. MySubjectsSection в Dashboard.tsx) */}
+      {profile && <MySubjectsSection onNav={onNav} />}
 
       <p className="mt-8 text-center text-[12px] text-ink2">{content.paymentNote}</p>
       <p className="mt-2 text-center text-[12px] text-ink2">
