@@ -90,6 +90,26 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
+// удаление аккаунта необратимо, поэтому подтверждаем паролем (не полагаемся на один лишь факт
+// владения токеном — вкладка могла остаться открытой на чужом устройстве). Все пользовательские
+// таблицы ссылаются на auth.users с "on delete cascade" (см. миграции), так что удаление одной
+// строки полностью и без остатка уносит профиль, предметы, попытки, диагностику, план, чат с ИИ.
+app.delete("/auth/account", authMiddleware, async (req, res) => {
+  const { password } = req.body ?? {};
+  if (!password) return res.status(400).json({ error: { message: "Введи пароль, чтобы подтвердить удаление" } });
+  try {
+    const { rows } = await pool.query("select encrypted_password from auth.users where id = $1", [req.user.sub]);
+    const row = rows[0];
+    if (!row || !(await bcrypt.compare(password, row.encrypted_password))) {
+      return res.status(400).json({ error: { message: "Неверный пароль" } });
+    }
+    await pool.query("delete from auth.users where id = $1", [req.user.sub]);
+    res.json({ error: null });
+  } catch (e) {
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
+  }
+});
+
 // ─────────────────────── storage ───────────────────────
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });

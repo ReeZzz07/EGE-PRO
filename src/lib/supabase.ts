@@ -100,6 +100,17 @@ const authShim = {
     setSession(null, "SIGNED_OUT");
     return { error: null };
   },
+  async deleteAccount(password: string) {
+    const resp = await apiFetch("/auth/account", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    setSession(null, "SIGNED_OUT");
+    return { error: null };
+  },
 };
 
 function storageFrom(bucket: string) {

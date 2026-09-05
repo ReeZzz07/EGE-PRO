@@ -41,6 +41,10 @@ interface AuthCtx {
   signUp: (email: string, password: string, name: string) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  /** необратимо: в режиме с бэкендом требует пароль (см. server.js DELETE /auth/account) и
+   *  каскадом уносит вообще все данные пользователя — профиль, предметы, попытки, диагностику,
+   *  план, чат с ИИ. В гостевом режиме пароля нет — просто очищает локальный профиль. */
+  deleteAccount: (password: string) => Promise<AuthResult>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
   /** перечитать profile.subjects из БД — вызывать после addProfileSubject/removeProfileSubject
    *  (см. lib/profileSubjects.ts), эти функции сами по себе локальный profile не трогают. */
@@ -165,6 +169,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
+  const deleteAccount = async (password: string): Promise<AuthResult> => {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.deleteAccount(password);
+      if (error) return { error: error.message };
+    }
+    saveGuestProfile(null);
+    setProfile(null);
+    return {};
+  };
+
   const updateProfile = async (patch: Partial<Profile>) => {
     const previousPrimarySubject = profile?.primarySubject;
     setProfile((prev) => {
@@ -224,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, updateProfile, refreshSubjects }}>
+    <AuthCtx.Provider value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, deleteAccount, updateProfile, refreshSubjects }}>
       {children}
     </AuthCtx.Provider>
   );
