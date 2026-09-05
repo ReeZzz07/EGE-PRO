@@ -164,9 +164,17 @@ export async function loadSubjectAggregates(): Promise<void> {
   bump();
 }
 
-/** Сумма первичных баллов по всему банку — для лендинга. */
+/** Сумма первичных баллов по всему банку — для лендинга. Для "личного зачёта" (Главная/Статистика/
+ *  Профиль) это НЕ то число — там нужна сумма только по подключённым предметам ученика, иначе
+ *  знаменатель обещает баллы за предметы, которых на его тарифе физически нет, см.
+ *  getSubjectsPointsTotal ниже. */
 export function getGlobalPointsTotal(): number {
   return ALL_SUBJECTS.reduce((sum, s) => sum + getSubjectPointsTotal(s), 0);
+}
+
+/** То же самое, но только по переданным предметам — для личного прогресса, а не витрины всего банка. */
+export function getSubjectsPointsTotal(subjects: Subject[]): number {
+  return subjects.reduce((sum, s) => sum + getSubjectPointsTotal(s), 0);
 }
 
 /** Сколько всего заданий с развёрнутым ответом (эссе/сочинение) в опубликованном банке. */
@@ -251,6 +259,11 @@ export async function hydrateTasksByIds(ids: string[]): Promise<void> {
  *  в интерфейсе), без необходимости грузить все предметы целиком. */
 export function getGlobalTaskTotal(): number {
   return ALL_SUBJECTS.reduce((sum, s) => sum + getSubjectTotal(s), 0);
+}
+
+/** То же самое, но только по переданным предметам — см. комментарий у getSubjectsPointsTotal. */
+export function getSubjectsTaskTotal(subjects: Subject[]): number {
+  return subjects.reduce((sum, s) => sum + getSubjectTotal(s), 0);
 }
 
 /** Все коды предметов — удобно для перебора (Object.keys(SUBJECTS) даёт то же самое, экспортируем

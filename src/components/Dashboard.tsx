@@ -5,7 +5,7 @@ import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
 import { addProfileSubject } from "../lib/profileSubjects";
 import { useEffect, useMemo, useState } from "react";
 import { dayIndex, formatClock, plural, useCountdown, useScramble } from "../lib/utils";
-import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
+import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, getSubjectsPointsTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, useToast } from "./ui";
 
@@ -120,12 +120,16 @@ function examTarget(): { date: Date; year: number } {
 export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
   useTasksVersion();
-  const { profile } = useAuth();
+  const { profile, isGuestMode } = useAuth();
   const primarySubject = profile?.primarySubject;
   // раньше здесь показывались ВСЕ предметы платформы, а не только подключённые ученику — теперь
   // рус + математика (базовая или профильная) подключаются автоматически при регистрации (см.
   // supabase/migrations/0015), остальные — через "Мои предметы" на странице тарифов
   const connectedSubjects = profile?.subjects ?? [];
+  // "личный зачёт" ниже — только подключённые предметы, не вся платформа (см. StatsView для той
+  // же логики и объяснения); "все N заданий"/"там N баллов ждут тебя" дальше по странице — это
+  // витрина всего банка (приглашение исследовать), их не трогаем.
+  const personalPointsTotal = profile?.isAdmin || isGuestMode ? getGlobalPointsTotal() : getSubjectsPointsTotal(connectedSubjects);
   const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
   const exam = useMemo(examTarget, []);
   const cd = useCountdown(exam.date);
@@ -232,7 +236,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               <div className="grid flex-1 gap-2.5">
                 <div className="flex items-baseline justify-between border-b border-dashed border-ink/25 pb-1">
                   <span className="text-[12px] font-semibold text-ink2">Первичные баллы</span>
-                  <span className="font-mono text-lg font-extrabold text-blue">{derived.earnedPoints}<span className="text-[11px] text-ink2">/{getGlobalPointsTotal()}</span></span>
+                  <span className="font-mono text-lg font-extrabold text-blue">{derived.earnedPoints}<span className="text-[11px] text-ink2">/{personalPointsTotal}</span></span>
                 </div>
                 <div className="flex items-baseline justify-between border-b border-dashed border-ink/25 pb-1">
                   <span className="text-[12px] font-semibold text-ink2">Серия дней</span>

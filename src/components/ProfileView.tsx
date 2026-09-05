@@ -8,7 +8,7 @@ import { useAuth } from "../lib/auth";
 import { useProgress } from "../lib/store";
 import { GOAL_OPTS, GRADE_OPTS } from "./OnboardingFlow";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
-import { getGlobalPointsTotal } from "../lib/dbTasks";
+import { getGlobalPointsTotal, getSubjectsPointsTotal } from "../lib/dbTasks";
 import { AVATAR_PRESETS, photoUrlFromAvatarUrl, presetFromAvatarUrl, removeUploadedAvatar, uploadAvatar } from "../lib/avatar";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
@@ -29,7 +29,7 @@ function FactTile({ icon, label, value, accent, onClick }: { icon: string; label
 }
 
 export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
-  const { profile, updateProfile, changeEmail, setAvatar } = useAuth();
+  const { profile, updateProfile, changeEmail, setAvatar, isGuestMode } = useAuth();
   const { derived } = useProgress();
   const { push } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -232,7 +232,7 @@ export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
         <FactTile
           icon="star"
           label="баллы"
-          value={`${derived.earnedPoints} из ${getGlobalPointsTotal()}`}
+          value={`${derived.earnedPoints} из ${profile.isAdmin || isGuestMode ? getGlobalPointsTotal() : getSubjectsPointsTotal(profile.subjects)}`}
           accent="blue"
           onClick={() => onNav({ name: "stats" })}
         />

@@ -3,7 +3,7 @@ import { SUBJECTS, taskById } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
-import { getGlobalPointsTotal, getGlobalTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
+import { getGlobalPointsTotal, getGlobalTaskTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import { Icon, Reveal } from "./ui";
@@ -128,13 +128,19 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derived.recent]);
 
+  // знаменатель — по подключённым предметам, не по всей платформе (иначе "0 из 82279" обещает
+  // баллы за 9 предметов, которых на тарифе физически нет — см. getSubjectsPointsTotal). Админы и
+  // гостевой режим (там profile.subjects не отслеживается вовсе) — по всей платформе, как раньше.
+  const pointsTotal = profile?.isAdmin || isGuestMode ? getGlobalPointsTotal() : getSubjectsPointsTotal(connectedSubjects);
+  const taskTotal = profile?.isAdmin || isGuestMode ? getGlobalTaskTotal() : getSubjectsTaskTotal(connectedSubjects);
+
   const summary = [
     { label: "Попыток всего", value: String(atts.length), icon: "list" },
     { label: "Точность", value: `${Math.round(derived.accuracy * 100)}%`, icon: "target" },
-    { label: "Первичные баллы", value: `${derived.earnedPoints}/${getGlobalPointsTotal()}`, icon: "star" },
+    { label: "Первичные баллы", value: `${derived.earnedPoints}/${pointsTotal}`, icon: "star" },
     { label: "Время за решением", value: hours ? `${hours} ч ${mins} м` : `${mins} мин`, icon: "timer" },
     { label: "Серия дней", value: String(derived.streak), icon: "flame" },
-    { label: "Заданий решено", value: `${derived.solvedIds.size}/${getGlobalTaskTotal()}`, icon: "check" },
+    { label: "Заданий решено", value: `${derived.solvedIds.size}/${taskTotal}`, icon: "check" },
   ];
 
   return (
