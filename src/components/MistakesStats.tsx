@@ -4,9 +4,63 @@ import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
 import { getGlobalPointsTotal, getGlobalTaskTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
+import { deleteExamAttempt, listExamAttempts, type ExamAttempt } from "../lib/examAttempts";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import { Icon, Reveal } from "./ui";
+
+/* ─────────── Сохранённые варианты «Экзамен-режима» ─────────── */
+function ExamAttemptsSection({ onNav }: { onNav: (v: View) => void }) {
+  const [attempts, setAttempts] = useState<ExamAttempt[] | null>(null);
+
+  const load = () => {
+    listExamAttempts().then(setAttempts);
+  };
+  useEffect(load, []);
+
+  // пока грузится или ни одной попытки ещё не пройдено — секция просто не занимает места, не
+  // мигаем отдельным пустым состоянием ради того, что для многих учеников будет постоянным
+  if (!attempts || attempts.length === 0) return null;
+
+  return (
+    <Reveal delay={180}>
+      <div className="sheet mt-6 p-6">
+        <h2 className="font-display text-lg font-bold">Сохранённые варианты «Экзамен-режима»</h2>
+        <p className="mt-1 text-[12.5px] text-ink2">Тот же набор заданий, что выпал при прохождении — можно пройти ещё раз.</p>
+        <ul className="mt-4 space-y-2">
+          {attempts.map((a) => {
+            const meta = SUBJECTS[a.subject];
+            return (
+              <li key={a.id} className="flex flex-wrap items-center gap-3 border border-ink/10 px-3 py-2.5">
+                <span className={`font-mono text-[10px] font-bold ${meta.color}`}>{meta.short}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-bold">{meta.name}</span>
+                  <span className="font-mono text-[10.5px] text-ink2">
+                    {formatDay(new Date(a.finishedAt).getTime())} · {a.primaryScore}/{a.maxPrimary} п.б.
+                    {a.secondaryScore != null && ` · ${a.secondaryScore}${a.secondaryMax === 5 ? "" : "/100"}`}
+                  </span>
+                </span>
+                <button onClick={() => onNav({ name: "mock-exam", retryAttemptId: a.id })} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                  Пройти снова
+                </button>
+                <button
+                  onClick={async () => {
+                    await deleteExamAttempt(a.id);
+                    load();
+                  }}
+                  title="Удалить"
+                  className="text-ink2 hover:text-red"
+                >
+                  <Icon name="trash" size={14} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </Reveal>
+  );
+}
 
 /* ─────────── Тетрадь ошибок ─────────── */
 export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
@@ -247,6 +301,8 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
           </div>
         </Reveal>
       </div>
+
+      <ExamAttemptsSection onNav={onNav} />
 
       <Reveal delay={150}>
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-2 border-dashed border-ink/25 bg-sheet px-5 py-4">

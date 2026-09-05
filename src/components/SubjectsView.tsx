@@ -46,6 +46,16 @@ export default function SubjectsView({ onNav }: { onNav: (v: View) => void }) {
       )}
 
       <MySubjectsSection onNav={onNav} />
+
+      <button
+        onClick={() => onNav({ name: "kim2027" })}
+        className="mt-8 flex w-full items-center justify-between gap-3 border-l-4 border-amber bg-amber/8 px-4 py-3 text-left transition hover:bg-amber/12"
+      >
+        <span className="text-[13px] leading-relaxed text-ink2">
+          <strong className="text-ink">Что меняется в ЕГЭ 2027</strong> — проект ФИПИ по математике, истории и информатике.
+        </span>
+        <span className="shrink-0 font-mono text-[12px] font-bold text-amber">Подробнее →</span>
+      </button>
     </div>
   );
 }

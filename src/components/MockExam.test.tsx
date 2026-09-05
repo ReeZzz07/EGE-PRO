@@ -17,12 +17,12 @@ vi.mock("../lib/auth", () => ({
 vi.mock("../lib/tariffs", () => ({ useEssayCheckAllowed: vi.fn() }));
 vi.mock("../lib/aiTutor", () => ({ callAiTutor: vi.fn() }));
 
-function shortTask(id: string): EgeTask {
+function shortTask(id: string, egeNumber: number): EgeTask {
   return {
     id,
     fipiId: id,
     subject: "rus",
-    egeNumber: 1,
+    egeNumber,
     topic: `Задание ${id}`,
     difficulty: 1,
     points: 1,
@@ -55,7 +55,7 @@ function essayTask(): EgeTask {
 
 beforeEach(() => {
   TASKS.length = 0;
-  for (let i = 0; i < 6; i++) TASKS.push(shortTask(`s${i}`));
+  for (let i = 0; i < 6; i++) TASKS.push(shortTask(`s${i}`, i + 1));
   TASKS.push(essayTask());
 });
 

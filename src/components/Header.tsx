@@ -16,19 +16,20 @@ export type View =
   | { name: "task"; id: string }
   | { name: "diagnostic"; subject: Subject }
   | { name: "plan"; subject?: Subject }
-  | { name: "mock-exam"; subject?: Subject }
+  | { name: "mock-exam"; subject?: Subject; retryAttemptId?: number }
   | { name: "session-summary" }
   | { name: "tariffs" }
   | { name: "profile" }
   | { name: "settings" }
   | { name: "subjects" }
+  | { name: "kim2027" }
   | { name: "legal"; doc: "offer" | "privacy" }
   | { name: "admin" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
 export const PROTECTED_VIEWS: View["name"][] = [
   "bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary",
-  "profile", "settings", "subjects", "admin",
+  "profile", "settings", "subjects", "kim2027", "admin",
 ];
 
 /** Виды, доступные только администраторам (см. AppShell). */

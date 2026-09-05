@@ -21,6 +21,7 @@ import Tariffs from "./components/Tariffs";
 import ProfileView from "./components/ProfileView";
 import SettingsView from "./components/SettingsView";
 import SubjectsView from "./components/SubjectsView";
+import Kim2027Changes from "./components/Kim2027Changes";
 import LegalDoc from "./components/LegalDoc";
 import { pathToView, viewToPath } from "./lib/routes";
 
@@ -276,6 +277,15 @@ function AppShell() {
         })()}
 
         {view.name === "mock-exam" && (() => {
+          if (view.retryAttemptId != null) {
+            return (
+              <MockExam
+                retryAttemptId={view.retryAttemptId}
+                onFinish={() => setView({ name: "session-summary" })}
+                onExit={() => setView({ name: "stats" })}
+              />
+            );
+          }
           const subject = view.subject ?? profile?.primarySubject;
           return subject ? (
             <MockExam subject={subject} onFinish={() => setView({ name: "session-summary" })} onExit={() => setView({ name: "home" })} />
@@ -293,6 +303,7 @@ function AppShell() {
         {view.name === "profile" && <ProfileView onNav={setView} />}
         {view.name === "settings" && <SettingsView onNav={setView} />}
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
+        {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
