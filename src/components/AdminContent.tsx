@@ -97,14 +97,14 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center">
         <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-ink2">Загрузка контента…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-20">
+    <div className="mx-auto max-w-[1600px] px-4 pb-20">
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">админка</p>
