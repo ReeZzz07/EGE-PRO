@@ -8,7 +8,9 @@ import type { View } from "./Header";
 
 type Step = "subject" | "quiz" | "auth" | "explainer";
 
-const GRADE_OPTS: { v: Grade; l: string }[] = [
+/** экспортируются — переиспользуются на странице профиля (см. ProfileView.tsx) для тех же полей,
+ *  но уже РЕДАКТИРУЕМЫХ после онбординга, а не только при первом заполнении анкеты */
+export const GRADE_OPTS: { v: Grade; l: string }[] = [
   { v: "10", l: "10 класс" },
   { v: "11", l: "11 класс" },
   { v: "grad", l: "Выпускник прошлых лет" },
@@ -17,20 +19,20 @@ const YEAR_OPTS: { v: "this" | "next"; l: string }[] = [
   { v: "this", l: "В этом году" },
   { v: "next", l: "В следующем году" },
 ];
-const GOAL_OPTS: { v: Goal; l: string }[] = [
+export const GOAL_OPTS: { v: Goal; l: string }[] = [
   { v: "threshold", l: "Перейти порог" },
   { v: "70plus", l: "Сдать на 70+" },
   { v: "80plus", l: "Сдать на 80+" },
   { v: "olympiad", l: "Готовлюсь к олимпиаде / топ-вузу" },
 ];
-const TIME_OPTS: { v: number; l: string }[] = [
+export const TIME_OPTS: { v: number; l: string }[] = [
   { v: 10, l: "10 минут в день" },
   { v: 25, l: "20–30 минут в день" },
   { v: 60, l: "1 час в день" },
   { v: 90, l: "Больше часа" },
 ];
 
-function ChoiceRow<T extends string | number>({ label, options, value, onChange }: { label: string; options: { v: T; l: string }[]; value: T | null; onChange: (v: T) => void }) {
+export function ChoiceRow<T extends string | number>({ label, options, value, onChange }: { label: string; options: { v: T; l: string }[]; value: T | null; onChange: (v: T) => void }) {
   return (
     <div>
       <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">{label}</p>

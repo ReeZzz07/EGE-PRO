@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
@@ -18,11 +19,17 @@ export type View =
   | { name: "mock-exam"; subject?: Subject }
   | { name: "session-summary" }
   | { name: "tariffs" }
+  | { name: "profile" }
+  | { name: "settings" }
+  | { name: "subjects" }
   | { name: "legal"; doc: "offer" | "privacy" }
   | { name: "admin" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
-export const PROTECTED_VIEWS: View["name"][] = ["bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary", "admin"];
+export const PROTECTED_VIEWS: View["name"][] = [
+  "bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary",
+  "profile", "settings", "subjects", "admin",
+];
 
 /** Виды, доступные только администраторам (см. AppShell). */
 export const ADMIN_ONLY_VIEWS: View["name"][] = ["admin"];
@@ -36,10 +43,21 @@ const NAV: { id: string; label: string; icon: string }[] = [
   { id: "home", label: "Главная", icon: "home" },
   { id: "bank", label: "Банк заданий", icon: "list" },
   { id: "tutor", label: "ИИ-репетитор", icon: "chat" },
-  { id: "mistakes", label: "Ошибки", icon: "alert" },
-  { id: "stats", label: "Статистика", icon: "chart" },
   { id: "tariffs", label: "Тариф", icon: "spark" },
 ];
+
+/** Пункты выпадающего меню аккаунта (открывается наведением на кнопку с именем, см. ниже) —
+ *  "Ошибки" и "Статистика" раньше были в основной навигации, но чем больше личных разделов
+ *  появлялось (профиль, предметы, настройки), тем очевиднее, что это одна группа "мой аккаунт",
+ *  а не отдельные пункты верхнего уровня наравне с "Банк заданий". */
+const ACCOUNT_MENU: { id: string; label: string; icon: string }[] = [
+  { id: "profile", label: "Профиль", icon: "user" },
+  { id: "stats", label: "Статистика", icon: "chart" },
+  { id: "mistakes", label: "Ошибки", icon: "alert" },
+  { id: "subjects", label: "Мои предметы", icon: "book" },
+  { id: "settings", label: "Настройки", icon: "gear" },
+];
+const ACCOUNT_VIEWS: View["name"][] = ACCOUNT_MENU.map((n) => n.id) as View["name"][];
 
 const GUEST_NAV: { section?: string; view?: View; label: string; icon: string }[] = [
   { label: "Главная", icon: "home" },
@@ -52,7 +70,14 @@ const GUEST_NAV: { section?: string; view?: View; label: string; icon: string }[
 export default function Header({ view, onNav }: { view: View; onNav: (v: View) => void }) {
   const { derived } = useProgress();
   const { profile, signOut } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
   const active = view.name === "task" ? "bank" : view.name;
+
+  const goTo = (name: string) => {
+    onNav({ name } as View);
+    setMenuOpen(false);
+  };
+
   return (
     <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
@@ -84,11 +109,6 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                   >
                     <Icon name={n.icon} size={15} />
                     <span className="hidden whitespace-nowrap lg:inline">{n.label}</span>
-                    {n.id === "mistakes" && derived.mistakeIds.size > 0 && (
-                      <span className="rounded-sm bg-red px-1 py-px font-mono text-[10px] font-bold leading-none text-white">
-                        {derived.mistakeIds.size}
-                      </span>
-                    )}
                     {isActive && <span className="absolute inset-x-1.5 bottom-0.5 h-[2.5px] rounded-full bg-blue" aria-hidden />}
                   </button>
                 );
@@ -126,10 +146,55 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
             </>
           )}
           {profile ? (
-            <button onClick={() => { signOut(); onNav({ name: "landing" }); }} title="Выйти" className="flex items-center gap-1.5 rounded-sm border-2 border-ink/20 px-1.5 py-1 text-[11px] font-bold text-ink2 hover:border-ink hover:text-ink sm:px-2">
-              <span className="hidden max-w-[80px] truncate sm:inline lg:hidden xl:inline">{profile.name || profile.email}</span>
-              <Icon name="x" size={12} />
-            </button>
+            <div className="relative" onMouseEnter={() => setMenuOpen(true)} onMouseLeave={() => setMenuOpen(false)}>
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                title="Аккаунт"
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                className={`flex items-center gap-1.5 rounded-sm border-2 px-1.5 py-1 text-[11px] font-bold sm:px-2 ${
+                  menuOpen || ACCOUNT_VIEWS.includes(view.name) ? "border-blue text-blue" : "border-ink/20 text-ink2 hover:border-ink hover:text-ink"
+                }`}
+              >
+                <Icon name="user" size={13} />
+                <span className="hidden max-w-[80px] truncate sm:inline lg:hidden xl:inline">{profile.name || profile.email}</span>
+                {derived.mistakeIds.size > 0 && <span className="h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
+                <Icon name="chevronDown" size={11} className={`transition-transform ${menuOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {menuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-52">
+                  <div role="menu" className="sheet overflow-hidden rounded-sm py-1.5">
+                    {ACCOUNT_MENU.map((n) => (
+                      <button
+                        key={n.id}
+                        role="menuitem"
+                        onClick={() => goTo(n.id)}
+                        className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-bold transition-colors ${
+                          view.name === n.id ? "bg-blue/8 text-blue" : "text-ink2 hover:bg-ink/5 hover:text-ink"
+                        }`}
+                      >
+                        <Icon name={n.icon} size={15} />
+                        {n.label}
+                        {n.id === "mistakes" && derived.mistakeIds.size > 0 && (
+                          <span className="ml-auto rounded-sm bg-red px-1 py-px font-mono text-[10px] font-bold leading-none text-white">
+                            {derived.mistakeIds.size}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    <div className="my-1.5 border-t border-ink/10" aria-hidden />
+                    <button
+                      role="menuitem"
+                      onClick={() => { signOut(); onNav({ name: "landing" }); setMenuOpen(false); }}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-bold text-red hover:bg-red/5"
+                    >
+                      <Icon name="x" size={15} /> Выйти
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <button onClick={() => onNav({ name: "auth", mode: "signup" })} className="btn btn-ink px-2.5 py-1.5 text-[11px] sm:px-3">
               Регистрация

@@ -93,7 +93,8 @@ app.post("/auth/login", async (req, res) => {
 // удаление аккаунта необратимо, поэтому подтверждаем паролем (не полагаемся на один лишь факт
 // владения токеном — вкладка могла остаться открытой на чужом устройстве). Все пользовательские
 // таблицы ссылаются на auth.users с "on delete cascade" (см. миграции), так что удаление одной
-// строки полностью и без остатка уносит профиль, предметы, попытки, диагностику, план, чат с ИИ.
+// строки уносит профиль, предметы, попытки, диагностику, план, чат с ИИ — но НЕ файл аватарки
+// (см. POST /profile/avatar ниже, он живёт на диске, а не в БД), его чистим отдельно сами.
 app.delete("/auth/account", authMiddleware, async (req, res) => {
   const { password } = req.body ?? {};
   if (!password) return res.status(400).json({ error: { message: "Введи пароль, чтобы подтвердить удаление" } });
@@ -103,8 +104,50 @@ app.delete("/auth/account", authMiddleware, async (req, res) => {
     if (!row || !(await bcrypt.compare(password, row.encrypted_password))) {
       return res.status(400).json({ error: { message: "Неверный пароль" } });
     }
+    removeExistingAvatarFiles(req.user.sub);
     await pool.query("delete from auth.users where id = $1", [req.user.sub]);
     res.json({ error: null });
+  } catch (e) {
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
+  }
+});
+
+// смена пароля — тоже подтверждаем текущим паролем (та же логика, что и удаление аккаунта выше:
+// не полагаемся на один факт владения токеном).
+app.post("/auth/change-password", authMiddleware, async (req, res) => {
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: { message: "Новый пароль должен быть не короче 6 символов" } });
+  try {
+    const { rows } = await pool.query("select encrypted_password from auth.users where id = $1", [req.user.sub]);
+    const row = rows[0];
+    if (!row || !(await bcrypt.compare(currentPassword ?? "", row.encrypted_password))) {
+      return res.status(400).json({ error: { message: "Неверный текущий пароль" } });
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query("update auth.users set encrypted_password = $2 where id = $1", [req.user.sub, hash]);
+    res.json({ error: null });
+  } catch (e) {
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
+  }
+});
+
+// смена email — тоже требует пароль. Возвращаем свежий токен (в нём зашит email, см. signToken),
+// иначе клиент до следующего входа продолжал бы слать токен со старым email в payload.
+app.post("/auth/change-email", authMiddleware, async (req, res) => {
+  const { password, newEmail } = req.body ?? {};
+  if (!newEmail) return res.status(400).json({ error: { message: "Введи новый email" } });
+  try {
+    const { rows } = await pool.query("select email, encrypted_password from auth.users where id = $1", [req.user.sub]);
+    const row = rows[0];
+    if (!row || !(await bcrypt.compare(password ?? "", row.encrypted_password))) {
+      return res.status(400).json({ error: { message: "Неверный пароль" } });
+    }
+    if (newEmail === row.email) return res.json({ data: { user: { id: req.user.sub, email: row.email } }, error: null, access_token: signToken({ id: req.user.sub, email: row.email }) });
+    const existing = await pool.query("select id from auth.users where email = $1", [newEmail]);
+    if (existing.rows.length) return res.status(400).json({ error: { message: "Этот email уже занят другим аккаунтом" } });
+    await pool.query("update auth.users set email = $2 where id = $1", [req.user.sub, newEmail]);
+    const user = { id: req.user.sub, email: newEmail };
+    res.json({ data: { user }, error: null, access_token: signToken(user) });
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
@@ -195,6 +238,59 @@ app.get("/storage/:bucket/*", (req, res) => {
     fs.createReadStream(full).pipe(res);
   } catch (e) {
     res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ─────────────────────── аватар профиля ───────────────────────
+// Отдельный от /storage/upload путь: тот требует requireAdmin (доверенная загрузка контента
+// заданий), а сюда может постучаться любой авторизованный ученик. Раз аудитория шире — путь
+// вычисляем сами по req.user.sub, а не берём из тела запроса (иначе можно было бы перезаписать
+// чужой файл), и проверяем содержимое по магическим байтам, а не расширению из имени файла.
+const AVATAR_EXT = { "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp" };
+
+function sniffAvatarImageType(buf) {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  const ascii6 = buf.toString("ascii", 0, Math.min(6, buf.length));
+  if (ascii6 === "GIF87a" || ascii6 === "GIF89a") return "image/gif";
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  return null;
+}
+
+function removeExistingAvatarFiles(userId) {
+  for (const ext of Object.values(AVATAR_EXT)) {
+    const full = safeRelPath("avatars", `${userId}${ext}`);
+    if (fs.existsSync(full)) fs.unlinkSync(full);
+  }
+}
+
+app.post("/profile/avatar", authMiddleware, upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: { message: "Файл не получен" } });
+    const mime = sniffAvatarImageType(req.file.buffer);
+    const ext = AVATAR_EXT[mime];
+    if (!ext) return res.status(400).json({ error: { message: "Поддерживаются только PNG, JPEG, GIF и WEBP" } });
+
+    removeExistingAvatarFiles(req.user.sub);
+    const relPath = `${req.user.sub}${ext}`;
+    const full = safeRelPath("avatars", relPath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, req.file.buffer);
+
+    await pool.query("update public.profiles set avatar_url = $2 where id = $1", [req.user.sub, `avatars/${relPath}`]);
+    res.json({ path: `avatars/${relPath}`, error: null });
+  } catch (e) {
+    res.status(400).json({ error: { message: String(e?.message ?? e) } });
+  }
+});
+
+app.delete("/profile/avatar", authMiddleware, async (req, res) => {
+  try {
+    removeExistingAvatarFiles(req.user.sub);
+    await pool.query("update public.profiles set avatar_url = null where id = $1", [req.user.sub]);
+    res.json({ error: null });
+  } catch (e) {
+    res.status(400).json({ error: { message: String(e?.message ?? e) } });
   }
 });
 

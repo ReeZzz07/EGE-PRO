@@ -84,3 +84,22 @@ test("DELETE /auth/account: без пароля в теле — 400 с поня�
     await deleteTestUser(id);
   }
 });
+
+test("DELETE /auth/account: аватарка на диске (см. POST /profile/avatar) удаляется вместе с аккаунтом", async () => {
+  const { id, token } = await signup();
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  const form = new FormData();
+  form.append("file", new Blob([png], { type: "image/png" }), "a.png");
+  const up = await fetch(`${BASE_URL}/profile/avatar`, { method: "POST", headers: { authorization: `Bearer ${token}` }, body: form });
+  const upJson = await up.json();
+  assert.equal(up.status, 200);
+
+  const before = await fetch(`${BASE_URL}/storage/${upJson.path}`);
+  assert.equal(before.status, 200);
+
+  const r = await deleteAccount(token, PASSWORD);
+  assert.equal(r.status, 200);
+
+  const after1 = await fetch(`${BASE_URL}/storage/${upJson.path}`);
+  assert.equal(after1.status, 404);
+});

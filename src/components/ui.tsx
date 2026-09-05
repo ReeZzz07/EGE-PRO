@@ -84,6 +84,25 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M4.5 16.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" />
     </>
   ),
+  upload: (
+    <>
+      <path d="M12 20.5v-11M8 12.5l4-4 4 4" />
+      <path d="M4.5 16.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.5 20c1.2-4.2 4.4-6.3 7.5-6.3s6.3 2.1 7.5 6.3" />
+    </>
+  ),
+  gear: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2.4M12 18.6V21M4.2 12H2M22 12h-2.2M5.7 5.7l1.5 1.5M16.8 16.8l1.5 1.5M18.3 5.7l-1.5 1.5M7.2 16.8l-1.5 1.5" />
+    </>
+  ),
+  chevronDown: <path d="M6 9l6 6 6-6" />,
 };
 
 export function Icon({ name, size = 20, className = "" }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {

@@ -9,44 +9,21 @@ import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, useToast } from "./ui";
-import { MySubjectsSection } from "./Dashboard";
 import type { View } from "./Header";
 
-function money(rub: number): string {
+export function money(rub: number): string {
   if (rub === 0) return "Бесплатно";
   return `${rub.toLocaleString("ru-RU")} ₽/мес`;
 }
 
 export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
-  const { profile, updateProfile, deleteAccount, isGuestMode } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const { push } = useToast();
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [seo, setSeo] = useState(DEFAULT_SEO);
   const [content, setContent] = useState<TariffsPageContent>(DEFAULT_TARIFFS_CONTENT);
-
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [showDeletePassword, setShowDeletePassword] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const cancelDelete = () => {
-    setConfirmingDelete(false);
-    setDeletePassword("");
-    setDeleteError(null);
-  };
-
-  const confirmDelete = async () => {
-    if (!isGuestMode && !deletePassword.trim()) return setDeleteError("Введи пароль, чтобы подтвердить удаление.");
-    setDeleting(true);
-    setDeleteError(null);
-    const res = await deleteAccount(deletePassword);
-    setDeleting(false);
-    if (res.error) return setDeleteError(res.error);
-    onNav({ name: "landing" });
-  };
 
   useEffect(() => {
     loadActiveTariffs().then((t) => {
@@ -142,66 +119,15 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
         })}
       </div>
 
-      {/* управление предметами живёт здесь, а не на главной — лимит "N предметов на выбор" как
-          раз то, что решается на этой странице (см. MySubjectsSection в Dashboard.tsx) */}
-      {profile && <MySubjectsSection onNav={onNav} />}
-
+      {/* управление предметами и удаление аккаунта — на странице профиля (см. ProfileView.tsx),
+          рядом с остальными личными настройками, а не здесь */}
       {profile && (
-        <section className="mt-14 border-t-2 border-dashed border-red/30 pt-8">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-red">опасная зона</p>
-          <h2 className="font-display mt-1 text-xl font-black">Удалить аккаунт</h2>
-          <p className="mt-2 max-w-lg text-[13px] leading-relaxed text-ink2">
-            Профиль, подключённые предметы, попытки решений, диагностика, план подготовки и история чата с
-            ИИ-репетитором будут удалены безвозвратно.
-          </p>
-
-          {!confirmingDelete ? (
-            <button onClick={() => setConfirmingDelete(true)} className="btn btn-ghost mt-4 px-4 py-2.5 text-[13px] text-red">
-              <Icon name="trash" size={14} /> Удалить аккаунт
-            </button>
-          ) : (
-            <div className="sheet mt-4 max-w-sm border-red/40 p-5">
-              {isGuestMode ? (
-                <p className="text-[13px] leading-relaxed text-ink2">Гостевой профиль в этом браузере будет удалён без возможности восстановления.</p>
-              ) : (
-                <>
-                  <label className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Подтверди паролем</label>
-                  <div className="relative mt-1.5">
-                    <input
-                      value={deletePassword}
-                      onChange={(e) => setDeletePassword(e.target.value)}
-                      type={showDeletePassword ? "text" : "password"}
-                      onKeyDown={(e) => e.key === "Enter" && confirmDelete()}
-                      className="input-blank w-full rounded-sm px-3.5 py-2.5 pr-10 text-sm"
-                      placeholder="Текущий пароль"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowDeletePassword((v) => !v)}
-                      className="absolute inset-y-0 right-0 flex items-center px-3 text-ink2 hover:text-ink"
-                      aria-label={showDeletePassword ? "Скрыть пароль" : "Показать пароль"}
-                    >
-                      <Icon name={showDeletePassword ? "eyeOff" : "eye"} size={16} />
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {deleteError && (
-                <p className="anim-rise mt-3 flex items-center gap-2 text-[13px] font-bold text-red">
-                  <Icon name="alert" size={15} /> {deleteError}
-                </p>
-              )}
-
-              <div className="mt-4 flex flex-wrap gap-2.5">
-                <button onClick={confirmDelete} disabled={deleting} className="btn btn-red px-4 py-2.5 text-[13px]">
-                  {deleting ? "Удаляем…" : "Да, удалить навсегда"}
-                </button>
-                <button onClick={cancelDelete} className="btn btn-ghost px-4 py-2.5 text-[13px]">Отмена</button>
-              </div>
-            </div>
-          )}
-        </section>
+        <p className="mt-8 text-center text-[12.5px] text-ink2">
+          Подключено {profile.subjects.length} из {tariffs.find((t) => t.id === profile.tariffId)?.subjectsCount ?? "?"} предметов —{" "}
+          <button onClick={() => onNav({ name: "subjects" })} className="link-slide font-bold text-ink2 hover:text-ink">
+            управлять в «Мои предметы»
+          </button>
+        </p>
       )}
 
       <p className="mt-8 text-center text-[12px] text-ink2">{content.paymentNote}</p>

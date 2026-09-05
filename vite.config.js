@@ -14,6 +14,7 @@ const apiProxy = backendHost
   ? {
       "/rest/v1": { target: `http://postgrest:3000`, changeOrigin: true, rewrite: (p) => p.replace(/^\/rest\/v1/, "") },
       "/auth": { target: `http://api:8787`, changeOrigin: true },
+      "/profile": { target: `http://api:8787`, changeOrigin: true },
       "/storage": { target: `http://api:8787`, changeOrigin: true },
       "/admin": { target: `http://api:8787`, changeOrigin: true },
       "/ai-tutor": { target: `http://api:8787`, changeOrigin: true },

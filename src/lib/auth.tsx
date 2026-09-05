@@ -27,6 +27,9 @@ export interface Profile {
   /** id тарифа из public.tariffs; по умолчанию "free". Администраторы тариф игнорируют — им
    *  всегда доступно всё, независимо от того, что здесь записано (см. isAdmin). */
   tariffId?: string;
+  /** "preset:<id>" (см. lib/avatar.ts AVATAR_PRESETS) или путь к загруженному файлу
+   *  ("avatars/<id>.<ext>", см. server.js POST /profile/avatar). Пусто — используем инициал имени. */
+  avatarUrl?: string;
 }
 
 interface AuthResult {
@@ -45,6 +48,14 @@ interface AuthCtx {
    *  каскадом уносит вообще все данные пользователя — профиль, предметы, попытки, диагностику,
    *  план, чат с ИИ. В гостевом режиме пароля нет — просто очищает локальный профиль. */
   deleteAccount: (password: string) => Promise<AuthResult>;
+  /** недоступно в гостевом режиме — там пароля никогда не было (см. signIn). */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
+  /** возвращает свежую сессию под капотом (см. supabase.ts authShim.changeEmail) — profile.email
+   *  обновится сам через onAuthStateChange, вызывать updateProfile для этого не нужно. */
+  changeEmail: (password: string, newEmail: string) => Promise<AuthResult>;
+  /** null — сбросить на дефолтный аватар (инициал имени). Отдельно от updateProfile: там
+   *  undefined-поля патча означают "не трогать", а здесь null — осознанный сброс, это разные вещи. */
+  setAvatar: (value: string | null) => Promise<AuthResult>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
   /** перечитать profile.subjects из БД — вызывать после addProfileSubject/removeProfileSubject
    *  (см. lib/profileSubjects.ts), эти функции сами по себе локальный profile не трогают. */
@@ -108,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           onboardedAt: data.onboarded_at ? new Date(data.onboarded_at).getTime() : undefined,
           isAdmin: data.is_admin ?? false,
           tariffId: data.tariff_id ?? "free",
+          avatarUrl: data.avatar_url ?? undefined,
         });
       } else {
         setProfile({ id: userId, name: fallbackName, email: fallbackEmail, subjects });
@@ -179,6 +191,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {};
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<AuthResult> => {
+    if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме пароля нет — менять нечего." };
+    const { error } = await supabase.auth.changePassword(currentPassword, newPassword);
+    return error ? { error: error.message } : {};
+  };
+
+  const changeEmail = async (password: string, newEmail: string): Promise<AuthResult> => {
+    if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме email — просто локальная метка, менять негде." };
+    const { error } = await supabase.auth.changeEmail(password, newEmail);
+    return error ? { error: error.message } : {};
+  };
+
+  const setAvatar = async (value: string | null): Promise<AuthResult> => {
+    if (isSupabaseConfigured && supabase && profile) {
+      const { error } = await supabase.from("profiles").update({ avatar_url: value }).eq("id", profile.id);
+      if (error) return { error: error.message };
+    }
+    setProfile((prev) => {
+      const next = prev ? { ...prev, avatarUrl: value ?? undefined } : prev;
+      if (next && !isSupabaseConfigured) saveGuestProfile(next);
+      return next;
+    });
+    return {};
+  };
+
   const updateProfile = async (patch: Partial<Profile>) => {
     const previousPrimarySubject = profile?.primarySubject;
     setProfile((prev) => {
@@ -238,7 +275,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, deleteAccount, updateProfile, refreshSubjects }}>
+    <AuthCtx.Provider
+      value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, deleteAccount, changePassword, changeEmail, setAvatar, updateProfile, refreshSubjects }}
+    >
       {children}
     </AuthCtx.Provider>
   );

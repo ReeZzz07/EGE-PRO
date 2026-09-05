@@ -6,7 +6,7 @@
 // которые уже вызываются в auth.tsx/adminTasks.ts/dbTasks.ts/aiTutor.ts.
 import { PostgrestClient } from "@supabase/postgrest-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+export const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 
 /** true, если бэкенд (Docker-стек) сконфигурирован */
 export const isSupabaseConfigured = !!url;
@@ -109,6 +109,30 @@ const authShim = {
     const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
     if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
     setSession(null, "SIGNED_OUT");
+    return { error: null };
+  },
+  async changePassword(currentPassword: string, newPassword: string) {
+    const resp = await apiFetch("/auth/change-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    return { error: null };
+  },
+  async changeEmail(password: string, newEmail: string) {
+    const resp = await apiFetch("/auth/change-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password, newEmail }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    // свежий токен — иначе до следующего входа клиент продолжал бы слать токен со старым email
+    // в payload (см. комментарий у самого роута в docker/api/server.js)
+    const session = { access_token: json.access_token, user: json.data.user };
+    setSession(session, "SIGNED_IN");
     return { error: null };
   },
 };
