@@ -14,7 +14,7 @@ import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintP
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
-import { resolveUserTariffGate, countTodayTutorMessages, checkDailyAiLimit, isEssayCheckAllowed } from "./tariffGate.js";
+import { resolveUserTariffGate, countTodayTutorMessages, reserveDailyAiSlot, releaseDailyAiSlot, isEssayCheckAllowed } from "./tariffGate.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -157,7 +157,16 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
+// Единственные два реальных бакета (см. avatar.ts/adminTasks.ts на фронтенде) — раньше bucket
+// приходил из URL/тела запроса без проверки вообще, и только относительный путь p проверялся на
+// "..". Строка вида "..%2F..%2Fetc" в :bucket из GET /storage/:bucket/* (единственный публичный,
+// без authMiddleware — картинки должны открываться без входа) декодируется Express'ом в "../../etc"
+// ДО того, как попадает в path.join(STORAGE_ROOT, bucket, rel) — обходя проверку p и читая
+// произвольный файл с диска контейнера. Разрешаем только эти два конкретных имени.
+const KNOWN_BUCKETS = new Set(["avatars", "task-media"]);
+
 function safeRelPath(bucket, p) {
+  if (!KNOWN_BUCKETS.has(bucket)) throw new Error("неизвестный bucket");
   const rel = path.normalize(String(p ?? "")).replace(/^([./\\]+)/, "");
   if (rel.includes("..")) throw new Error("недопустимый путь");
   return path.join(STORAGE_ROOT, bucket, rel);
@@ -517,7 +526,11 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
       return res.json({ assessment });
     }
 
-    const limitCheck = await checkDailyAiLimit(gate, userId);
+    // Резервирует строку user-сообщения СРАЗУ (до обращения к модели) атомарно с самой проверкой —
+    // см. reserveDailyAiSlot: раньше проверка и запись были разнесены по разные стороны медленного
+    // вызова модели и ничем не сериализовались, позволяя параллельным запросам одного пользователя
+    // пройти лимит разом.
+    const limitCheck = await reserveDailyAiSlot(gate, userId, { taskId: body.taskId, mode: body.mode, content: body.message ?? "" });
     if (limitCheck.limited) {
       // 200, а не 429 — это штатный, ожидаемый ответ репетитора, а не сбой: клиент (lib/aiTutor.ts)
       // при ошибке молча уходит в офлайн-фолбэк с шаблонными подсказками, что скрыло бы от ученика
@@ -542,7 +555,17 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
     }
     const messages = [...history, { role: "user", content: userContent }];
 
-    let text = await callText(settings, system, messages);
+    let text;
+    try {
+      text = await callText(settings, system, messages);
+    } catch (e) {
+      // Слот уже списан в reserveDailyAiSlot выше (до вызова модели — это и чинит гонку, см.
+      // комментарий там), но если сама модель не ответила (сеть, таймаут, ошибка провайдера),
+      // возвращать ученику ошибку И тратить его дневной лимит на попытку без ответа нечестно —
+      // откатываем резервацию перед тем, как отдать 500 ниже.
+      await releaseDailyAiSlot(limitCheck.reservationId);
+      throw e;
+    }
 
     if (body.mode === "hint" && leaksAnswer(text, body.taskId)) {
       console.warn("postfilter: подозрение на утечку ответа", { taskId: body.taskId, userId });
@@ -552,14 +575,10 @@ app.post("/ai-tutor", authMiddleware, async (req, res) => {
     if (body.mode === "hint") {
       pool.query("insert into public.hints_used (user_id, task_id, level) values ($1,$2,$3)", [userId, body.taskId, (body.hintLevel ?? 0) + 1]).catch((e) => console.warn("hints log failed", e));
     }
+    // user-строка уже записана в reserveDailyAiSlot выше (до вызова модели, ради атомарности с
+    // проверкой лимита) — здесь дописываем только ответ ассистента.
     pool
-      .query(`insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,$3,'user',$4), ($1,$2,$3,'assistant',$5)`, [
-        userId,
-        body.taskId ?? null,
-        body.mode,
-        body.message ?? "",
-        text,
-      ])
+      .query(`insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,$3,'assistant',$4)`, [userId, body.taskId ?? null, body.mode, text])
       .catch((e) => console.warn("audit log failed", e));
 
     res.json({ text });

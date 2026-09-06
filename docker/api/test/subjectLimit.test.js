@@ -72,3 +72,24 @@ test("enforce_subject_limit: один и тот же предмет дважды
     await deleteTestUser(userId);
   }
 });
+
+// Раньше select count(*) в триггере ничем не блокировался — несколько конкурентных insert для
+// одного user_id читали один и тот же "старый" count в отдельных транзакциях и все проходили
+// проверку разом (см. 0019_fix_subject_limit_race.sql: advisory-лок на user_id это чинит).
+test("enforce_subject_limit: конкурентные insert одного пользователя не превышают лимит (гонка)", async () => {
+  const userId = await createTestUser({ tariffId: "free" }); // лимит 2
+  try {
+    await resetSubjects(userId);
+    await addSubject(userId, "math"); // used=1, остался 1 слот
+
+    const candidates = ["rus", "fiz", "chem", "bio", "hist"];
+    const results = await Promise.allSettled(candidates.map((s) => addSubject(userId, s)));
+    const fulfilled = results.filter((r) => r.status === "fulfilled").length;
+    assert.equal(fulfilled, 1, "ровно один конкурентный insert должен пройти проверку лимита");
+
+    const { rows } = await pool.query(`select count(*)::int as n from public.profile_subjects where user_id = $1`, [userId]);
+    assert.equal(rows[0].n, 2, "итоговое число предметов не должно превысить лимит тарифа");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});

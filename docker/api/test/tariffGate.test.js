@@ -13,7 +13,7 @@
 // упавшего прогона остался мусор — вызови sweepLeftoverTestUsers() из helpers.js вручную.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { checkDailyAiLimit, countTodayTutorMessages, isEssayCheckAllowed, resolveUserTariffGate } from "../tariffGate.js";
+import { checkDailyAiLimit, countTodayTutorMessages, isEssayCheckAllowed, releaseDailyAiSlot, reserveDailyAiSlot, resolveUserTariffGate } from "../tariffGate.js";
 import { createTestUser, deleteTestUser, insertAiMessage, pool } from "./helpers.js";
 
 after(() => pool.end());
@@ -122,6 +122,78 @@ test("checkDailyAiLimit: free — ограничен ровно по дости�
   } finally {
     await deleteTestUser(userId);
   }
+});
+
+test("reserveDailyAiSlot: под лимитом — резервирует строку и не ограничивает", async () => {
+  const userId = await createTestUser(); // free, daily_ai_limit=3
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    const result = await reserveDailyAiSlot(gate, userId, { taskId: "t1", mode: "chat", content: "привет" });
+    assert.equal(result.limited, false);
+    assert.equal(await countTodayTutorMessages(userId), 1);
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("reserveDailyAiSlot: на лимите — не резервирует (не пишет строку)", async () => {
+  const userId = await createTestUser(); // free, daily_ai_limit=3
+  try {
+    for (let i = 0; i < 3; i++) await insertAiMessage(userId, { mode: "chat", role: "user" });
+    const gate = await resolveUserTariffGate(userId);
+    const result = await reserveDailyAiSlot(gate, userId, { taskId: "t1", mode: "chat", content: "привет" });
+    assert.equal(result.limited, true);
+    assert.equal(await countTodayTutorMessages(userId), 3);
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+// Тот самый TOCTOU-баг: раньше проверка (SELECT count) и запись строки были разнесены по разные
+// стороны медленного вызова модели, ничем не сериализуясь — несколько параллельных запросов от
+// одного пользователя читали один и тот же "старый" count и все проходили проверку разом. Здесь
+// прямая проверка на конкурентных вызовах ОДНОЙ и той же функции: из 5 параллельных запросов при
+// 1 оставшемся слоте должен пройти ровно 1, а не все 5.
+test("reserveDailyAiSlot: конкурентные запросы у одного пользователя не превышают лимит", async () => {
+  const userId = await createTestUser(); // free, daily_ai_limit=3
+  try {
+    await insertAiMessage(userId, { mode: "chat", role: "user" });
+    await insertAiMessage(userId, { mode: "chat", role: "user" }); // used=2, остался 1 слот
+    const gate = await resolveUserTariffGate(userId);
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => reserveDailyAiSlot(gate, userId, { taskId: "t1", mode: "chat", content: `попытка ${i}` }))
+    );
+
+    const allowed = results.filter((r) => !r.limited).length;
+    assert.equal(allowed, 1, "ровно один конкурентный запрос должен пройти проверку");
+    assert.equal(await countTodayTutorMessages(userId), 3, "итоговый счётчик не должен превысить дневной лимит");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+// Резервация происходит ДО обращения к модели (см. server.js) — если сам вызов модели не удался
+// (сеть/таймаут/ошибка провайдера), server.js откатывает резервацию через releaseDailyAiSlot,
+// чтобы неудачная попытка не стоила ученику одной из его ограниченных попыток на день.
+test("releaseDailyAiSlot: откатывает резервацию — счётчик возвращается к прежнему значению", async () => {
+  const userId = await createTestUser(); // free, daily_ai_limit=3
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    const reserved = await reserveDailyAiSlot(gate, userId, { taskId: "t1", mode: "chat", content: "привет" });
+    assert.equal(reserved.limited, false);
+    assert.equal(await countTodayTutorMessages(userId), 1);
+
+    await releaseDailyAiSlot(reserved.reservationId);
+    assert.equal(await countTodayTutorMessages(userId), 0, "неудачная попытка не должна тратить дневной лимит");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("releaseDailyAiSlot: reservationId отсутствует (админ/безлимит) — ничего не делает, не падает", async () => {
+  await assert.doesNotReject(() => releaseDailyAiSlot(undefined));
+  await assert.doesNotReject(() => releaseDailyAiSlot(null));
 });
 
 test("isEssayCheckAllowed: платный тариф или админ — да, бесплатный обычный пользователь — нет", () => {
