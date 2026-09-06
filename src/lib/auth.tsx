@@ -240,12 +240,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // онбординг задаёт primarySubject один раз — это и есть "добавить первый предмет"
       // (см. lib/profileSubjects.ts); дальше пользователь добавляет остальные сам на дашборде.
       // Русский и математика базового уровня подключаются автоматически при регистрации (триггер
-      // handle_new_user, см. supabase/migrations/0015) — если на онбординге выбрана профильная
-      // математика, это не "ещё один предмет", а замена базовой: сначала освобождаем её место,
-      // иначе упрёмся в лимит предметов тарифа, пытаясь добавить профильную поверх базовой.
+      // handle_new_user, см. supabase/migrations/0015) — если на онбординге (или при повторном
+      // заходе в него — см. App.tsx, кнопки "Начать"/"Начать онбординг" в пустых экранах плана и
+      // Экзамен-режима) выбран другой уровень математики, это не "ещё один предмет", а замена уже
+      // подключённого уровня: сначала освобождаем его место (в обе стороны — база→профиль и
+      // профиль→база), иначе упрёмся в лимит предметов тарифа, пытаясь добавить второй уровень
+      // математики поверх первого.
       if (patch.primarySubject && !profile.subjects.includes(patch.primarySubject)) {
-        const swappingMathLevel = patch.primarySubject === "math" && profile.subjects.includes("math_base");
-        if (swappingMathLevel) await removeProfileSubject(profile.id, "math_base");
+        const isMathVariant = (s: Subject) => s === "math" || s === "math_base";
+        const otherMathVariant = isMathVariant(patch.primarySubject)
+          ? profile.subjects.find((s) => isMathVariant(s) && s !== patch.primarySubject)
+          : undefined;
+        if (otherMathVariant) await removeProfileSubject(profile.id, otherMathVariant);
         const res = await addProfileSubject(profile.id, patch.primarySubject);
         if (res.error) {
           // не удалось подключить выбранный предмет (лимит тарифа — например, на лендинге выбран
@@ -257,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile((prev) => {
             if (!prev) return prev;
-            const withoutOldMath = swappingMathLevel ? prev.subjects.filter((s) => s !== "math_base") : prev.subjects;
+            const withoutOldMath = otherMathVariant ? prev.subjects.filter((s) => s !== otherMathVariant) : prev.subjects;
             return { ...prev, subjects: [...withoutOldMath, patch.primarySubject!] };
           });
         }

@@ -42,7 +42,7 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
     setValue("");
     if (idx + 1 >= tasks.length) {
       const scored = scoreDiagnostic(subject, next);
-      saveDiagnosticResult(scored);
+      if (profile) saveDiagnosticResult(scored, profile.id);
       if (!isGuestMode && profile) mirrorDiagnosticToSupabase(profile.id, scored);
       setPhase("result");
     } else {

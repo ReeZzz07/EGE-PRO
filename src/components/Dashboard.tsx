@@ -45,7 +45,7 @@ export function MySubjectsSection({ onNav }: { onNav: (v: View) => void }) {
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {subjects.map((s) => {
           const meta = SUBJECTS[s];
-          const hasDiagnostic = !!loadDiagnosticResult(s);
+          const hasDiagnostic = !!(profile && loadDiagnosticResult(s, profile.id));
           return (
             <div key={s} className="sheet flex h-full flex-col p-5">
               <span className={`font-display inline-block w-fit border-2 border-ink px-2 py-0.5 text-[11px] font-black ${meta.color}`}>{meta.short}</span>
@@ -136,7 +136,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   // это витрина платформы для гостя).
   const personalPointsTotal = profile?.isAdmin || isGuestMode ? getGlobalPointsTotal() : getSubjectsPointsTotal(connectedSubjects);
   const personalTaskTotal = profile?.isAdmin || isGuestMode ? getGlobalTaskTotal() : getSubjectsTaskTotal(connectedSubjects);
-  const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
+  const plan = primarySubject && profile ? loadStudyPlan(primarySubject, profile.id) : null;
   const exam = useMemo(examTarget, []);
   const cd = useCountdown(exam.date);
   const title = useScramble(`ЕГЭ·${exam.year}`);
@@ -156,12 +156,14 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tasksOfDay = useMemo(
     () =>
-      connectedSubjects.map((s) => ({
-        subject: s,
-        task: pickTaskOfDay(s, derived.mistakeIds, derived.solvedIds),
-        loading: isSubjectLoading(s),
-      })),
-    [connectedSubjects.join(","), derived.mistakeIds, derived.solvedIds]
+      !profile
+        ? []
+        : connectedSubjects.map((s) => ({
+            subject: s,
+            task: pickTaskOfDay(s, derived.mistakeIds, derived.solvedIds, profile.id),
+            loading: isSubjectLoading(s),
+          })),
+    [connectedSubjects.join(","), derived.mistakeIds, derived.solvedIds, profile]
   );
   // "на реванш" — тоже только по подключённым предметам: ошибка по давно отключённому предмету
   // (см. effectivePrimarySubject в lib/auth.tsx — тот же класс "хвостов" от предмета не по тарифу)
@@ -370,7 +372,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
                   <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-ink2">{s.desc}</p>
                   <div className="mt-4">
                     <div className="flex items-center justify-between font-mono text-[11px] text-ink2">
-                      <span>{st.solved} из {st.total} {plural(st.total, "задания", "заданий", "заданий")} решено</span>
+                      <span>{st.solved} из {st.total} {plural(st.total, "задание", "задания", "заданий")} решено</span>
                       <span className={s.color}>{pct}%</span>
                     </div>
                     <div className="mt-1.5 h-2.5 overflow-hidden rounded-full border border-ink/15 bg-paper">

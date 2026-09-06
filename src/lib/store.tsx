@@ -3,7 +3,7 @@ import { TASKS, taskById, type Subject } from "../data/tasks";
 import { dateKey } from "./utils";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
-import { getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
+import { ALL_SUBJECTS, getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
 
 export interface Attempt {
   taskId: string;
@@ -187,7 +187,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
 
     const perSubject = {} as Derived["perSubject"];
-    (["math", "rus", "inf", "fiz", "soc", "bio", "eng", "geo", "chem", "hist", "lit", "math_base"] as Subject[]).forEach((s) => {
+    ALL_SUBJECTS.forEach((s) => {
       const tasks = TASKS.filter((t) => t.subject === s);
       const atts = state.attempts.filter((a) => taskById(a.taskId)?.subject === s);
       perSubject[s] = {

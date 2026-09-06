@@ -180,9 +180,8 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
     onNav(v);
   };
 
-  const requestHint = async (level: number) => {
-    setHintsUsed((n) => Math.max(n, level));
-    if (hintTexts[level - 1] != null || hintLoadingLevel === level) return;
+  const fetchHintLevel = async (level: number) => {
+    if (hintTexts[level - 1] != null) return;
     setHintLoadingLevel(level);
     try {
       const res = await callAiTutor(
@@ -196,6 +195,17 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
       });
     } finally {
       setHintLoadingLevel(null);
+    }
+  };
+
+  // подсказки открываются по порядку: клик по "3" не должен пропускать 1 и 2 — иначе их слоты
+  // рендерятся (см. ниже, Array.from({length: hintsUsed})), но текста для них никто не запросил,
+  // и кнопки 1/2 к этому моменту уже задизейблены (hintsUsed >= h) — вечный спиннер без выхода.
+  const requestHint = async (level: number) => {
+    if (hintLoadingLevel != null) return;
+    setHintsUsed((n) => Math.max(n, level));
+    for (let l = 1; l <= level; l++) {
+      await fetchHintLevel(l);
     }
   };
 
@@ -409,7 +419,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
                         <button
                           key={h}
                           onClick={() => requestHint(h)}
-                          disabled={hintsUsed >= h}
+                          disabled={hintsUsed >= h || hintLoadingLevel != null}
                           className={`border-2 px-2.5 py-1 text-[12px] font-bold transition ${
                             hintsUsed >= h ? "border-amber bg-amber/15 text-amber" : "border-ink/25 text-ink2 hover:border-amber hover:text-amber"
                           }`}

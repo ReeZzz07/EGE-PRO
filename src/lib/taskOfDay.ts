@@ -16,12 +16,12 @@ function pickOfDay<T>(pool: T[]): T | undefined {
   return pool.length ? pool[dayIndex(pool.length)] : undefined;
 }
 
-export function pickTaskOfDay(subject: Subject, mistakeIds: Set<string>, solvedIds: Set<string>): EgeTask | undefined {
+export function pickTaskOfDay(subject: Subject, mistakeIds: Set<string>, solvedIds: Set<string>, userId: string): EgeTask | undefined {
   const mistakes = [...mistakeIds].map((id) => taskById(id)).filter((t): t is EgeTask => !!t && t.subject === subject);
   const fromMistakes = pickOfDay(mistakes);
   if (fromMistakes) return fromMistakes;
 
-  const weakTopics = loadDiagnosticResult(subject)?.weakTopics ?? [];
+  const weakTopics = loadDiagnosticResult(subject, userId)?.weakTopics ?? [];
   if (weakTopics.length) {
     const weakPool = TASKS.filter((t) => t.subject === subject && weakTopics.includes(t.topic) && !solvedIds.has(t.id));
     const fromWeakTopic = pickOfDay(weakPool);

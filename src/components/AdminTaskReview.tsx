@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SUBJECTS } from "../data/tasks";
 import {
   loadTaskSubjectStats,
@@ -160,9 +160,17 @@ export default function AdminTaskReview() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // requestId — refresh() зовётся и из эффекта ниже, и напрямую из TaskCard (onChanged, после
+  // публикации/правки строки), так что локального cancelled-флага одного эффекта недостаточно:
+  // если ответ на более старый вызов refresh() (из любого источника) придёт позже более нового,
+  // он не должен перезаписать rows/total уже неактуальными данными — применяем только ответ,
+  // который всё ещё "самый новый" на момент прихода.
+  const latestRequestId = useRef(0);
   const refresh = () => {
+    const requestId = ++latestRequestId.current;
     setLoading(true);
     loadTasks({ subject: subject || undefined, onlyReview, page, pageSize: PAGE_SIZE }).then(({ rows, total }) => {
+      if (requestId !== latestRequestId.current) return;
       setRows(rows);
       setTotal(total);
       setLoading(false);
@@ -173,14 +181,25 @@ export default function AdminTaskReview() {
     loadTaskSubjectStats().then(setStats);
   }, []);
 
+  // subject/onlyReview меняются => страница должна сброситься на 0 ПЕРЕД тем, как что-то грузить —
+  // раньше это были два отдельных эффекта: один фетчил по [subject, onlyReview, page] (и успевал
+  // один раз сходить за старой page с новым subject/onlyReview), другой отдельно сбрасывал page —
+  // отсюда лишний фетч неверной страницы, видимый как вспышка пустого/чужого списка при смене
+  // фильтра. Здесь при смене фильтра только сбрасываем page и выходим — эффект перезапустится
+  // из-за изменившегося page и уже тогда сходит за данными.
+  const filterKey = `${subject}|${onlyReview}`;
+  const prevFilterKey = useRef(filterKey);
   useEffect(() => {
+    if (prevFilterKey.current !== filterKey) {
+      prevFilterKey.current = filterKey;
+      if (page !== 0) {
+        setPage(0);
+        return;
+      }
+    }
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject, onlyReview, page]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [subject, onlyReview]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 

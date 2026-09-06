@@ -46,19 +46,20 @@ export default function AdminScoreScales() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadYears = async (s: Subject) => {
-    const ys = await listScoreScaleYears(s);
-    setYears(ys);
-    return ys;
-  };
-
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    loadYears(subject).then((ys) => {
+    listScoreScaleYears(subject).then((ys) => {
+      // до этого именно setYears был не защищён этим же флагом (звался через отдельную loadYears,
+      // общую с save/removeYear) — при быстром переключении предмета список годов мог остаться от
+      // уже неактуального предмета, даже когда текст/год уже отражали новый.
+      if (cancelled) return;
+      setYears(ys);
       const targetYear = ys[0] ?? new Date().getFullYear();
       setYear(targetYear);
       if (ys.length) {
         loadScoreScale(subject, targetYear).then((rows) => {
+          if (cancelled) return;
           setText(rowsToText(rows));
           setLoading(false);
         });
@@ -67,6 +68,9 @@ export default function AdminScoreScales() {
         setLoading(false);
       }
     });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject]);
 
@@ -95,14 +99,15 @@ export default function AdminScoreScales() {
     setSaving(false);
     if (res.error) return push(res.error, "err");
     push(`Шкала ${SUBJECTS[subject].name} за ${year} год сохранена (${rows.length} строк)`, "ok");
-    loadYears(subject);
+    setYears(await listScoreScaleYears(subject));
   };
 
   const removeYear = async (y: number) => {
     const res = await deleteScoreScale(subject, y);
     if (res.error) return push(res.error, "err");
     push(`Шкала за ${y} год удалена`, "ok");
-    const ys = await loadYears(subject);
+    const ys = await listScoreScaleYears(subject);
+    setYears(ys);
     if (y === year) {
       if (ys.length) openYear(ys[0]);
       else {

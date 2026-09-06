@@ -8,6 +8,7 @@ import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { plural } from "../lib/utils";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
 
@@ -96,7 +97,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
                 {(t.features.length > 0
                   ? t.features
                   : [
-                      `${t.subjectsCount} ${t.subjectsCount === 1 ? "предмет" : t.subjectsCount < 5 ? "предмета" : "предметов"} на выбор`,
+                      `${t.subjectsCount} ${plural(t.subjectsCount, "предмет", "предмета", "предметов")} на выбор`,
                       t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений к ИИ-репетитору в день` : "Безлимитный ИИ-репетитор",
                       "Диагностика, план, пробные варианты",
                     ]

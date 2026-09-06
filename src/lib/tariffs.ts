@@ -115,7 +115,12 @@ export async function deleteTariff(id: string): Promise<{ error?: string }> {
 /** Доступна ли пользователю проверка сочинений/развёрнутых ответов ИИ-репетитором — только платные
  *  тарифы (price_rub > 0) и админы, которые тариф игнорируют вообще. null, пока не загрузилось.
  *  Это только UI-гейт (не пускать писать сочинение, которое всё равно не проверят) — настоящая
- *  защита на сервере, см. docker/api/server.js (resolveUserTariffGate, ответ с tierBlocked). */
+ *  защита на сервере, см. docker/api/server.js (resolveUserTariffGate/isEssayCheckAllowed в
+ *  tariffGate.js), которая тоже смотрит только price_rub, без фильтра по is_active. Раньше здесь
+ *  был loadActiveTariffs() (только активные), а на сервере — без этого фильтра: если админ снимал
+ *  тариф с публикации, у пользователей, которые на нём УЖЕ сидят, этот тариф переставал находиться
+ *  в списке активных, и UI показывал сочинение недоступным, хотя сервер его бы принял и оценил —
+ *  loadAllTariffs() здесь специально совпадает с сервером по кругу тарифов, которые учитываются. */
 export function useEssayCheckAllowed(profile: { isAdmin?: boolean; tariffId?: string } | null): boolean | null {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const isAdmin = profile?.isAdmin ?? false;
@@ -131,7 +136,7 @@ export function useEssayCheckAllowed(profile: { isAdmin?: boolean; tariffId?: st
       return;
     }
     let cancelled = false;
-    loadActiveTariffs().then((tariffs) => {
+    loadAllTariffs().then((tariffs) => {
       if (cancelled) return;
       const t = tariffs.find((x) => x.id === tariffId);
       setAllowed(!!t && t.priceRub > 0);

@@ -17,7 +17,7 @@ export default function SessionSummary({ onNav }: { onNav: (v: View) => void }) 
   const mistakesReviewed = new Set(todayAttempts.filter((a) => !a.correct).map((a) => a.taskId)).size;
 
   const primarySubject = effectivePrimarySubject(profile);
-  const plan = primarySubject ? loadStudyPlan(primarySubject) : null;
+  const plan = primarySubject && profile ? loadStudyPlan(primarySubject, profile.id) : null;
 
   return (
     <div className="mx-auto max-w-xl px-4 py-16">

@@ -22,6 +22,7 @@ function makeConfiguredSupabaseMock(opts: { session?: { user: { id: string; emai
   let authChangeCb: ((event: string, session: unknown) => void) | null = null;
   const updateCalls: Record<string, unknown>[] = [];
   const insertCalls: Record<string, unknown>[] = [];
+  const deleteCalls: Record<string, unknown>[] = [];
   let insertError: { message: string } | null = null;
 
   function profilesBuilder() {
@@ -39,14 +40,24 @@ function makeConfiguredSupabaseMock(opts: { session?: { user: { id: string; emai
   }
 
   function profileSubjectsBuilder() {
+    let pendingDelete: Record<string, unknown> | null = null;
     const b: Record<string, unknown> = {
       select: () => b,
-      eq: () => b,
+      eq: (col: string, val: unknown) => {
+        if (pendingDelete) pendingDelete[col] = val;
+        return b;
+      },
       order: () => Promise.resolve({ data: subjectRows.map((s) => ({ subject: s })), error: null }),
       insert: (row: Record<string, unknown>) => {
         insertCalls.push(row);
         return Promise.resolve({ error: insertError });
       },
+      delete: () => {
+        pendingDelete = {};
+        deleteCalls.push(pendingDelete);
+        return b;
+      },
+      then: (resolve: (v: { error: null }) => void) => resolve({ error: null }),
     };
     return b;
   }
@@ -75,6 +86,7 @@ function makeConfiguredSupabaseMock(opts: { session?: { user: { id: string; emai
     triggerAuthChange: (event: string, s: unknown) => act(() => authChangeCb?.(event, s)),
     updateCalls,
     insertCalls,
+    deleteCalls,
     setInsertError: (msg: string | null) => {
       insertError = msg ? { message: msg } : null;
     },
@@ -363,6 +375,42 @@ describe("AuthProvider — режим с бэкендом (isSupabaseConfigured=
     });
 
     expect(mock.insertCalls).toEqual([]);
+  });
+
+  it("updateProfile: смена базовой математики на профильную — освобождает место базовой", async () => {
+    const { AuthProvider, useAuth, mock } = await loadAuthConfigured({
+      session: { user: { id: "u1", email: "u1@x.com" } },
+      profileRow: { id: "u1", full_name: "Иван", primary_subject: "math_base" },
+      subjectRows: ["rus", "math_base"],
+    });
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+    await waitFor(() => expect(result.current.profile?.subjects).toEqual(["rus", "math_base"]));
+
+    await act(async () => {
+      await result.current.updateProfile({ primarySubject: "math" });
+    });
+
+    expect(mock.deleteCalls).toEqual([{ user_id: "u1", subject: "math_base" }]);
+    expect(mock.insertCalls).toEqual([{ user_id: "u1", subject: "math" }]);
+    expect(result.current.profile?.subjects).toEqual(["rus", "math"]);
+  });
+
+  it("updateProfile: смена профильной математики на базовую (обратное направление) — тоже освобождает место", async () => {
+    const { AuthProvider, useAuth, mock } = await loadAuthConfigured({
+      session: { user: { id: "u1", email: "u1@x.com" } },
+      profileRow: { id: "u1", full_name: "Иван", primary_subject: "math" },
+      subjectRows: ["rus", "math"],
+    });
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+    await waitFor(() => expect(result.current.profile?.subjects).toEqual(["rus", "math"]));
+
+    await act(async () => {
+      await result.current.updateProfile({ primarySubject: "math_base" });
+    });
+
+    expect(mock.deleteCalls).toEqual([{ user_id: "u1", subject: "math" }]);
+    expect(mock.insertCalls).toEqual([{ user_id: "u1", subject: "math_base" }]);
+    expect(result.current.profile?.subjects).toEqual(["rus", "math_base"]);
   });
 
   it("updateProfile: лимит предметов по тарифу исчерпан (ошибка от триггера БД) — subjects локально не меняются", async () => {

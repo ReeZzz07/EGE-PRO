@@ -1,6 +1,7 @@
 // Админ-доступ к массово импортированным заданиям (public.tasks/task_media) — проверка, правка,
 // публикация того, что попало в базу с needs_review=true (см. scripts/import/publish-to-supabase.mjs).
 import { supabase, isSupabaseConfigured, apiFetch } from "./supabase";
+import { ALL_SUBJECTS } from "./dbTasks";
 import type { EssayCriterion } from "../data/tasks";
 
 export interface AdminMedia {
@@ -39,8 +40,6 @@ export function mediaPublicUrl(storagePath: string): string {
   return supabase.storage.from("task-media").getPublicUrl(storagePath).data.publicUrl;
 }
 
-const ALL_SUBJECT_CODES = ["math", "rus", "inf", "fiz", "soc", "bio", "eng", "geo", "chem", "hist", "lit", "math_base"];
-
 /** Список предметов, для которых вообще есть импортированные задания, со сводкой.
  *  Запрашиваем ПО ПРЕДМЕТУ, а не всю таблицу разом: у PostgREST жёсткий потолок
  *  PGRST_DB_MAX_ROWS=20000 на строки в ответе — с ~58 тыс. заданий общий запрос обрежется и даст
@@ -49,7 +48,7 @@ const ALL_SUBJECT_CODES = ["math", "rus", "inf", "fiz", "soc", "bio", "eng", "ge
 export async function loadTaskSubjectStats(): Promise<SubjectStat[]> {
   if (!isSupabaseConfigured || !supabase) return [];
   const results = await Promise.all(
-    ALL_SUBJECT_CODES.map(async (subject) => {
+    ALL_SUBJECTS.map(async (subject) => {
       const { data, error } = await supabase!.from("tasks").select("published").eq("subject", subject);
       if (error || !data || !data.length) return null;
       const rows = data as { published: boolean }[];

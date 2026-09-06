@@ -26,17 +26,18 @@ export default function PlanView({ subject, onStartTraining, onSkipToBank }: { s
   const { profile, isGuestMode } = useAuth();
 
   const { plan, result } = useMemo(() => {
-    const diag = loadDiagnosticResult(subject);
+    if (!profile) return { plan: null, result: null };
+    const diag = loadDiagnosticResult(subject, profile.id);
     if (!diag) return { plan: null, result: null };
-    let p = loadStudyPlan(subject);
+    let p = loadStudyPlan(subject, profile.id);
     if (!p || p.generatedAt < diag.finishedAt) {
-      p = generatePlan(diag, profile?.dailyMinutes);
-      saveStudyPlan(p);
-      if (!isGuestMode && profile) mirrorPlanToSupabase(profile.id, p);
+      p = generatePlan(diag, profile.dailyMinutes);
+      saveStudyPlan(p, profile.id);
+      if (!isGuestMode) mirrorPlanToSupabase(profile.id, p);
     }
     return { plan: p, result: diag };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject]);
+  }, [subject, profile]);
 
   if (!plan || !result) {
     return (

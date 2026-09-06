@@ -59,6 +59,27 @@ describe("useEssayCheckAllowed", () => {
     const { result } = renderHook(() => useEssayCheckAllowed({ isAdmin: false, tariffId: "deleted-tariff" }));
     await waitFor(() => expect(result.current).toBe(false));
   });
+
+  // Сервер (docker/api/tariffGate.js: resolveUserTariffGate/isEssayCheckAllowed) смотрит только
+  // price_rub, без фильтра по is_active — если бы клиент здесь звал loadActiveTariffs() (только
+  // активные), пользователь на снятом с публикации, но всё ещё платном тарифе увидел бы сочинение
+  // недоступным, хотя сервер бы его принял. Проверяем, что запрос НЕ фильтрует по is_active.
+  it("не фильтрует тарифы по is_active — платный, но снятый с публикации тариф всё ещё даёт доступ", async () => {
+    const eqCalls: unknown[][] = [];
+    const builder: Record<string, unknown> = {
+      select: () => builder,
+      eq: (...args: unknown[]) => {
+        eqCalls.push(args);
+        return builder;
+      },
+      order: () => builder,
+      then: (resolve: (v: { data: typeof TARIFF_ROWS; error: null }) => void) => resolve({ data: TARIFF_ROWS, error: null }),
+    };
+    vi.mocked(supabase!.from).mockReturnValue(builder as never);
+    const { result } = renderHook(() => useEssayCheckAllowed({ isAdmin: false, tariffId: "attestat" }));
+    await waitFor(() => expect(result.current).toBe(true));
+    expect(eqCalls.some(([col]) => col === "is_active")).toBe(false);
+  });
 });
 
 // ─────────────────────── CRUD (админка) — перевод ошибок БД в понятные сообщения ───────────────────────

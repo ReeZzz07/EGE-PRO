@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SUBJECTS, taskById, type EgeTask, type Subject } from "../data/tasks";
-import { checkAnswer, formatClock } from "../lib/utils";
+import { checkAnswer, formatClock, plural } from "../lib/utils";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { useEssayCheckAllowed } from "../lib/tariffs";
@@ -248,7 +248,7 @@ export default function MockExam({
           <div className="sheet mt-5 space-y-2.5 p-5">
             <p className="flex items-center gap-2 text-[13.5px] text-ink2"><Icon name="list" size={16} /> Часть 1: {previewAutoCount} заданий, автоматическая проверка</p>
             {previewEssayCount > 0 && (
-              <p className="flex items-center gap-2 text-[13.5px] text-ink2"><Icon name="book" size={16} /> Часть 2: {previewEssayCount} {previewEssayCount === 1 ? "задание" : "заданий"} с развёрнутым ответом</p>
+              <p className="flex items-center gap-2 text-[13.5px] text-ink2"><Icon name="book" size={16} /> Часть 2: {previewEssayCount} {plural(previewEssayCount, "задание", "задания", "заданий")} с развёрнутым ответом</p>
             )}
             <p className="flex items-center gap-2 text-[13.5px] text-ink2"><Icon name="timer" size={16} /> Время: {formatClock(previewTotalSeconds)}</p>
           </div>
