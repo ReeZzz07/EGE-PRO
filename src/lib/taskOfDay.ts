@@ -2,12 +2,21 @@
 // по дню из profile.primarySubject, независимо от того, сколько предметов реально подключено.
 // Из-за рассинхронизации primarySubject/subjects (см. effectivePrimarySubject в lib/auth.tsx) это
 // иногда показывало задание по предмету, который ученику вообще недоступен. Теперь — по одному
-// заданию на каждый ПОДКЛЮЧЁННЫЙ предмет (см. Dashboard.tsx), и выбирается оно не просто ротацией
-// по дню, а по приоритету: сначала действительно непройденная ошибка, потом задание по слабой теме
-// из диагностики, и только если ни того ни другого нет — прежняя ротация по всему банку предмета.
+// заданию на каждый ПОДКЛЮЧЁННЫЙ предмет (см. Dashboard.tsx), и выбирается оно по приоритету:
+// сначала тема, для которой подошёл срок интервального повторения (раздел 3.4 ТЗ — см.
+// lib/spacedReview.ts), потом действительно непройденная ошибка, потом задание по слабой теме из
+// диагностики, и только если ничего из этого нет — прежняя ротация по всему банку предмета.
 import { TASKS, taskById, type EgeTask, type Subject } from "../data/tasks";
 import { dayIndex } from "./utils";
 import { loadDiagnosticResult } from "./planStorage";
+import { getDueTopics } from "./spacedReview";
+
+export type TaskOfDayReason = "review" | "mistake" | "weak-topic" | "rotation";
+
+export interface TaskOfDayPick {
+  task: EgeTask;
+  reason: TaskOfDayReason;
+}
 
 /** Один случайный, но стабильный на весь день выбор из пула — тот же приём, что был у старого
  *  "задания дня" (см. git-историю Dashboard.tsx): ротация по номеру дня, а не Math.random(),
@@ -16,17 +25,26 @@ function pickOfDay<T>(pool: T[]): T | undefined {
   return pool.length ? pool[dayIndex(pool.length)] : undefined;
 }
 
-export function pickTaskOfDay(subject: Subject, mistakeIds: Set<string>, solvedIds: Set<string>, userId: string): EgeTask | undefined {
+export function pickTaskOfDay(subject: Subject, mistakeIds: Set<string>, solvedIds: Set<string>, userId: string): TaskOfDayPick | undefined {
+  const dueTopics = getDueTopics(userId, subject);
+  if (dueTopics.length) {
+    const dueTopic = pickOfDay(dueTopics);
+    const duePool = TASKS.filter((t) => t.subject === subject && t.topic === dueTopic && !solvedIds.has(t.id));
+    const fromReview = pickOfDay(duePool);
+    if (fromReview) return { task: fromReview, reason: "review" };
+  }
+
   const mistakes = [...mistakeIds].map((id) => taskById(id)).filter((t): t is EgeTask => !!t && t.subject === subject);
   const fromMistakes = pickOfDay(mistakes);
-  if (fromMistakes) return fromMistakes;
+  if (fromMistakes) return { task: fromMistakes, reason: "mistake" };
 
   const weakTopics = loadDiagnosticResult(subject, userId)?.weakTopics ?? [];
   if (weakTopics.length) {
     const weakPool = TASKS.filter((t) => t.subject === subject && weakTopics.includes(t.topic) && !solvedIds.has(t.id));
     const fromWeakTopic = pickOfDay(weakPool);
-    if (fromWeakTopic) return fromWeakTopic;
+    if (fromWeakTopic) return { task: fromWeakTopic, reason: "weak-topic" };
   }
 
-  return pickOfDay(TASKS.filter((t) => t.subject === subject));
+  const fromRotation = pickOfDay(TASKS.filter((t) => t.subject === subject));
+  return fromRotation ? { task: fromRotation, reason: "rotation" } : undefined;
 }

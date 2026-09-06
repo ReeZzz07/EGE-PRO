@@ -2,7 +2,7 @@ import { SUBJECTS, TASKS, taskById, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { effectivePrimarySubject, useAuth } from "../lib/auth";
 import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
-import { pickTaskOfDay } from "../lib/taskOfDay";
+import { pickTaskOfDay, type TaskOfDayReason } from "../lib/taskOfDay";
 import { addProfileSubject } from "../lib/profileSubjects";
 import { useEffect, useMemo, useState } from "react";
 import { formatClock, plural, useCountdown, useScramble } from "../lib/utils";
@@ -111,6 +111,14 @@ const TICKER = [
   "НН: стеклянный, оловянный, деревянный", "1 Кбайт = 1024 байта", "h = v₀²/2g",
 ];
 
+// Почему именно это задание попало в "задания дня" — см. приоритет в lib/taskOfDay.ts. Ротацию
+// (нет ни ошибок, ни повторения, ни слабой темы) отдельно не подписываем — это дефолт, а не повод.
+const REASON_LABEL: Partial<Record<TaskOfDayReason, string>> = {
+  review: "На повторении",
+  mistake: "Ошибка",
+  "weak-topic": "Слабая тема",
+};
+
 function examTarget(): { date: Date; year: number } {
   const y = new Date().getFullYear();
   const thisYear = new Date(y, 5, 1, 10, 0, 0); // 1 июня
@@ -158,11 +166,10 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
     () =>
       !profile
         ? []
-        : connectedSubjects.map((s) => ({
-            subject: s,
-            task: pickTaskOfDay(s, derived.mistakeIds, derived.solvedIds, profile.id),
-            loading: isSubjectLoading(s),
-          })),
+        : connectedSubjects.map((s) => {
+            const pick = pickTaskOfDay(s, derived.mistakeIds, derived.solvedIds, profile.id);
+            return { subject: s, task: pick?.task, reason: pick?.reason, loading: isSubjectLoading(s) };
+          }),
     [connectedSubjects.join(","), derived.mistakeIds, derived.solvedIds, profile]
   );
   // "на реванш" — тоже только по подключённым предметам: ошибка по давно отключённому предмету
@@ -412,15 +419,23 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
               <p className="mt-4 text-sm text-ink2">Пройди онбординг, чтобы выбрать предмет — тогда здесь появятся задания дня.</p>
             ) : (
               <div className="mt-4 space-y-4">
-                {tasksOfDay.map(({ subject: s, task, loading }) => {
+                {tasksOfDay.map(({ subject: s, task, reason, loading }) => {
                   const meta = SUBJECTS[s];
+                  const reasonLabel = reason ? REASON_LABEL[reason] : undefined;
                   return (
                     <div key={s} className="border-t border-dashed border-ink/15 pt-4 first:border-0 first:pt-0">
                       {task ? (
                         <>
                           <div className="flex items-center justify-between gap-2">
                             <span className={`font-mono text-[10.5px] font-bold ${meta.color}`}>{meta.name}</span>
-                            <span className="font-mono text-[11px] text-ink2">№ {task.fipiId}</span>
+                            <span className="flex items-center gap-2">
+                              {reasonLabel && (
+                                <span className={`rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.08em] ${reason === "review" ? "bg-violet/15 text-violet" : "bg-amber/15 text-amber"}`}>
+                                  {reasonLabel}
+                                </span>
+                              )}
+                              <span className="font-mono text-[11px] text-ink2">№ {task.fipiId}</span>
+                            </span>
                           </div>
                           <h3 className="font-display mt-1.5 text-lg font-bold leading-snug">{task.topic}</h3>
                           <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink2">{task.statement[0]}</p>

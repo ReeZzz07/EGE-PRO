@@ -4,6 +4,7 @@ import { dateKey } from "./utils";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
 import { ALL_SUBJECTS, getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
+import { recordTopicOutcome } from "./spacedReview";
 
 export interface Attempt {
   taskId: string;
@@ -215,6 +216,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const addAttempt = (attempt: Attempt) => {
     dispatch({ type: "ADD", attempt });
+    // интервальное повторение (раздел 3.4 ТЗ) — ошибка планирует повтор темы через растущие
+    // интервалы, верный ответ (когда срок подошёл) двигает его дальше; см. lib/spacedReview.ts.
+    // Работает и в гостевом режиме — там profile.id тоже стабилен между перезагрузками.
+    const task = taskById(attempt.taskId);
+    if (profile && task) recordTopicOutcome(profile.id, task.subject, task.topic, attempt.correct);
     if (!isGuestMode && profile && supabase) {
       supabase
         .from("attempts")

@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
 import { getGlobalPointsTotal, getGlobalTaskTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
 import { deleteExamAttempt, listExamAttempts, type ExamAttempt } from "../lib/examAttempts";
+import { countScheduledTopics } from "../lib/spacedReview";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import { Icon, Reveal } from "./ui";
@@ -195,6 +196,9 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
     { label: "Время за решением", value: hours ? `${hours} ч ${mins} м` : `${mins} мин`, icon: "timer" },
     { label: "Серия дней", value: String(derived.streak), icon: "flame" },
     { label: "Заданий решено", value: `${derived.solvedIds.size}/${taskTotal}`, icon: "check" },
+    // раздел 3.4 ТЗ — темы с ошибками, которые платформа вернёт на повторение через растущие
+    // интервалы (1/3/7/14/30 дней); см. lib/spacedReview.ts и "задания дня" на главной.
+    { label: "Тем на повторении", value: profile ? String(countScheduledTopics(profile.id)) : "0", icon: "refresh" },
   ];
 
   return (
@@ -205,7 +209,7 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
       </div>
 
       {/* сводка */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
         {summary.map((s, i) => (
           <Reveal key={s.label} delay={i * 50}>
             <div className="sheet card-lift h-full p-4">
