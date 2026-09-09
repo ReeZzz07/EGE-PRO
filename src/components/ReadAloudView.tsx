@@ -63,7 +63,13 @@ export default function ReadAloudView({ task, onNav, nextTaskId }: { task: EgeTa
 
   const meta = SUBJECTS[task.subject];
   const speechSupported = useMemo(() => createSpeechRecognizer() != null, []);
-  const referenceText = useMemo(() => task.statement.join(" "), [task]);
+  // Первый абзац у ЭТОГО типа задания — всегда фиксированная инструкция ЕГЭ ("Imagine that you
+  // are preparing a project... You have 1.5 minutes to read the text silently..."), одна и та же
+  // во всех 69 заданиях банка (проверено) — сама она вслух не читается, читается только текст
+  // после неё. Без этого сравнение либо засчитывало инструкцию в счёт прочитанного (если ученик её
+  // не озвучивал — а он и не должен), либо подсвечивало как "непрочитанную", хотя её и не нужно
+  // было читать.
+  const referenceText = useMemo(() => task.statement.slice(1).join(" "), [task]);
   const extraImages = useMemo(() => {
     const used = usedImageMarkerIndices(task.statement);
     return (task.images ?? []).filter((_, i) => !used.has(i));
@@ -206,11 +212,27 @@ export default function ReadAloudView({ task, onNav, nextTaskId }: { task: EgeTa
         </div>
         <h1 className="font-display mt-4 text-xl font-bold leading-snug sm:text-2xl">{task.topic}</h1>
         <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-ink/90">
-          {task.statement.map((p, i) => (
-            <p key={i}>
-              <StatementLine text={p} images={task.images} />
-            </p>
-          ))}
+          {task.statement.map((p, i) =>
+            // Первый абзац у этого типа задания — всегда служебная инструкция ЕГЭ (см. комментарий
+            // у referenceText ниже: она не читается вслух и не участвует в самопроверке) — визуально
+            // отделяем её от самого текста для чтения, чтобы это было понятно и на глаз, не только
+            // по смыслу условия.
+            i === 0 ? (
+              <div key={i} className="flex items-start gap-2 rounded-sm border-l-4 border-amber/50 bg-amber/8 px-3 py-2.5">
+                <Icon name="alert" size={14} className="mt-[3px] shrink-0 text-amber" />
+                <div>
+                  <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.2em] text-amber">Инструкция · не читается вслух</p>
+                  <p className="mt-1 text-[13.5px] italic leading-relaxed text-ink2">
+                    <StatementLine text={p} images={task.images} />
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p key={i}>
+                <StatementLine text={p} images={task.images} />
+              </p>
+            )
+          )}
         </div>
 
         {extraImages.length > 0 && (
