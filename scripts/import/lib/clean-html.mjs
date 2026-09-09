@@ -72,10 +72,16 @@ export function cleanTaskHtml(html, variants) {
   const root = $("root");
   const imagesInOrder = [];
 
-  root.find("img").each((_, img) => {
-    const src = $(img).attr("src");
+  // <audio> — те же маркеры и тот же общий счётчик, что у <img>: attachments (см. buildRowsForSubject
+  // в publish-neofamily.mjs) хранит оба типа вложений в одном списке, в порядке появления в HTML —
+  // счётчик здесь должен идти по обоим тегам вместе, иначе N-й маркер разойдётся с N-м attachments[].
+  // Раньше <audio> тут не ловился вообще: cheerio .text() у него пустой (нет текстовых потомков),
+  // и тег с ссылкой на запись пропадал из текста бесследно — задание на аудирование оставалось без
+  // единого способа услышать то, что просит расшифровать условие.
+  root.find("img, audio").each((_, el) => {
+    const src = $(el).attr("src");
     if (src) imagesInOrder.push(src);
-    $(img).replaceWith(imagesInOrder.length ? ` [ИЗОБРАЖЕНИЕ ${imagesInOrder.length}] ` : " [ИЗОБРАЖЕНИЕ] ");
+    $(el).replaceWith(imagesInOrder.length ? ` [ИЗОБРАЖЕНИЕ ${imagesInOrder.length}] ` : " [ИЗОБРАЖЕНИЕ] ");
   });
 
   const hasVariants = Array.isArray(variants) && variants.length > 0;

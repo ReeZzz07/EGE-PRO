@@ -49,6 +49,12 @@ const SUBJECT_DIR_MAP = {
 const root = path.join(process.cwd(), "output", "neofamily");
 const onlySubject = args.subject;
 const limit = args.limit ? Number(args.limit) : Infinity;
+// точечное обновление конкретных заданий (например, после точечного patch'а source-JSONL —
+// см. --task-ids ниже) без пере-upsert'а ВСЕГО предмета: полный прогон перезаписал бы published/
+// needs_review у остальных заданий пересчитанными с нуля значениями, теряя любую ручную правку
+// через /admin, которую до этого мог сделать методист. task_id — без префикса предмета (то, что
+// после дефиса в id public.tasks: "eng-248" -> "248").
+const onlyTaskIds = args["task-ids"] ? new Set(args["task-ids"].split(",")) : null;
 const skipMedia = args["skip-media"] === "true";
 const onlyMedia = args["only-media"] === "true";
 const concurrency = Number(args.concurrency ?? 15);
@@ -198,7 +204,10 @@ async function pool(items, worker, size) {
 }
 
 function contentTypeFor(ext) {
-  return { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" }[ext.toLowerCase()] ?? "application/octet-stream";
+  return (
+    { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml", ".mp3": "audio/mpeg" }[ext.toLowerCase()] ??
+    "application/octet-stream"
+  );
 }
 
 /** Источник не даёт реальной сложности задания — только номер в структуре ЕГЭ (task_line.name).
@@ -285,18 +294,30 @@ function buildRowsForSubject(folder, dbSubject) {
       published: !needsReview,
     });
 
-    const imgs = (t.attachments ?? []).filter((a) => a.type === "image");
+    // attachments идёт в ТОМ ЖЕ порядке, что и <img> в question_html — то есть 1:1 с маркерами
+    // "[ИЗОБРАЖЕНИЕ N]", которые cleanTaskHtml (см. lib/clean-html.mjs) расставил в statement выше
+    // (N-й маркер -> attachments[N-1] -> сохранённая ниже position=N-1). Раньше здесь стоял
+    // "if (pos >= 4) break" — обрубал задания с больше чем 4 картинками (у некоторых геометрических
+    // задач их 10+: каждая точка/отрезок/угол внутри условия — отдельная формула-картинка), из-за
+    // чего лишние маркеры в тексте указывали на несуществующую картинку. Без этого лимита позиция
+    // строго совпадает с номером маркера — не выбираем "самые важные" 4, сохраняем все.
+    // "audio" — записи для заданий на аудирование (см. clean-html.mjs выше: <audio> размечается
+    // тем же маркером "[ИЗОБРАЖЕНИЕ N]" и тем же общим счётчиком, что и <img>, так что позиция здесь
+    // обязана считаться по ОБОИМ типам вместе, иначе номер маркера разойдётся с attachments[]).
+    const imgs = (t.attachments ?? []).filter((a) => a.type === "image" || a.type === "audio");
     if (imgs.length) {
       const list = [];
       let pos = 0;
       for (const att of imgs) {
         const full = path.join(subjDir, att.path);
-        if (!fs.existsSync(full)) continue;
+        if (!fs.existsSync(full)) {
+          pos++; // позиция должна расти даже для пропущенного файла — иначе после него все следующие маркеры съедут на один индекс
+          continue;
+        }
         const ext = path.extname(att.path);
         const storagePath = `neofamily/${folder}/${t.task_id}_${pos}${ext}`;
         list.push({ storage_path: storagePath, position: pos, fullLocalPath: full });
         pos++;
-        if (pos >= 4) break;
       }
       if (list.length) mediaByTask.set(id, list);
     }
@@ -323,6 +344,11 @@ async function main() {
     let { taskRows, mediaByTask } = buildRowsForSubject(folder, dbSubject);
     if (limit !== Infinity) {
       taskRows = taskRows.slice(0, limit);
+      const keep = new Set(taskRows.map((t) => t.id));
+      mediaByTask = new Map([...mediaByTask].filter(([id]) => keep.has(id)));
+    }
+    if (onlyTaskIds) {
+      taskRows = taskRows.filter((t) => onlyTaskIds.has(t.id.slice(dbSubject.length + 1)));
       const keep = new Set(taskRows.map((t) => t.id));
       mediaByTask = new Map([...mediaByTask].filter(([id]) => keep.has(id)));
     }

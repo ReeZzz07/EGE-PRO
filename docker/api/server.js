@@ -218,7 +218,10 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
 
 // ─────────────────────── storage ───────────────────────
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+// 15 МБ хватало для картинок/аватарок, но записи для заданий на аудирование (task-media, см.
+// scripts/import/publish-neofamily.mjs) доходят до ~29 МБ — 40 МБ оставляет запас без открытия
+// лимита слишком широко (это всё ещё контентная загрузка только для admin, см. requireAdmin ниже).
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
 
 // Единственные два реальных бакета (см. avatar.ts/adminTasks.ts на фронтенде) — раньше bucket
 // приходил из URL/тела запроса без проверки вообще, и только относительный путь p проверялся на
@@ -273,7 +276,17 @@ app.get("/storage/list", authMiddleware, requireAdmin, (req, res) => {
   }
 });
 
-const CONTENT_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml" };
+const CONTENT_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  // аудио к заданиям на аудирование (см. task_media/EgeTask.images в SolveView/EssayView) — без
+  // верного content-type браузер не обязан проигрывать <audio src> корректно.
+  ".mp3": "audio/mpeg",
+};
 
 /** У части файлов из импорта (~126, в основном география) путь пришёл вовсе без расширения —
  *  path.extname() для них пустая строка, CONTENT_TYPES не находит тип, браузер получает

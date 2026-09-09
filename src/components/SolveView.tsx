@@ -9,7 +9,8 @@ import { DEFAULT_FILTERS, filterTasks, loadTaskBankFilters } from "../lib/taskFi
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import EssayView from "./EssayView";
-import { Burst, Icon, Stamp, TutorText, useToast } from "./ui";
+import ReadAloudView from "./ReadAloudView";
+import { Burst, Icon, MediaItem, Stamp, StatementLine, TutorText, useToast, usedImageMarkerIndices } from "./ui";
 
 type Phase = "solve" | "wrong" | "correct" | "revealed";
 
@@ -69,6 +70,10 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
   if (task.answerType === "essay") {
     const idx = TASKS.findIndex((t) => t.id === task.id);
     const nextTaskId = TASKS[(idx + 1) % TASKS.length].id;
+    // «Чтение текста вслух» (№39 английского) — тоже bucket=essay в БД (см. миграцию/import), но
+    // ответ там — устная речь, а не написанный текст; ЭссейView с текстовым полем ответа для него
+    // не подходит (см. ReadAloudView.tsx — своя запись+самопроверка через распознавание речи).
+    if (task.subject === "eng" && task.egeNumber === 39) return <ReadAloudView task={task} onNav={onNav} nextTaskId={nextTaskId} />;
     return <EssayView task={task} onNav={onNav} nextTaskId={nextTaskId} />;
   }
 
@@ -96,6 +101,10 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
   const recordedRef = useRef(false);
 
   const meta = SUBJECTS[task.subject];
+  const extraImages = useMemo(() => {
+    const used = usedImageMarkerIndices(task.statement);
+    return (task.images ?? []).filter((_, i) => !used.has(i));
+  }, [task]);
 
   // догружаем весь предмет в фоне — иначе после прямого захода на задание (например, после
   // перезагрузки страницы — см. App.tsx) в TASKS есть только это одно задание, и список для
@@ -306,15 +315,18 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
 
             <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-ink/90">
               {task.statement.map((p, i) => (
-                <p key={i}>{p}</p>
+                <p key={i}>
+                  <StatementLine text={p} images={task.images} />
+                </p>
               ))}
             </div>
 
-            {task.images && task.images.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-3">
-                {task.images.map((src, i) => (
-                  <img key={i} src={src} alt={`Иллюстрация к заданию ${i + 1}`} className="max-h-72 rounded-sm border-2 border-ink/15 object-contain" />
-                ))}
+            {/* картинки без своего маркера в тексте (ручной/ZIP-импорт вообще не расставляет
+                маркеры — см. StatementLine/usedImageMarkerIndices в components/ui.tsx) — как раньше,
+                отдельным блоком-иллюстрацией после условия. */}
+            {extraImages.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {extraImages.map((src, i) => <MediaItem key={i} src={src} />)}
               </div>
             )}
 

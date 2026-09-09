@@ -103,6 +103,12 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   chevronDown: <path d="M6 9l6 6 6-6" />,
+  mic: (
+    <>
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v3.5M9 21h6" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, className = "" }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {
@@ -309,5 +315,91 @@ export function TutorText({ text, light = false }: { text: string; light?: boole
         );
       })}
     </div>
+  );
+}
+
+/* ─────────── Формулы/картинки внутри условия задания ─────────── */
+// Заданиях из автоматического импорта (scripts/import/lib/clean-html.mjs, только для источников
+// fipi_auto_solve/neofamily) на месте каждой убранной из HTML картинки в тексте стоит маркер
+// "[ИЗОБРАЖЕНИЕ N]" — 1-based номер по порядку появления в исходном условии, N-я картинка задания
+// (task.images, тот же порядок). Раньше маркеры вырезались пробелом, а все картинки показывались
+// отдельным блоком ПОСЛЕ текста — предложение вида "на сторонах  и  отмечены точки  и " разваливалось
+// на бессмысленные обрывки, потому что то, что должно было стоять на месте пробелов (имена точек,
+// отрезков, формулы), пряталось в отдельном блоке ниже, без всякой видимой связи с текстом.
+const IMAGE_MARKER_RE = /\[ИЗОБРАЖЕНИЕ\s*(\d*)\]/gi;
+
+/** Индексы (0-based, как в task.images) картинок, на которые ссылается хоть один маркер в тексте —
+ *  остальные картинки задания к тексту не привязаны (ручной/ZIP-импорт вообще не расставляет
+ *  маркеры, см. docker/api/importArchive.js) и должны показываться отдельным блоком, как раньше. */
+export function usedImageMarkerIndices(statement: string[]): Set<number> {
+  const used = new Set<number>();
+  for (const line of statement) {
+    for (const m of line.matchAll(IMAGE_MARKER_RE)) {
+      if (m[1]) used.add(Number(m[1]) - 1);
+    }
+  }
+  return used;
+}
+
+// Записи для аудирования (см. clean-html.mjs) приходят без корректного заголовка длительности —
+// <audio> сперва знает только, что duration = NaN/Infinity, и до первого реального проигрывания
+// считает прогресс-бар от этого неизвестного значения, поэтому ползунок стоит не там, где реально
+// идёт воспроизведение. Известный обход (Chromium и большинство движков): перемотать на заведомо
+// большее время, чем есть в файле — это форсирует полное сканирование и настоящую длительность в
+// durationChange, откуда возвращаем currentTime обратно к 0. Метим элемент, чтобы вернуть именно
+// свою перемотку — а не сбросить позицию на 0, если durationchange придёт по другой причине.
+const fixingDuration = new WeakSet<HTMLAudioElement>();
+function seekToDiscoverDuration(el: HTMLAudioElement) {
+  if (Number.isFinite(el.duration)) return;
+  fixingDuration.add(el);
+  el.currentTime = 1e10;
+}
+function resetAfterDurationDiscovered(el: HTMLAudioElement) {
+  if (!fixingDuration.has(el) || !Number.isFinite(el.duration)) return;
+  fixingDuration.delete(el);
+  el.currentTime = 0;
+}
+
+/** Одно вложение задания — по расширению файла решает, как его показать: .mp3 — запись для
+ *  аудирования (см. <audio> в clean-html.mjs — сама запись, а не иллюстрация, поэтому плеер на всю
+ *  ширину, а не картинка), .svg — формула Wiris без своего "фото-обрамления", в размер строки текста,
+ *  остальное — настоящая иллюстрация/чертёж, крупнее и в рамке. */
+export function MediaItem({ src }: { src: string }) {
+  if (/\.mp3$/i.test(src)) {
+    return (
+      <audio
+        src={src}
+        controls
+        className="my-1 block w-full max-w-md"
+        onLoadedMetadata={(e) => seekToDiscoverDuration(e.currentTarget)}
+        onDurationChange={(e) => resetAfterDurationDiscovered(e.currentTarget)}
+      />
+    );
+  }
+  const isFormula = /\.svg$/i.test(src);
+  return (
+    <img
+      src={src}
+      alt={isFormula ? "формула" : "Иллюстрация к заданию"}
+      className={isFormula ? "mx-0.5 inline-block h-6 w-auto align-middle object-contain" : "mx-1 inline-block max-h-72 w-auto rounded-sm border-2 border-ink/15 align-middle object-contain"}
+    />
+  );
+}
+
+/** Вклеивает вложение (формулу/аудио/иллюстрацию — см. MediaItem) прямо на место маркера в тексте.
+ *  Маркер, на который ссылается, но которого физически нет (см. давний баг с обрезкой до 4 картинок
+ *  на задание в publish-neofamily.mjs — старые задания могли остаться недозалитыми), просто пропадает,
+ *  без сломанной иконки на его месте. */
+export function StatementLine({ text, images }: { text: string; images?: string[] }) {
+  const parts = text.split(IMAGE_MARKER_RE);
+  // split с capturing group чередует: текст, номер-маркера(или ""), текст, номер, текст...
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part ? <span key={i}>{part}</span> : null;
+        const src = part ? images?.[Number(part) - 1] : undefined;
+        return src ? <MediaItem key={i} src={src} /> : null;
+      })}
+    </>
   );
 }

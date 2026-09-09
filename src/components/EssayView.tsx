@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EgeTask } from "../data/tasks";
 import { SUBJECTS } from "../data/tasks";
 import { useProgress } from "../lib/store";
@@ -6,7 +6,7 @@ import { useAuth } from "../lib/auth";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useEssayCheckAllowed } from "../lib/tariffs";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
-import { Icon } from "./ui";
+import { Icon, MediaItem, StatementLine, usedImageMarkerIndices } from "./ui";
 import type { View } from "./Header";
 
 type Phase = "write" | "checking" | "result";
@@ -51,6 +51,10 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
 
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   const meta = SUBJECTS[task.subject];
+  const extraImages = useMemo(() => {
+    const used = usedImageMarkerIndices(task.statement);
+    return (task.images ?? []).filter((_, i) => !used.has(i));
+  }, [task]);
 
   useEffect(() => {
     if (phase !== "checking") return;
@@ -103,14 +107,16 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
         </div>
         <h1 className="font-display mt-4 text-xl font-bold leading-snug sm:text-2xl">{task.topic}</h1>
         <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-ink/90">
-          {task.statement.map((p, i) => <p key={i}>{p}</p>)}
+          {task.statement.map((p, i) => (
+            <p key={i}>
+              <StatementLine text={p} images={task.images} />
+            </p>
+          ))}
         </div>
 
-        {task.images && task.images.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-3">
-            {task.images.map((src, i) => (
-              <img key={i} src={src} alt={`Иллюстрация к заданию ${i + 1}`} className="max-h-72 rounded-sm border-2 border-ink/15 object-contain" />
-            ))}
+        {extraImages.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {extraImages.map((src, i) => <MediaItem key={i} src={src} />)}
           </div>
         )}
 
