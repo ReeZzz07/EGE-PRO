@@ -3,13 +3,30 @@ import type { EgeTask } from "../data/tasks";
 import { SUBJECTS } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
+import { formatClock } from "../lib/utils";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useEssayCheckAllowed } from "../lib/tariffs";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
+import { useVoiceRecorder } from "../lib/useVoiceRecorder";
 import { Icon, MediaItem, StatementLine, usedImageMarkerIndices } from "./ui";
 import type { View } from "./Header";
 
 type Phase = "write" | "checking" | "result";
+
+/** Условный диалог-расспрос (№40) и монолог (№42) — по условию задания устная речь ("ask four
+ *  questions", "leave a voice message", "you will speak for..."), не письменный текст. В отличие
+ *  от «Чтение текста вслух» здесь нет единого правильного текста для сверки (расспрос/монолог —
+ *  открытый ответ), поэтому вместо отдельной страницы (см. ReadAloudView.tsx) — тот же голосовой
+ *  ввод здесь же: расшифровка речи просто становится черновиком, который отправляется на ту же
+ *  ИИ-проверку по критериям, что и раньше уходил напечатанный текст. №41 (диалог-интервью) не
+ *  входит — там свои 5 вопросов интервьюера должны звучать в аудио, которого у этих заданий сейчас
+ *  нет вообще (см. обсуждение бага) — голосовой ответ здесь ничего не исправит.
+ *  №37/38 (письмо, эссе по графику) — не сюда, это настоящие письменные задания.
+ */
+function isSpokenTask(task: EgeTask): boolean {
+  return task.subject === "eng" && (task.egeNumber === 40 || task.egeNumber === 42);
+}
+const MAX_SPOKEN_SECONDS = 240;
 
 const CHECK_STATUSES = ["Анализируем структуру…", "Проверяем аргументы…", "Оцениваем грамотность…", "Формируем комментарии…"];
 
@@ -51,6 +68,10 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
 
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   const meta = SUBJECTS[task.subject];
+  const spoken = isSpokenTask(task);
+  // Хук всегда вызываем (правило хуков), даже для письменных заданий — просто не показываем и не
+  // используем его состояние, если spoken === false (см. рендер ниже).
+  const recorder = useVoiceRecorder("en-US", MAX_SPOKEN_SECONDS);
   const extraImages = useMemo(() => {
     const used = usedImageMarkerIndices(task.statement);
     return (task.images ?? []).filter((_, i) => !used.has(i));
@@ -62,6 +83,16 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
     const id = setInterval(() => setStatusIdx((i) => Math.min(CHECK_STATUSES.length - 1, i + 1)), 700);
     return () => clearInterval(id);
   }, [phase]);
+
+  // расшифровка речи становится черновиком ответа — тем же текстом, который раньше печатали
+  // руками и который уходит на ту же ИИ-проверку по критериям (см. submit ниже); если в браузере
+  // нет распознавания речи, recorder.transcript останется null — текстовое поле просто не
+  // перезаписывается, ученик печатает вручную, как раньше.
+  useEffect(() => {
+    if (!spoken || recorder.phase !== "done" || recorder.transcript == null) return;
+    setText(recorder.transcript);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.phase]);
 
   const submit = async () => {
     if (!essayAllowed) return; // защита в глубину — кнопка и так скрыта, см. рендер ниже
@@ -150,14 +181,58 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
 
         {essayAllowed && phase === "write" && (
           <div className="mt-6 border-t-2 border-dashed border-ink/25 pt-5">
+            {spoken && (
+              <div className="mb-5 border-2 border-ink/15 bg-sheet px-4 py-3.5">
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Устный ответ</p>
+                {recorder.phase === "idle" && (
+                  <>
+                    <p className="mt-2 text-[12.5px] leading-relaxed text-ink2">
+                      Это задание на говорение — запиши ответ голосом. Текст ниже заполнится расшифровкой автоматически, её можно подправить перед отправкой
+                      (а если распознавание речи недоступно — просто напиши сам, что сказал(а)).
+                    </p>
+                    {recorder.micError && <p className="mt-2 text-[13px] font-bold text-red">{recorder.micError}</p>}
+                    <button onClick={recorder.start} className="btn btn-blue mt-3 px-5 py-2.5 text-sm">
+                      <Icon name="mic" size={16} /> Записать голосом
+                    </button>
+                  </>
+                )}
+                {recorder.phase === "recording" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <span className="relative flex h-3 w-3">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red/60" />
+                      <span className="relative inline-flex h-3 w-3 rounded-full bg-red" />
+                    </span>
+                    <p className="font-mono text-[13px] font-bold text-ink">Идёт запись — {formatClock(recorder.seconds)}</p>
+                    <button onClick={recorder.stop} className="btn btn-ink ml-auto px-4 py-2 text-[12.5px]">
+                      Завершить запись
+                    </button>
+                  </div>
+                )}
+                {recorder.phase === "done" && (
+                  <div className="mt-2">
+                    {recorder.audioUrl && <audio src={recorder.audioUrl} controls className="w-full" />}
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[12px] text-ink2">
+                        {recorder.transcript != null
+                          ? "Расшифровка — в поле ниже, можно подправить перед отправкой."
+                          : "Распознавание речи недоступно в этом браузере (работает в Chrome/Edge) — впиши ниже вручную, что сказал(а)."}
+                      </p>
+                      <button onClick={recorder.reset} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                        <Icon name="refresh" size={13} /> Записать заново
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <label className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-ink2">
-              Черновик {drafts.length > 0 ? `№ ${drafts.length + 1}` : ""}
+              {spoken ? "Текст ответа" : "Черновик"} {drafts.length > 0 ? `№ ${drafts.length + 1}` : ""}
             </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={10}
-              placeholder="Пиши здесь свой ответ…"
+              placeholder={spoken ? "Появится здесь после записи голосом — или напиши сам, что бы сказал(а)…" : "Пиши здесь свой ответ…"}
               className="input-blank mt-2 w-full resize-y rounded-sm px-4 py-3 text-[14.5px] leading-relaxed"
             />
             <div className="mt-2 flex items-center justify-between">
