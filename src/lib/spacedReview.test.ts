@@ -2,7 +2,7 @@
 // интервалы (1/3/7/14/30 дней), верный ответ двигает интервал дальше, но только когда повтор
 // реально настал (иначе досрочная тренировка той же темы в банке сбивала бы расписание).
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { countScheduledTopics, getDueTopics, recordTopicOutcome, REVIEW_INTERVALS_DAYS } from "./spacedReview";
+import { clearAllTopicReviews, clearTopicReview, countScheduledTopics, getDueTopics, recordTopicOutcome, REVIEW_INTERVALS_DAYS } from "./spacedReview";
 
 vi.mock("./supabase", () => ({ isSupabaseConfigured: false, supabase: null }));
 
@@ -82,6 +82,35 @@ describe("recordTopicOutcome", () => {
     expect(getDueTopics("u1", "rus")).toEqual(["Паронимы"]);
     expect(getDueTopics("u1", "math")).toEqual(["Логарифмы"]);
     expect(countScheduledTopics("u1")).toBe(2);
+    expect(countScheduledTopics("u2")).toBe(1);
+  });
+});
+
+// "Убрать задание и его историю" (clearTask) и "Сбросить прогресс" (resetAll) в lib/store.tsx
+// обещают забыть про ошибку(и) целиком — расписание повторения должно уходить вместе с ними,
+// а не оставаться "на повторении" по темам, о которых свежая история попыток уже ничего не знает.
+describe("clearTopicReview / clearAllTopicReviews", () => {
+  it("clearTopicReview снимает с повторения только свою тему, не трогая остальные", () => {
+    recordTopicOutcome("u1", "rus", "Паронимы", false);
+    recordTopicOutcome("u1", "math", "Логарифмы", false);
+    clearTopicReview("u1", "rus", "Паронимы");
+    vi.setSystemTime(Date.now() + REVIEW_INTERVALS_DAYS[0] * DAY + 1000);
+    expect(getDueTopics("u1", "rus")).toEqual([]);
+    expect(getDueTopics("u1", "math")).toEqual(["Логарифмы"]);
+    expect(countScheduledTopics("u1")).toBe(1);
+  });
+
+  it("clearTopicReview для темы без расписания — тихо ничего не делает", () => {
+    expect(() => clearTopicReview("u1", "rus", "Нет такой темы")).not.toThrow();
+    expect(countScheduledTopics("u1")).toBe(0);
+  });
+
+  it("clearAllTopicReviews стирает всё расписание этого пользователя, не трогая других", () => {
+    recordTopicOutcome("u1", "rus", "Паронимы", false);
+    recordTopicOutcome("u1", "math", "Логарифмы", false);
+    recordTopicOutcome("u2", "rus", "Паронимы", false);
+    clearAllTopicReviews("u1");
+    expect(countScheduledTopics("u1")).toBe(0);
     expect(countScheduledTopics("u2")).toBe(1);
   });
 });

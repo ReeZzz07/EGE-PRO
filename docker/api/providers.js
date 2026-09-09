@@ -12,6 +12,24 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Раньше fetch() к провайдеру не имел таймаута вовсе — зависший TCP-коннект или молчащий провайдер
+// держал открытым HTTP-запрос ученика (и воркер Express) неограниченно долго. 45с — заметно больше
+// типичного времени ответа модели (даже tool-call на 1500 токенов), но не бесконечность.
+const AI_FETCH_TIMEOUT_MS = 45_000;
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e?.name === "AbortError") throw new Error(`Провайдер не ответил за ${AI_FETCH_TIMEOUT_MS / 1000}с`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Простой текстовый ответ (hint/explain_topic/chat) — без принудительного вызова инструмента. */
 export async function callText(settings, system, messages, maxTokens = 700) {
   if (settings.provider === "qwen") return callQwenText(settings, system, messages, maxTokens);
@@ -26,7 +44,7 @@ export async function callTool(settings, system, userContent, tool, maxTokens = 
 
 async function callAnthropicText(settings, system, messages, maxTokens) {
   const model = settings.model || ANTHROPIC_DEFAULT_MODEL;
-  const resp = await fetch(ANTHROPIC_URL, {
+  const resp = await fetchWithTimeout(ANTHROPIC_URL, {
     method: "POST",
     headers: { "x-api-key": settings.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model, max_tokens: maxTokens, system, messages }),
@@ -39,7 +57,7 @@ async function callAnthropicText(settings, system, messages, maxTokens) {
 
 async function callAnthropicTool(settings, system, userContent, tool, maxTokens) {
   const model = settings.model || ANTHROPIC_DEFAULT_MODEL;
-  const resp = await fetch(ANTHROPIC_URL, {
+  const resp = await fetchWithTimeout(ANTHROPIC_URL, {
     method: "POST",
     headers: { "x-api-key": settings.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
@@ -65,7 +83,7 @@ function toOpenAiTool(tool) {
 async function callQwenText(settings, system, messages, maxTokens) {
   const baseUrl = (settings.baseUrl || QWEN_DEFAULT_BASE_URL).replace(/\/+$/, "");
   const model = settings.model || QWEN_DEFAULT_MODEL;
-  const resp = await fetch(`${baseUrl}/chat/completions`, {
+  const resp = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${settings.apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({
@@ -98,7 +116,7 @@ async function callQwenTool(settings, system, userContent, tool, maxTokens) {
         },
         { role: "user", content: userContent },
       ];
-      const resp = await fetch(apiUrl, {
+      const resp = await fetchWithTimeout(apiUrl, {
         method: "POST",
         headers: { Authorization: `Bearer ${settings.apiKey}`, "content-type": "application/json" },
         body: JSON.stringify({

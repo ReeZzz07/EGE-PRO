@@ -5,7 +5,8 @@
 set -e
 
 echo "[pg-init] bootstrap"
-psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /pg-init-extra/0000_bootstrap.sql
+: "${AUTHENTICATOR_PASSWORD:?AUTHENTICATOR_PASSWORD не задан}"
+psql -v ON_ERROR_STOP=1 -v authenticator_password="$AUTHENTICATOR_PASSWORD" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /pg-init-extra/0000_bootstrap.sql
 
 for f in /pg-init-migrations/*.sql; do
   echo "[pg-init] applying $f"

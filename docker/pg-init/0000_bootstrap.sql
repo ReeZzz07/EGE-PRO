@@ -16,7 +16,7 @@ begin
     create role service_role nologin noinherit bypassrls;
   end if;
   if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-    create role authenticator noinherit login password 'authenticator_local_pw';
+    create role authenticator noinherit login password :'authenticator_password';
   end if;
 end $$;
 

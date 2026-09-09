@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DIFF_LABEL, SUBJECTS, TASKS, taskById, type EgeTask } from "../data/tasks";
 import { useProgress } from "../lib/store";
+import { useAuth } from "../lib/auth";
 import { checkAnswer, formatClock, plural } from "../lib/utils";
 import { hydrateSubjectTasks, hydrateTasksByIds, useTasksVersion } from "../lib/dbTasks";
 import { callAiTutor } from "../lib/aiTutor";
@@ -18,6 +19,7 @@ type Phase = "solve" | "wrong" | "correct" | "revealed";
 export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v: View) => void }) {
   useTasksVersion();
   const task = taskById(taskId);
+  const { profile } = useAuth();
   const [checkedRemote, setCheckedRemote] = useState(false);
 
   useEffect(() => {
@@ -44,6 +46,22 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
       <div className="mx-auto max-w-3xl px-4 py-24 text-center">
         <p className="font-display text-xl font-bold">Задание не найдено</p>
         <button onClick={() => onNav({ name: "bank" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">В банк заданий</button>
+      </div>
+    );
+  }
+
+  // TaskBank показывает предметы всей платформы независимо от тарифа (это витрина, см. каталог) —
+  // но РЕШАТЬ задание по предмету, который ученик не подключил (и не админ), ссылка на банк не
+  // должна пропускать: тариф ограничивает именно доступ к заданиям, а не только их листинг.
+  if (profile && !profile.isAdmin && !profile.subjects.includes(task.subject)) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+        <p className="font-display text-xl font-bold">Предмет «{SUBJECTS[task.subject].name}» не подключён</p>
+        <p className="mt-3 text-sm text-ink2">Реши это задание можно будет, как только подключишь предмет — на странице тарифов, в разделе «Мои предметы».</p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue px-5 py-2.5 text-sm">Подключить предмет</button>
+          <button onClick={() => onNav({ name: "bank" })} className="btn btn-ghost px-5 py-2.5 text-sm">В банк заданий</button>
+        </div>
       </div>
     );
   }

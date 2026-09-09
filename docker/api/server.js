@@ -3,6 +3,9 @@
 // PostgREST напрямую, он wire-совместим с supabase-js .from()).
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -27,22 +30,66 @@ if (!JWT_SECRET) throw new Error("JWT_SECRET не задан");
 fs.mkdirSync(STORAGE_ROOT, { recursive: true });
 
 const app = express();
-app.use(cors());
+// Единственный путь, которым браузер сюда попадает — через dev-proxy внутри контейнера web (см.
+// vite.config.js, xfwd:true), поэтому доверяем РОВНО одному хопу: express-rate-limit/req.ip будут
+// брать реальный IP браузера из X-Forwarded-For, который добавляет этот хоп, а не значение, которое
+// клиент мог бы подсунуть сам тем же заголовком (при trust proxy:1 всё, что левее одного доверенного
+// хопа, игнорируется — см. документацию express на "trust proxy"). Без этой строки все запросы
+// приходили бы с одним и тем же req.ip (адресом контейнера web) и делили один общий лимит на всех.
+app.set("trust proxy", 1);
+// helmet трогаем осторожно: contentSecurityPolicy/crossOriginEmbedderPolicy по умолчанию рассчитаны
+// на то, что этот же сервис отдаёт HTML — здесь только JSON API + статика из /storage (картинки,
+// отдаются на чужой origin, см. GET /storage/:bucket/* ниже), включённый CSP/COEP по умолчанию их
+// не ломает, но crossOriginResourcePolicy обязательно "cross-origin", иначе браузер блокирует
+// картинки задания, запрошенные с origin фронтенда (localhost:3100) у этого сервиса (localhost:8787).
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+// раньше cors() без опций разрешал ЛЮБОЙ origin с любыми учётными данными — для API, куда
+// авторизованные запросы идут с Bearer-токеном (не куки), это не даёт CSRF, но всё равно позволяет
+// произвольному сайту читать ответы (например, чужой JS мог бы дёргать /ai-tutor с украденным из
+// localStorage токеном). CORS_ORIGIN — через запятую список разрешённых origin (см. docker-compose.yml).
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3100").split(",").map((s) => s.trim()).filter(Boolean);
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json({ limit: "2mb" }));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-function signToken(user) {
-  return jwt.sign({ sub: user.id, role: "authenticated", email: user.email }, JWT_SECRET, { expiresIn: "30d" });
+// авторизация/регистрация и ИИ-репетитор — самые дорогие/чувствительные к брутфорсу и накрутке
+// счётчиков эндпоинты; остальные (storage, admin-импорт) либо требуют admin, либо не так опасны.
+// 100/15мин на IP — заметно выше того, что нужно живому ученику (даже с опечатками в пароле), но
+// не настолько высоко, чтобы не тормозить подбор пароля (тем более что каждая проверка — это ещё
+// и bcrypt.compare с cost 10, ~50-100мс сам по себе); нижняя граница — реальный backend test suite
+// (docker/api/test/*.test.js), который гоняет через эти же роуты десятки запросов за секунды.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+const aiTutorLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+
+function signToken(user, tokenVersion) {
+  // 7 дней, а не 30 — токен всё равно можно отозвать раньше (см. token_version ниже), но короче
+  // срок жизни сам по себе сокращает окно, в которое ворованный токен остаётся полезен, даже если
+  // до отзыва (смены пароля) никто не додумался.
+  return jwt.sign({ sub: user.id, role: "authenticated", email: user.email, tv: tokenVersion ?? 0 }, JWT_SECRET, { expiresIn: "7d" });
 }
 
-function authMiddleware(req, res, next) {
+/** Токен подписан верно и не просрочен — но это не значит, что он ещё действителен: смена пароля
+ *  (см. POST /auth/change-password) бампает token_version в БД, и все токены с более старым tv
+ *  сразу должны отваливаться, даже если им ещё есть 6 дней жизни (см. миграцию 0022). */
+async function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "missing authorization" });
+  let payload;
   try {
-    req.user = jwt.verify(header.slice(7), JWT_SECRET);
-    next();
+    payload = jwt.verify(header.slice(7), JWT_SECRET);
   } catch {
     return res.status(401).json({ error: "invalid token" });
   }
+  try {
+    const { rows } = await pool.query("select token_version from public.profiles where id = $1", [payload.sub]);
+    // профиля может не быть (аккаунт только что создан до вставки профиля, или гостевой auth.users
+    // без строки в profiles) — тогда сверять не с чем, пропускаем как раньше, до появления tv.
+    if (rows[0] && (payload.tv ?? 0) < rows[0].token_version) return res.status(401).json({ error: "token revoked" });
+  } catch (e) {
+    return res.status(500).json({ error: String(e?.message ?? e) });
+  }
+  req.user = payload;
+  next();
 }
 
 async function requireAdmin(req, res, next) {
@@ -57,7 +104,7 @@ async function requireAdmin(req, res, next) {
 
 // ─────────────────────── auth ───────────────────────
 
-app.post("/auth/signup", async (req, res) => {
+app.post("/auth/signup", authLimiter, async (req, res) => {
   const { email, password, full_name } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: { message: "email и password обязательны" } });
   try {
@@ -70,21 +117,27 @@ app.post("/auth/signup", async (req, res) => {
       [email, hash, JSON.stringify({ full_name: full_name ?? "" })]
     );
     const user = rows[0];
-    res.json({ data: { user }, error: null, access_token: signToken(user) });
+    // свежий аккаунт — token_version всегда 0 (см. миграцию 0022, default), профиль ещё создаётся
+    // триггером handle_new_user асинхронно с этим же insert, читать его здесь незачем.
+    res.json({ data: { user }, error: null, access_token: signToken(user, 0) });
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
 });
 
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", authLimiter, async (req, res) => {
   const { email, password } = req.body ?? {};
   try {
-    const { rows } = await pool.query("select id, email, encrypted_password from auth.users where email = $1", [email]);
+    const { rows } = await pool.query(
+      `select u.id, u.email, u.encrypted_password, coalesce(p.token_version, 0) as token_version
+       from auth.users u left join public.profiles p on p.id = u.id where u.email = $1`,
+      [email]
+    );
     const row = rows[0];
     if (!row || !(await bcrypt.compare(password ?? "", row.encrypted_password))) {
       return res.status(400).json({ error: { message: "Неверный email или пароль" } });
     }
-    res.json({ data: { user: { id: row.id, email: row.email } }, error: null, access_token: signToken(row) });
+    res.json({ data: { user: { id: row.id, email: row.email } }, error: null, access_token: signToken(row, row.token_version) });
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
@@ -125,7 +178,14 @@ app.post("/auth/change-password", authMiddleware, async (req, res) => {
     }
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query("update auth.users set encrypted_password = $2 where id = $1", [req.user.sub, hash]);
-    res.json({ error: null });
+    // бампаем token_version сразу после — все токены, выпущенные до смены пароля (в т.ч.
+    // потенциально украденные), сразу перестают проходить authMiddleware (см. миграцию 0022).
+    const upd = await pool.query("update public.profiles set token_version = token_version + 1 where id = $1 returning token_version", [req.user.sub]);
+    const nextTv = upd.rows[0]?.token_version ?? (req.user.tv ?? 0) + 1;
+    // свежий токен — иначе собственная, только что успешно завершившая смену пароля сессия
+    // моментально сама себя разлогинивала бы этим же бампом (см. комментарий у change-email ниже,
+    // та же необходимость).
+    res.json({ data: { user: { id: req.user.sub, email: req.user.email } }, error: null, access_token: signToken({ id: req.user.sub, email: req.user.email }, nextTv) });
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
@@ -142,12 +202,15 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
     if (!row || !(await bcrypt.compare(password ?? "", row.encrypted_password))) {
       return res.status(400).json({ error: { message: "Неверный пароль" } });
     }
-    if (newEmail === row.email) return res.json({ data: { user: { id: req.user.sub, email: row.email } }, error: null, access_token: signToken({ id: req.user.sub, email: row.email }) });
+    // tv переносим как есть (req.user.tv уже прошёл проверку в authMiddleware) — иначе новый
+    // токен подписался бы с tv:0 по умолчанию и сам себя тут же считал бы отозванным, если
+    // token_version в БД уже был поднят раньше (см. change-password выше).
+    if (newEmail === row.email) return res.json({ data: { user: { id: req.user.sub, email: row.email } }, error: null, access_token: signToken({ id: req.user.sub, email: row.email }, req.user.tv) });
     const existing = await pool.query("select id from auth.users where email = $1", [newEmail]);
     if (existing.rows.length) return res.status(400).json({ error: { message: "Этот email уже занят другим аккаунтом" } });
     await pool.query("update auth.users set email = $2 where id = $1", [req.user.sub, newEmail]);
     const user = { id: req.user.sub, email: newEmail };
-    res.json({ data: { user }, error: null, access_token: signToken(user) });
+    res.json({ data: { user }, error: null, access_token: signToken(user, req.user.tv) });
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
@@ -435,6 +498,16 @@ async function callClaudeEssayAssessor(settings, policy, task, essayText) {
   const criteriaText = criteria.map((c) => `${c.code} (макс. ${c.max} балл${c.max === 1 ? "" : "ов"}): ${c.name}`).join("\n");
   const userMsg = `Задание (тема: «${task.topic}»):\n${task.statement.join("\n")}\n\nКритерии оценивания:\n${criteriaText}\n\nОтвет ученика:\n"""\n${essayText || "(пусто)"}\n"""\n\nОцени ответ по каждому критерию и вызови submit_assessment.`;
 
+  // Монолог/диалог по фото, письмо по графику (устная и письменная часть ЕГЭ по английскому) —
+  // раньше сюда уходил только текст ответа, без самого изображения, хотя задание прямо просит
+  // описать/сравнить то, что на нём. ИИ оценивал пересказ картинки, которую сам не видел — не
+  // мог заметить ни расхождение с фото, ни то, что ученик описал не то, что там есть на самом деле.
+  let userContent = userMsg;
+  if (task.media?.length) {
+    const attachments = buildTaskAttachments(task.media, supportsVision(settings));
+    userContent = buildUserContent(settings.provider, userMsg, attachments);
+  }
+
   const tool = {
     name: "submit_assessment",
     description: "Отправить структурированную оценку развёрнутого ответа по критериям",
@@ -452,7 +525,7 @@ async function callClaudeEssayAssessor(settings, policy, task, essayText) {
     },
   };
 
-  const input = await callTool(settings, buildEssaySystemPrompt(policy), userMsg, tool, 1500);
+  const input = await callTool(settings, buildEssaySystemPrompt(policy), userContent, tool, 1500);
   const clipped = input.criteria.map((c) => {
     const meta = criteria.find((k) => k.code === c.code);
     const max = meta?.max ?? Math.round(c.score);
@@ -496,7 +569,7 @@ async function dbSafeTaskById(id) {
   };
 }
 
-app.post("/ai-tutor", authMiddleware, async (req, res) => {
+app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
   const [settings, policy] = await Promise.all([resolveAiSettings(), resolveSystemPrompt()]);
   if (!settings.apiKey) return res.status(500).json({ error: "Ключ ИИ-провайдера не настроен — задай его в /admin → «ИИ-репетитор»" });
   const userId = req.user.sub;
@@ -604,4 +677,27 @@ app.get("/ai-tutor/quota", authMiddleware, async (req, res) => {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
+const server = app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
+
+// раньше необработанное исключение/rejection (например, в неawait'нутом .catch() пула — см.
+// множество pool.query(...).catch(console.warn) выше, но не все асинхронные пути покрыты) просто
+// падало в stderr, а процесс продолжал жить в неопределённом состоянии — Docker не перезапускал
+// контейнер, потому что процесс формально не завершился. Логируем и падаем осознанно — restart:
+// unless-stopped (см. docker-compose.yml) поднимет контейнер заново с чистым состоянием.
+function crashAndExit(kind, err) {
+  console.error(`[api] ${kind}:`, err);
+  process.exit(1);
+}
+process.on("uncaughtException", (err) => crashAndExit("uncaughtException", err));
+process.on("unhandledRejection", (err) => crashAndExit("unhandledRejection", err));
+
+// SIGTERM — то, что шлёт `docker stop`/`docker compose down` перед SIGKILL по таймауту. Без
+// обработчика Node просто убивался посреди активных запросов и открытых соединений к Postgres;
+// закрываем HTTP-сервер (даём начатым ответам договорить) и пул подключений по порядку.
+async function shutdown() {
+  console.log("[api] SIGTERM — завершаемся...");
+  server.close(() => {
+    pool.end().finally(() => process.exit(0));
+  });
+}
+process.on("SIGTERM", shutdown);

@@ -119,6 +119,10 @@ const authShim = {
     });
     const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
     if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    // свежий токен — смена пароля отзывает все ранее выданные (см. token_version в
+    // docker/api/server.js), включая тот, что только что использовала эта же сессия для запроса
+    const session = { access_token: json.access_token, user: json.data.user };
+    setSession(session, "SIGNED_IN");
     return { error: null };
   },
   async changeEmail(password: string, newEmail: string) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { SUBJECTS, taskById } from "../data/tasks";
+import { SUBJECTS, taskById, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock, formatDay, plural } from "../lib/utils";
@@ -66,6 +66,7 @@ function ExamAttemptsSection({ onNav }: { onNav: (v: View) => void }) {
 /* ─────────── Тетрадь ошибок ─────────── */
 export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
   const { state, derived, clearTask } = useProgress();
+  const { profile } = useAuth();
   useTasksVersion();
   // после перезагрузки страницы TASKS снова пуст — задания из ошибок надо точечно догрузить по id
   // (их предметы могли не открываться в этой сессии), см. lib/dbTasks.ts
@@ -73,7 +74,14 @@ export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
     hydrateTasksByIds([...derived.mistakeIds]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derived.mistakeIds]);
-  const mistakes = [...derived.mistakeIds].map((id) => taskById(id)!).filter(Boolean);
+  // тетрадь ошибок не должна показывать задания по предметам, от которых ученик уже отключился
+  // (сменил набор предметов в анкете) — иначе клик по такому заданию ведёт в SolveView, доступ в
+  // который для этого предмета уже закрыт (см. подобный фильтр в Dashboard.tsx).
+  const connectedSubjects = profile?.subjects ?? [];
+  const mistakes = [...derived.mistakeIds]
+    .filter((id) => connectedSubjects.includes(taskById(id)?.subject as Subject))
+    .map((id) => taskById(id)!)
+    .filter(Boolean);
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-20">

@@ -4,7 +4,7 @@ import { dateKey } from "./utils";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
 import { ALL_SUBJECTS, getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
-import { recordTopicOutcome } from "./spacedReview";
+import { clearAllTopicReviews, clearTopicReview, recordTopicOutcome } from "./spacedReview";
 
 export interface Attempt {
   taskId: string;
@@ -233,6 +233,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const clearTask = async (taskId: string) => {
     dispatch({ type: "CLEAR_TASK", taskId });
+    // "убрать историю" — забыть про эту ошибку целиком, включая расписание повторения по её теме
+    // (см. lib/spacedReview.ts); если по той же теме позже случится новая ошибка (в этом или
+    // другом задании), расписание заведётся заново — ничего не теряется навсегда.
+    const task = taskById(taskId);
+    if (profile && task) clearTopicReview(profile.id, task.subject, task.topic);
     if (!isGuestMode && supabase && profile) {
       const { error } = await supabase.from("attempts").delete().eq("user_id", profile.id).eq("task_id", taskId);
       if (error) console.warn("Не удалось убрать попытки из Supabase:", error.message);
@@ -241,6 +246,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const resetAll = async () => {
     dispatch({ type: "RESET" });
+    if (profile) clearAllTopicReviews(profile.id);
     if (!isGuestMode && supabase && profile) {
       const { error } = await supabase.from("attempts").delete().eq("user_id", profile.id);
       if (error) console.warn("Не удалось стереть попытки в Supabase:", error.message);

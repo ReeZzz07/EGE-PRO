@@ -10,15 +10,22 @@ const port = Number(process.env.PORT) || 3000;
 // в этом случае указывает на облачный/иной адрес напрямую, см. .env.example).
 const backendHost = process.env.BACKEND_PROXY_HOST; // например "api" / "postgrest" внутри docker-сети
 
+// xfwd: true — прокси дописывает X-Forwarded-For настоящим IP браузера (тем, что видит сам на
+// TCP-уровне, подделать нельзя) при пересылке на api/postgrest. Без этого api видел бы во ВСЕХ
+// запросах один и тот же адрес — адрес контейнера web (единственная точка, через которую браузеры
+// сюда попадают) — и рейт-лимитер по IP (см. docker/api/server.js) считал бы всех учеников платформы
+// одним пользователем, деля между ними один общий лимит. api должен доверять ровно этому одному
+// хопу (app.set("trust proxy", 1) там же) — не больше, иначе сам заголовок можно подделать напрямую.
+const XFWD = { xfwd: true };
 const apiProxy = backendHost
   ? {
-      "/rest/v1": { target: `http://postgrest:3000`, changeOrigin: true, rewrite: (p) => p.replace(/^\/rest\/v1/, "") },
-      "/auth": { target: `http://api:8787`, changeOrigin: true },
-      "/profile": { target: `http://api:8787`, changeOrigin: true },
-      "/storage": { target: `http://api:8787`, changeOrigin: true },
-      "/admin": { target: `http://api:8787`, changeOrigin: true },
-      "/ai-tutor": { target: `http://api:8787`, changeOrigin: true },
-      "/health": { target: `http://api:8787`, changeOrigin: true },
+      "/rest/v1": { target: `http://postgrest:3000`, changeOrigin: true, rewrite: (p) => p.replace(/^\/rest\/v1/, ""), ...XFWD },
+      "/auth": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/profile": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/storage": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/admin": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/ai-tutor": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/health": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
     }
   : undefined;
 

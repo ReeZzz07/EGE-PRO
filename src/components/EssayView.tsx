@@ -106,6 +106,14 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
           {task.statement.map((p, i) => <p key={i}>{p}</p>)}
         </div>
 
+        {task.images && task.images.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-3">
+            {task.images.map((src, i) => (
+              <img key={i} src={src} alt={`Иллюстрация к заданию ${i + 1}`} className="max-h-72 rounded-sm border-2 border-ink/15 object-contain" />
+            ))}
+          </div>
+        )}
+
         {task.criteria && (
           <div className="mt-5 border-t-2 border-dashed border-ink/25 pt-4">
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Критерии оценивания</p>

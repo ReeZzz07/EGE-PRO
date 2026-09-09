@@ -118,3 +118,38 @@ export function getDueTopics(userId: string, subject: Subject): string[] {
 export function countScheduledTopics(userId: string): number {
   return loadAll(userId).length;
 }
+
+/** Снимает с повторения одну тему — зовётся из clearTask (см. lib/store.tsx): "Убрать задание и
+ *  его историю" в тетради ошибок обещает забыть про эту ошибку целиком, а расписание повторения
+ *  раньше этим не затрагивалось — тема продолжала маячить "на повторении" даже после того, как
+ *  ученик явно попросил её убрать. */
+export function clearTopicReview(userId: string, subject: Subject, topic: string): void {
+  const all = loadAll(userId).filter((r) => !(r.subject === subject && r.topic === topic));
+  saveAll(userId, all);
+  if (!isSupabaseConfigured || !supabase) return;
+  supabase
+    .from("topic_reviews")
+    .delete()
+    .eq("user_id", userId)
+    .eq("subject", subject)
+    .eq("topic", topic)
+    .then(({ error }) => {
+      if (error) console.warn("Не удалось убрать тему из расписания повторения в Supabase:", error.message);
+    });
+}
+
+/** Полностью очищает расписание повторения — зовётся из resetAll (см. lib/store.tsx): "Сбросить
+ *  прогресс" обещает стереть всё, а расписание повторения раньше переживало сброс нетронутым —
+ *  бейдж "на повторении" мог всплыть по темам, о которых свежая (нулевая) история попыток ничего
+ *  не знает. */
+export function clearAllTopicReviews(userId: string): void {
+  saveAll(userId, []);
+  if (!isSupabaseConfigured || !supabase) return;
+  supabase
+    .from("topic_reviews")
+    .delete()
+    .eq("user_id", userId)
+    .then(({ error }) => {
+      if (error) console.warn("Не удалось стереть расписание повторения в Supabase:", error.message);
+    });
+}
