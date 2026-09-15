@@ -108,7 +108,7 @@ services:
     depends_on:
       - web
     environment:
-      SITE_DOMAIN: ${VITE_SUPABASE_URL:?VITE_SUPABASE_URL не задан — укажи https://твой-домен в .env}
+      SITE_HOST: ${SITE_HOST:?SITE_HOST не задан — укажи голый домен без схемы (например ege-tutor.ru) в .env}
     ports:
       - "80:80"
       - "443:443"
