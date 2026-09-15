@@ -96,9 +96,12 @@ export async function uploadTaskMedia(taskId: string, file: File): Promise<{ err
   if (!isSupabaseConfigured || !supabase) return { error: "Supabase не подключён" };
   const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
   const storagePath = `admin-uploads/${taskId}_${Date.now()}${ext}`;
-  const { error: upErr } = await supabase.storage.from("task-media").upload(storagePath, file, { contentType: file.type || undefined, upsert: true });
-  if (upErr) return { error: upErr.message };
-  const { error: insErr } = await supabase.from("task_media").insert({ task_id: taskId, storage_path: storagePath, position: 99 });
+  const { data, error: upErr } = await supabase.storage.from("task-media").upload(storagePath, file, { contentType: file.type || undefined, upsert: true });
+  if (upErr) return { error: (upErr as { message?: string; error?: string }).message ?? (upErr as { error?: string }).error };
+  // server.js может подменить расширение в пути на реальное (по магическим байтам файла), если
+  // имя файла на диске пользователя не совпадает с его настоящим форматом — сохраняем в БД именно
+  // то, что реально легло на диск, иначе GET по storagePath из этой записи не найдёт файл.
+  const { error: insErr } = await supabase.from("task_media").insert({ task_id: taskId, storage_path: data?.path ?? storagePath, position: 99 });
   return insErr ? { error: insErr.message } : {};
 }
 

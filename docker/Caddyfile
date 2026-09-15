@@ -5,6 +5,15 @@
 # Let's Encrypt для обоих адресов при первом запуске — нужно только, чтобы A-запись домена И его
 # www-поддомена уже указывали на IP сервера, а порты 80/443 были открыты (см. scripts/setup-firewall.sh).
 {$SITE_HOST}, www.{$SITE_HOST} {
+	# Access-лог в stdout (docker compose logs caddy) — без него нельзя было проверить, какой
+	# User-Agent реально прислал Telegram/VK и попал ли он под @bot ниже; выяснилось это только
+	# постфактум, когда превью в реальных чатах не появилось. Формат console — читаемый через
+	# docker logs, не raw JSON.
+	log {
+		output stdout
+		format console
+	}
+
 	# Боты соцсетей (Telegram/VK/WhatsApp/Facebook и т.п.) не исполняют JS, поэтому не увидели бы
 	# og:image (он подставляется через useEffect, см. src/lib/useDocumentHead.ts) — на / и /tariffs
 	# их отдельно направляем на api, который отдаёт готовый HTML с актуальными og-тегами из БД (см.

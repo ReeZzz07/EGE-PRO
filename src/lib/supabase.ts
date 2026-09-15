@@ -152,8 +152,13 @@ function storageFrom(bucket: string) {
       form.append("path", path);
       form.append("file", file, (file as File).name ?? "upload");
       const resp = await apiFetch("/storage/upload", { method: "POST", body: form });
-      if (!resp.ok) return { error: await resp.json().catch(() => ({ message: resp.statusText })) };
-      return { error: null };
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok) return { data: null, error: json };
+      // path в ответе может отличаться от того, что мы отправили — server.js подменяет расширение
+      // на реальное по магическим байтам файла, если клиент прислал файл с "неправильным" (по
+      // содержимому) расширением в имени; вызывающий код должен строить публичный URL по нему,
+      // а не по тому, что передал сюда.
+      return { data: { path: json.path ?? path }, error: null };
     },
     async remove(paths: string[]) {
       const resp = await apiFetch("/storage/remove", {

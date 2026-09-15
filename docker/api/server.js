@@ -247,14 +247,36 @@ function safeRelPath(bucket, p) {
   return path.join(STORAGE_ROOT, bucket, rel);
 }
 
+/** Расширение из client-присланного path (relPath ниже) — это ИМЯ файла на диске пользователя,
+ * а не гарантия реального формата: браузер обычно определяет File.type по расширению, не по
+ * содержимому, так что файл с именем "photo.png", который на самом деле JPEG, честно проходит
+ * как image/png и уходит на сервер таким же путём. Раньше это было не критично (сервер просто
+ * сохранял и отдавал байты под тем content-type, что подсказало расширение) — сломалось видимо на
+ * og:image (см. AdminSeoSettings.tsx): VK/Telegram скачивали файл, видели заголовок
+ * "image/png", пытались раскодировать как PNG байты JPEG — и тихо отказывались показывать
+ * превью, при этом сама загрузка и раздача отчитывались как успешные (200 OK). Подменяем
+ * расширение на то, что реально показывают магические байты, ДО сохранения на диск — тот же
+ * принцип, что уже используется для аватаров (см. POST /profile/avatar ниже), просто раньше не
+ * был вынесен на общий /storage/upload, которым пользуется и SEO-картинка, и медиа заданий. */
+const IMAGE_EXT_BY_TYPE = { "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp" };
+
+function correctedPathForActualContent(relPath, buffer) {
+  const sniffed = sniffImageTypeFromBuffer(buffer);
+  if (!sniffed) return relPath;
+  const correctExt = IMAGE_EXT_BY_TYPE[sniffed];
+  if (!correctExt || path.extname(relPath).toLowerCase() === correctExt) return relPath;
+  return relPath.slice(0, relPath.length - path.extname(relPath).length) + correctExt;
+}
+
 app.post("/storage/upload", authMiddleware, requireAdmin, upload.single("file"), async (req, res) => {
   try {
     const { bucket, path: relPath } = req.body;
     if (!bucket || !relPath || !req.file) return res.status(400).json({ error: "bucket, path и file обязательны" });
-    const full = safeRelPath(bucket, relPath);
+    const correctedPath = correctedPathForActualContent(relPath, req.file.buffer);
+    const full = safeRelPath(bucket, correctedPath);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, req.file.buffer);
-    res.json({ path: relPath });
+    res.json({ path: correctedPath });
   } catch (e) {
     res.status(400).json({ error: String(e?.message ?? e) });
   }
@@ -297,6 +319,21 @@ const CONTENT_TYPES = {
   ".mp3": "audio/mpeg",
 };
 
+/** Общая проверка формата по магическим байтам — раньше было два почти одинаковых списка сигнатур
+ * (здесь и в /profile/avatar), теперь один. Используется и как fallback при раздаче файлов без
+ * расширения (см. GET /storage/:bucket/* ниже), и при загрузке — чтобы выбрать РЕАЛЬНОЕ расширение
+ * для сохраняемого файла (см. correctedPathForActualContent выше, /profile/avatar ниже). */
+function sniffImageTypeFromBuffer(buf) {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  const ascii6 = buf.toString("ascii", 0, Math.min(6, buf.length));
+  if (ascii6 === "GIF87a" || ascii6 === "GIF89a") return "image/gif";
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  const head = buf.toString("utf8", 0, Math.min(300, buf.length)).trimStart().toLowerCase();
+  if (head.startsWith("<svg") || head.startsWith("<?xml")) return "image/svg+xml";
+  return null;
+}
+
 /** У части файлов из импорта (~126, в основном география) путь пришёл вовсе без расширения —
  *  path.extname() для них пустая строка, CONTENT_TYPES не находит тип, браузер получает
  *  application/octet-stream и не рендерит как картинку. Подсматриваем в первые байты файла. */
@@ -306,17 +343,10 @@ function sniffImageContentType(full) {
     const buf = Buffer.alloc(300);
     const n = fs.readSync(fd, buf, 0, 300, 0);
     fs.closeSync(fd);
-    if (n >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
-    if (n >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-    const ascii6 = buf.toString("ascii", 0, Math.min(6, n));
-    if (ascii6 === "GIF87a" || ascii6 === "GIF89a") return "image/gif";
-    if (n >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
-    const head = buf.toString("utf8", 0, n).trimStart().toLowerCase();
-    if (head.startsWith("<svg") || head.startsWith("<?xml")) return "image/svg+xml";
+    return sniffImageTypeFromBuffer(buf.subarray(0, n));
   } catch {
-    /* ignore */
+    return null;
   }
-  return null;
 }
 
 app.get("/storage/:bucket/*", (req, res) => {
@@ -339,20 +369,10 @@ app.get("/storage/:bucket/*", (req, res) => {
 // Отдельный от /storage/upload путь: тот требует requireAdmin (доверенная загрузка контента
 // заданий), а сюда может постучаться любой авторизованный ученик. Раз аудитория шире — путь
 // вычисляем сами по req.user.sub, а не берём из тела запроса (иначе можно было бы перезаписать
-// чужой файл), и проверяем содержимое по магическим байтам, а не расширению из имени файла.
-const AVATAR_EXT = { "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp" };
-
-function sniffAvatarImageType(buf) {
-  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
-  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-  const ascii6 = buf.toString("ascii", 0, Math.min(6, buf.length));
-  if (ascii6 === "GIF87a" || ascii6 === "GIF89a") return "image/gif";
-  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
-  return null;
-}
-
+// чужой файл), и проверяем содержимое по магическим байтам (sniffImageTypeFromBuffer выше), а не
+// расширению из имени файла.
 function removeExistingAvatarFiles(userId) {
-  for (const ext of Object.values(AVATAR_EXT)) {
+  for (const ext of Object.values(IMAGE_EXT_BY_TYPE)) {
     const full = safeRelPath("avatars", `${userId}${ext}`);
     if (fs.existsSync(full)) fs.unlinkSync(full);
   }
@@ -361,8 +381,8 @@ function removeExistingAvatarFiles(userId) {
 app.post("/profile/avatar", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: { message: "Файл не получен" } });
-    const mime = sniffAvatarImageType(req.file.buffer);
-    const ext = AVATAR_EXT[mime];
+    const mime = sniffImageTypeFromBuffer(req.file.buffer);
+    const ext = IMAGE_EXT_BY_TYPE[mime];
     if (!ext) return res.status(400).json({ error: { message: "Поддерживаются только PNG, JPEG, GIF и WEBP" } });
 
     removeExistingAvatarFiles(req.user.sub);

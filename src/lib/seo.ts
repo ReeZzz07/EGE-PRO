@@ -23,9 +23,13 @@ export async function uploadOgImage(file: File): Promise<{ url?: string; error?:
 
   const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
   const path = `og-image-${Date.now()}${ext}`;
-  const { error } = await supabase.storage.from("seo").upload(path, file, { contentType: file.type, upsert: true });
-  if (error) return { error: (error as { message?: string }).message ?? "Не удалось загрузить файл" };
-  return { url: supabase.storage.from("seo").getPublicUrl(path).data.publicUrl };
+  const { data, error } = await supabase.storage.from("seo").upload(path, file, { contentType: file.type, upsert: true });
+  if (error) return { error: (error as { message?: string; error?: string }).message ?? (error as { error?: string }).error ?? "Не удалось загрузить файл" };
+  // data.path может отличаться от path выше — server.js подменяет расширение на реальное по
+  // магическим байтам файла, если имя на диске пользователя не совпадает с настоящим форматом
+  // (см. комментарий в docker/api/server.js, correctedPathForActualContent) — строим URL по нему,
+  // иначе картинка сохранится под одним именем, а og:image будет указывать на другое (404).
+  return { url: supabase.storage.from("seo").getPublicUrl(data?.path ?? path).data.publicUrl };
 }
 
 // Домен ещё не куплен — плейсхолдер. Задаётся сборке через VITE_SITE_URL (.env), используется
