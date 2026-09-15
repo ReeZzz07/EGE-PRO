@@ -15,10 +15,20 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'service_role') then
     create role service_role nologin noinherit bypassrls;
   end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-    create role authenticator noinherit login password :'authenticator_password';
-  end if;
 end $$;
+
+-- Роль authenticator — паролем, а не в блоке do $$ ... $$ выше: psql НЕ подставляет :'переменные'
+-- внутри $$-квотированных строк (та же логика, что для обычных '...'-строк — dollar-quoting
+-- специально означает "не трогать содержимое") — :'authenticator_password' там ушёл бы на сервер
+-- буквальным текстом и падал синтаксической ошибкой на самом ":". Обнаружено при первом реальном
+-- разворачивании на чистом volume (см. SETUP.md → "Прод-деплой") — до этого момента ни один
+-- volume в проекте не пересоздавался с нуля, поэтому баг ни разу не срабатывал. \gexec подставляет
+-- пароль здесь, на верхнем уровне запроса (до входа в какую-либо кавычку), собирает готовый
+-- CREATE ROLE через format(%L) (безопасно экранирует пароль как литерал) и исполняет его; если
+-- роль уже существует, select ничего не возвращает и \gexec не выполняет ничего.
+select format('create role authenticator noinherit login password %L', :'authenticator_password')
+where not exists (select 1 from pg_roles where rolname = 'authenticator')
+\gexec
 
 grant anon to authenticator;
 grant authenticated to authenticator;
