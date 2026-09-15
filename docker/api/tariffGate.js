@@ -5,12 +5,21 @@
 import { pool } from "./db.js";
 
 /** Тариф пользователя в разрезе, нужном ограничениям ИИ-репетитора ниже — один JOIN на оба
- * случая (дневной лимит и доступность проверки сочинений), вместо двух запросов на запрос. */
+ * случая (дневной лимит и доступность проверки сочинений), вместо двух запросов на запрос.
+ *
+ * tariff_expires_at (см. миграцию 0023_admin_user_management.sql) — если он в прошлом, пользователь
+ * для всех целей этой функции откатывается на условия бесплатного тарифа, как будто его платного
+ * tariff_id никогда не было: CASE ниже подставляет в JOIN 'free' вместо p.tariff_id в этом случае,
+ * а не просто зануляет price_rub/daily_ai_limit — так cache-код тарифа в профиле (для истории/
+ * отображения в админке) остаётся прежним, а фактические лимиты честно берутся из актуального
+ * бесплатного тарифа (он тоже может меняться админом, см. AdminTariffs.tsx).
+ */
 export async function resolveUserTariffGate(userId) {
   const { rows } = await pool.query(
     `select p.is_admin, coalesce(t.price_rub, 0) as price_rub, t.daily_ai_limit
      from public.profiles p
-     left join public.tariffs t on t.id = p.tariff_id
+     left join public.tariffs t
+       on t.id = (case when p.tariff_expires_at is not null and p.tariff_expires_at <= now() then 'free' else p.tariff_id end)
      where p.id = $1`,
     [userId]
   );

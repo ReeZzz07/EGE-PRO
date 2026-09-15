@@ -15,11 +15,11 @@ const TEST_EMAIL_DOMAIN = "tariffgate-test.local";
  * is_admin/tariff_id. Прямое SQL-подключение (не через PostgREST) — auth.uid() внутри триггеров
  * при этом null, что protect_admin_flag и enforce_subject_limit трактуют как доверенный контекст
  * (см. комментарии в самих миграциях), поэтому is_admin здесь можно выставлять свободно. */
-export async function createTestUser({ isAdmin = false, tariffId = "free" } = {}) {
+export async function createTestUser({ isAdmin = false, tariffId = "free", tariffExpiresAt = null } = {}) {
   const email = `t-${randomUUID()}@${TEST_EMAIL_DOMAIN}`;
   const { rows } = await pool.query(`insert into auth.users (email, encrypted_password, email_confirmed_at) values ($1, 'x', now()) returning id`, [email]);
   const id = rows[0].id;
-  await pool.query(`update public.profiles set is_admin = $2, tariff_id = $3 where id = $1`, [id, isAdmin, tariffId]);
+  await pool.query(`update public.profiles set is_admin = $2, tariff_id = $3, tariff_expires_at = $4 where id = $1`, [id, isAdmin, tariffId, tariffExpiresAt]);
   return id;
 }
 

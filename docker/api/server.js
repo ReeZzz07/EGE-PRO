@@ -26,6 +26,7 @@ import {
   reserveEssayCheckSlot,
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
+import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -469,6 +470,99 @@ app.post("/admin/import-archive", authMiddleware, requireAdmin, uploadArchive.si
     mediaFailed,
     errors: errors.slice(0, 50),
   });
+});
+
+// ─────────────────────── админка: пользователи ───────────────────────
+// Просмотр/поиск/правка + действия, которые требует 152-ФЗ по запросу субъекта персональных
+// данных: полная выгрузка, анонимизация, удаление. См. docker/api/adminUsers.js и миграцию
+// 0023_admin_user_management.sql (журнал admin_user_actions — кто/когда обращался к чьим данным).
+
+app.get("/admin/users", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const page = Math.max(0, Number(req.query.page) || 0);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
+    const q = req.query.q ? String(req.query.q).trim() : "";
+    res.json(await searchUsers({ q: q || undefined, page, pageSize }));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/admin/users/:id", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const detail = await getUserDetail(req.params.id);
+    if (!detail) return res.status(404).json({ error: "Пользователь не найден" });
+    res.json(detail);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// правка (в т.ч. персональная скидка, тариф и срок его действия) — любое подмножество полей,
+// см. updateUser() в adminUsers.js. isAdmin запрещаем менять на своём же аккаунте здесь — иначе
+// админ мог бы случайно (например, лишним кликом при массовой правке) сам себя разжаловать без
+// возможности отменить действие тем же аккаунтом.
+app.patch("/admin/users/:id", authMiddleware, requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  const patch = req.body ?? {};
+  if (patch.isAdmin !== undefined && targetId === req.user.sub) {
+    return res.status(400).json({ error: "Нельзя менять права администратора на собственном аккаунте здесь" });
+  }
+  try {
+    const result = await updateUser(targetId, patch);
+    if (result.error) return res.status(400).json({ error: result.error });
+    const email = await getUserEmail(targetId);
+    await logAdminAction(req.user.sub, targetId, email ?? "", "edit", patch);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// полная выгрузка персональных данных — ответ на запрос субъекта данных о доступе к своим
+// данным. Отдаём как файл на скачивание, не просто JSON-ответ — это то, что админ буквально
+// пересылает пользователю или прикладывает к письменному ответу на его запрос.
+app.get("/admin/users/:id/export", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const data = await exportUserData(req.params.id);
+    if (!data) return res.status(404).json({ error: "Пользователь не найден" });
+    await logAdminAction(req.user.sub, req.params.id, data.account.email, "view_export", {});
+    res.setHeader("content-disposition", `attachment; filename="user-${req.params.id}-export.json"`);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/admin/users/:id/anonymize", authMiddleware, requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  if (targetId === req.user.sub) return res.status(400).json({ error: "Нельзя анонимизировать собственный аккаунт" });
+  try {
+    const email = await getUserEmail(targetId);
+    if (!email) return res.status(404).json({ error: "Пользователь не найден" });
+    const result = await anonymizeUser(targetId);
+    if (result.error) return res.status(400).json({ error: result.error });
+    removeExistingAvatarFiles(targetId);
+    await logAdminAction(req.user.sub, targetId, email, "anonymize", {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.delete("/admin/users/:id", authMiddleware, requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  if (targetId === req.user.sub) return res.status(400).json({ error: "Нельзя удалить собственный аккаунт здесь — используй личный кабинет" });
+  try {
+    const email = await getUserEmail(targetId);
+    if (!email) return res.status(404).json({ error: "Пользователь не найден" });
+    removeExistingAvatarFiles(targetId);
+    await deleteUserCascade(targetId);
+    await logAdminAction(req.user.sub, targetId, email, "delete", {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
 });
 
 // ─────────────────────── ai-tutor ───────────────────────

@@ -1,0 +1,183 @@
+// Управление пользователями из админки (просмотр/поиск, правка, персональная скидка, экспорт и
+// удаление/анонимизация персональных данных — см. supabase/migrations/0023_admin_user_management.sql
+// и требования 152-ФЗ к работе с персональными данными). Вынесено из server.js в отдельный модуль
+// по тому же принципу, что tariffGate.js — чистая бизнес-логика, легко тестируемая без Express.
+import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
+import { pool } from "./db.js";
+
+/** Таблицы с прямым user_id, которые нужно включить в выгрузку персональных данных пользователя
+ * (см. exportUserData). essay_assessments сюда не входит — она ссылается на essay_submissions
+ * через submission_id, без собственного user_id (см. запрос в exportUserData ниже). Это фиксированный
+ * список имён таблиц из кода, не пользовательский ввод — интерполяция в SQL ниже безопасна. */
+const USER_DATA_TABLES = ["profile_subjects", "attempts", "diagnostics", "study_plans", "essay_submissions", "ai_messages", "hints_used", "exam_attempts", "topic_reviews"];
+
+export async function logAdminAction(adminId, targetUserId, targetEmail, action, details = {}) {
+  await pool.query(
+    `insert into public.admin_user_actions (admin_id, target_user_id, target_email, action, details) values ($1, $2, $3, $4, $5)`,
+    [adminId, targetUserId, targetEmail, action, JSON.stringify(details)]
+  );
+}
+
+export async function getUserEmail(id) {
+  const { rows } = await pool.query("select email from auth.users where id = $1", [id]);
+  return rows[0]?.email ?? null;
+}
+
+/** Список/поиск — по email или имени (ilike, регистронезависимо). tariff_active — платный тариф,
+ * действующий прямо сейчас (не free и срок либо не задан, либо ещё не истёк, см. resolveUserTariffGate
+ * в tariffGate.js — та же логика "истёк = как будто free", тут для отображения в списке). */
+export async function searchUsers({ q, page = 0, pageSize = 25 }) {
+  const where = q ? "where u.email ilike $1 or p.full_name ilike $1" : "";
+  const params = q ? [`%${q}%`] : [];
+  const { rows } = await pool.query(
+    `select u.id, u.email, u.created_at as registered_at, p.full_name, p.tariff_id, p.tariff_expires_at,
+            p.is_admin, p.discount_percent, p.anonymized_at,
+            (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active
+     from auth.users u
+     join public.profiles p on p.id = u.id
+     ${where}
+     order by u.created_at desc
+     limit $${params.length + 1} offset $${params.length + 2}`,
+    [...params, pageSize, page * pageSize]
+  );
+  const { rows: countRows } = await pool.query(`select count(*)::int as n from auth.users u join public.profiles p on p.id = u.id ${where}`, params);
+  return { rows, total: countRows[0].n };
+}
+
+/** Полная карточка пользователя для админки — профиль + тариф + список предметов. Не путать с
+ * exportUserData ниже: это витрина для UI (только то, что нужно показать сразу), экспорт —
+ * полная выгрузка ВСЕХ персональных данных по запросу субъекта (включая тексты сочинений, чат с
+ * ИИ и т.п.), их не нужно тащить в основную карточку. */
+export async function getUserDetail(id) {
+  const { rows } = await pool.query(
+    `select u.id, u.email, u.created_at as registered_at, u.email_confirmed_at,
+            p.full_name, p.grade, p.exam_year, p.goal, p.primary_subject, p.avatar_url,
+            p.is_admin, p.tariff_id, p.tariff_activated_at, p.tariff_expires_at, p.discount_percent,
+            p.anonymized_at, t.name as tariff_name, t.price_rub as tariff_price_rub,
+            (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active
+     from auth.users u
+     join public.profiles p on p.id = u.id
+     left join public.tariffs t on t.id = p.tariff_id
+     where u.id = $1`,
+    [id]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  const { rows: subjects } = await pool.query("select subject, added_at from public.profile_subjects where user_id = $1 order by added_at", [id]);
+  return { ...row, subjects };
+}
+
+/** patch — любое подмножество { fullName, email, tariffId, tariffExpiresAt, discountPercent,
+ * isAdmin }, отсутствующие ключи не трогаются. Смена tariffId сама выставляет tariff_activated_at =
+ * now() — так админ не обязан помнить об этом отдельным полем при каждой выдаче/продлении тарифа. */
+export async function updateUser(id, patch) {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    if (patch.email !== undefined) {
+      const dup = await client.query("select id from auth.users where email = $1 and id <> $2", [patch.email, id]);
+      if (dup.rows.length) {
+        await client.query("rollback");
+        return { error: "Этот email уже занят другим аккаунтом" };
+      }
+      await client.query("update auth.users set email = $2 where id = $1", [id, patch.email]);
+    }
+
+    const sets = [];
+    const params = [id];
+    const set = (col, value) => {
+      params.push(value);
+      sets.push(`${col} = $${params.length}`);
+    };
+    if (patch.fullName !== undefined) set("full_name", patch.fullName);
+    if (patch.isAdmin !== undefined) set("is_admin", patch.isAdmin);
+    if (patch.discountPercent !== undefined) set("discount_percent", patch.discountPercent);
+    if (patch.tariffExpiresAt !== undefined) set("tariff_expires_at", patch.tariffExpiresAt);
+    if (patch.tariffId !== undefined) {
+      set("tariff_id", patch.tariffId);
+      set("tariff_activated_at", new Date());
+    }
+    if (sets.length) {
+      await client.query(`update public.profiles set ${sets.join(", ")} where id = $1`, params);
+    }
+
+    await client.query("commit");
+    return {};
+  } catch (e) {
+    await client.query("rollback").catch(() => {});
+    return { error: String(e?.message ?? e) };
+  } finally {
+    client.release();
+  }
+}
+
+/** Полная выгрузка персональных данных пользователя — ответ на запрос субъекта данных (152-ФЗ).
+ * Всё, что где-либо ссылается на его user_id/id, включая тексты сочинений и переписку с
+ * ИИ-репетитором. Файл аватарки сюда не входит (бинарник, не текстовые персональные данные в
+ * БД) — только сам storage_path, по нему уже видно, что он существует. */
+export async function exportUserData(id) {
+  const { rows: userRows } = await pool.query("select id, email, raw_user_meta_data, email_confirmed_at, created_at from auth.users where id = $1", [id]);
+  if (!userRows[0]) return null;
+  const { rows: profileRows } = await pool.query("select * from public.profiles where id = $1", [id]);
+
+  // order by id, не created_at — topic_reviews (см. 0021_topic_reviews.sql) не имеет created_at
+  // вовсе (только updated_at), а id как identity-столбец есть у каждой таблицы из списка и сам по
+  // себе даёт тот же хронологический порядок.
+  const tables = {};
+  for (const table of USER_DATA_TABLES) {
+    const { rows } = await pool.query(`select * from public.${table} where user_id = $1 order by id`, [id]);
+    tables[table] = rows;
+  }
+  const { rows: assessments } = await pool.query(
+    `select ea.* from public.essay_assessments ea
+     join public.essay_submissions es on es.id = ea.submission_id
+     where es.user_id = $1
+     order by ea.id`,
+    [id]
+  );
+
+  return { exportedAt: new Date().toISOString(), account: userRows[0], profile: profileRows[0] ?? null, essay_assessments: assessments, ...tables };
+}
+
+/** Анонимизация — альтернатива полному удалению (deleteUserCascade ниже), когда нужно сохранить
+ * агрегатные строки (попытки, диагностику) для статистики, но стереть всё, что идентифицирует
+ * конкретного человека: email, имя, аватар, тексты сочинений и переписки с ИИ. Пароль заменяется
+ * на случайный (bcrypt-хеш от randomUUID — сам пароль никому не известен и не нужен), token_version
+ * увеличивается, чтобы уже выданные токены сразу отозвались — войти в аккаунт после этого нельзя.
+ * anonymized_at фиксирует момент — по нему UI показывает аккаунт как анонимизированный. */
+export async function anonymizeUser(id) {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const passwordHash = await bcrypt.hash(randomUUID(), 10);
+    await client.query("update auth.users set email = $2, encrypted_password = $3, raw_user_meta_data = '{}'::jsonb where id = $1", [
+      id,
+      `deleted-${id}@deleted.local`,
+      passwordHash,
+    ]);
+    await client.query(
+      "update public.profiles set full_name = null, avatar_url = null, anonymized_at = now(), token_version = token_version + 1 where id = $1",
+      [id]
+    );
+    await client.query("update public.essay_submissions set text = $2 where user_id = $1", [id, "[удалено по запросу пользователя]"]);
+    await client.query("update public.ai_messages set content = $2 where user_id = $1", [id, "[удалено по запросу пользователя]"]);
+    await client.query("commit");
+    return {};
+  } catch (e) {
+    await client.query("rollback").catch(() => {});
+    return { error: String(e?.message ?? e) };
+  } finally {
+    client.release();
+  }
+}
+
+/** Полное удаление аккаунта, инициированное админом (та же логика, что у самостоятельного
+ * DELETE /auth/account в server.js — единственная разница в том, кто инициирует и что не требуется
+ * пароль). Каскад по внешним ключам на auth.users уносит профиль, предметы, попытки, диагностику,
+ * план, сочинения, чат с ИИ — см. supabase/migrations/*.sql, "on delete cascade" везде, где есть
+ * user_id. Файл аватарки НЕ каскадируется (живёт на диске, не в БД) — чистит вызывающий код в
+ * server.js, как и в self-delete, до вызова этой функции. */
+export async function deleteUserCascade(id) {
+  await pool.query("delete from auth.users where id = $1", [id]);
+}

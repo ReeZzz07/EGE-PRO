@@ -64,6 +64,29 @@ test("resolveUserTariffGate: несуществующий пользовател
   assert.deepEqual(gate, { isAdmin: false, priceRub: 0, dailyAiLimit: null });
 });
 
+test("resolveUserTariffGate: истёкший платный тариф — откат на условия free, а не на бессрочный безлимит", async () => {
+  const yesterday = new Date(Date.now() - 24 * 3600 * 1000);
+  const userId = await createTestUser({ tariffId: "attestat", tariffExpiresAt: yesterday });
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    assert.deepEqual(gate, { isAdmin: false, priceRub: 0, dailyAiLimit: 3 });
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("resolveUserTariffGate: платный тариф с датой окончания в будущем — обычные платные условия", async () => {
+  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+  const userId = await createTestUser({ tariffId: "attestat", tariffExpiresAt: tomorrow });
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    assert.equal(gate.priceRub, 1990);
+    assert.equal(gate.dailyAiLimit, null);
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
 test("countTodayTutorMessages: считает только role=user и разрешённые режимы за сегодня", async () => {
   const userId = await createTestUser();
   try {

@@ -7,6 +7,7 @@ import type { View } from "./Header";
 import AdminTaskReview from "./AdminTaskReview";
 import AdminAiSettings from "./AdminAiSettings";
 import AdminTaskImport from "./AdminTaskImport";
+import AdminUsers from "./AdminUsers";
 import AdminTariffs from "./AdminTariffs";
 import AdminLegalDocs from "./AdminLegalDocs";
 import AdminSeoSettings from "./AdminSeoSettings";
@@ -69,7 +70,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "tariffs" | "scales" | "legal" | "seo">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(DEFAULT_CONTENT.capabilities);
@@ -147,6 +148,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
           ИИ-репетитор
         </button>
         <button
+          onClick={() => setTab("users")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "users" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Пользователи
+        </button>
+        <button
           onClick={() => setTab("tariffs")}
           className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "tariffs" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
         >
@@ -187,6 +194,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       {tab === "ai" && (
         <div className="mt-6">
           <AdminAiSettings />
+        </div>
+      )}
+
+      {tab === "users" && (
+        <div className="mt-6">
+          <AdminUsers />
         </div>
       )}
 
