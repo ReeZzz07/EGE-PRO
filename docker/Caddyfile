@@ -5,5 +5,19 @@
 # Let's Encrypt для обоих адресов при первом запуске — нужно только, чтобы A-запись домена И его
 # www-поддомена уже указывали на IP сервера, а порты 80/443 были открыты (см. scripts/setup-firewall.sh).
 {$SITE_HOST}, www.{$SITE_HOST} {
-	reverse_proxy web:3000
+	# Боты соцсетей (Telegram/VK/WhatsApp/Facebook и т.п.) не исполняют JS, поэтому не увидели бы
+	# og:image (он подставляется через useEffect, см. src/lib/useDocumentHead.ts) — на / и /tariffs
+	# их отдельно направляем на api, который отдаёт готовый HTML с актуальными og-тегами из БД (см.
+	# docker/api/server.js). Обычные браузеры на тех же путях продолжают идти в SPA как раньше —
+	# matcher строго по User-Agent, ничего в поведении для людей не меняется.
+	@bot {
+		header_regexp User-Agent "(?i)(bot|facebookexternalhit|telegrambot|vkshare|whatsapp|twitterbot|slackbot|discordbot|linkedinbot|redditbot|skypeuripreview|viber|odnoklassniki|pinterest)"
+		path / /tariffs
+	}
+	handle @bot {
+		reverse_proxy api:8787
+	}
+	handle {
+		reverse_proxy web:3000
+	}
 }

@@ -507,6 +507,73 @@ app.get("/sitemap.xml", (req, res) => {
   res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}</urlset>\n`);
 });
 
+// ─────────────────────── SEO-заглушка для ботов соцсетей ───────────────────────
+// useDocumentHead.ts (фронтенд) подставляет og:title/og:description/og:image через useEffect —
+// то есть ТОЛЬКО после того, как React смонтируется и выполнится JS в браузере. Боты Telegram, VK,
+// WhatsApp, Facebook и т.п. JS не исполняют — они читают ровно тот HTML, что вернул сервер первым
+// же ответом. index.html даёт статические og:title/og:description (на случай их сборки), но
+// og:image там нет вовсе (картинка выбирается в админке, в момент сборки её ещё не существует) —
+// значит превью в мессенджерах никогда не подхватывало бы картинку, как её ни грузи в /admin → SEO.
+// docker/Caddyfile матчит User-Agent известных ботов и шлёт ИХ (только их — обычные браузеры
+// продолжают идти на web:3000, всё как раньше) на этот роут: здесь читаем то же
+// public.content_blocks (key='seo'), что и админка/лендинг, и отдаём минимальный HTML с актуальными
+// тегами. Тело страницы ботам не нужно — только <head> с og/twitter-метатегами.
+const DEFAULT_PAGE_SEO = {
+  home: {
+    title: "ЕГЭ·ПРО — тренажёр с ИИ-репетитором",
+    description:
+      "ЕГЭ·ПРО — тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания из Открытого банка ФИПИ: математика, русский язык, информатика, физика, обществознание и другие предметы.",
+  },
+  tariffs: {
+    title: "Тарифы — ЕГЭ·ПРО",
+    description: "Бесплатный и платные тарифы подготовки к ЕГЭ с ИИ-репетитором: банк заданий ФИПИ, персональный план, проверка сочинений по критериям.",
+  },
+};
+const PAGE_KEY_BY_PATH = { "/": "home", "/tariffs": "tariffs" };
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+app.get(["/", "/tariffs"], async (req, res, next) => {
+  const pageKey = PAGE_KEY_BY_PATH[req.path];
+  const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  let saved = null;
+  try {
+    const { rows } = await pool.query("select data from public.content_blocks where key = 'seo'");
+    saved = rows[0]?.data ?? null;
+  } catch (e) {
+    console.warn("не удалось прочитать SEO-настройки из content_blocks, отдаю дефолт:", e?.message ?? e);
+  }
+  const title = saved?.pages?.[pageKey]?.title || DEFAULT_PAGE_SEO[pageKey].title;
+  const description = saved?.pages?.[pageKey]?.description || DEFAULT_PAGE_SEO[pageKey].description;
+  const ogImage = saved?.ogImage || "";
+  const canonicalUrl = `${domain}${req.path}`;
+
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.send(`<!doctype html>
+<html lang="ru"><head>
+<meta charset="UTF-8">
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeHtml(description)}">
+${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ""}
+<meta property="og:site_name" content="ЕГЭ·ПРО">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+${canonicalUrl ? `<meta property="og:url" content="${escapeHtml(canonicalUrl)}">` : ""}
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+${
+  ogImage
+    ? `<meta property="og:image" content="${escapeHtml(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image" content="${escapeHtml(ogImage)}">`
+    : `<meta name="twitter:card" content="summary">`
+}
+<meta name="twitter:title" content="${escapeHtml(title)}">
+<meta name="twitter:description" content="${escapeHtml(description)}">
+</head><body></body></html>
+`);
+});
+
 // ─────────────────────── админка: пользователи ───────────────────────
 // Просмотр/поиск/правка + действия, которые требует 152-ФЗ по запросу субъекта персональных
 // данных: полная выгрузка, анонимизация, удаление. См. docker/api/adminUsers.js и миграцию
