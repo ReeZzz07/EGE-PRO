@@ -6,7 +6,20 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
-import { DEFAULT_SEO, loadSeoSettings, saveSeoSettings, SEO_PAGE_LABELS, SITE_URL_PLACEHOLDER, type SeoPageKey, type SeoSettings } from "../lib/seo";
+import {
+  DEFAULT_SEO,
+  defaultSeoFiles,
+  loadSeoFiles,
+  loadSeoSettings,
+  saveSeoFiles,
+  saveSeoSettings,
+  SEO_PAGE_LABELS,
+  SITE_URL,
+  SITE_URL_PLACEHOLDER,
+  type SeoFiles,
+  type SeoPageKey,
+  type SeoSettings,
+} from "../lib/seo";
 import { Icon, useToast } from "./ui";
 
 const PAGE_PATH: Record<SeoPageKey, string> = { home: "/", tariffs: "/tariffs" };
@@ -17,10 +30,13 @@ export default function AdminSeoSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [seo, setSeo] = useState<SeoSettings>(DEFAULT_SEO);
+  const [files, setFiles] = useState<SeoFiles>(defaultSeoFiles());
+  const [filesSaving, setFilesSaving] = useState(false);
 
   useEffect(() => {
-    loadSeoSettings().then((s) => {
+    Promise.all([loadSeoSettings(), loadSeoFiles()]).then(([s, f]) => {
       setSeo(s);
+      setFiles(f);
       setLoading(false);
     });
   }, []);
@@ -38,11 +54,21 @@ export default function AdminSeoSettings() {
     else push("Сохранено — заголовки применятся при следующем открытии страницы", "ok");
   };
 
+  const saveFiles = async () => {
+    if (!profile) return;
+    setFilesSaving(true);
+    const res = await saveSeoFiles(files, profile.id);
+    setFilesSaving(false);
+    if (res.error) push(res.error, "err");
+    else push("Сохранено — /robots.txt и /sitemap.xml отдают новый текст сразу же", "ok");
+  };
+
   if (loading) {
     return <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
   }
 
   return (
+    <>
     <div className="sheet p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">SEO</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
@@ -57,11 +83,13 @@ export default function AdminSeoSettings() {
         </p>
       )}
 
-      <p className="mt-4 border-l-4 border-amber bg-amber/10 px-4 py-3 text-[13px] leading-relaxed text-ink2">
-        <strong className="text-ink">Домен пока не настроен:</strong> в canonical-ссылках, robots.txt и sitemap.xml стоит заглушка{" "}
-        <code className="font-mono">{SITE_URL_PLACEHOLDER}</code>. Когда появится реальный домен, задай его переменной{" "}
-        <code className="font-mono">VITE_SITE_URL</code> при сборке — здесь его редактировать не получится, эти файлы статические.
-      </p>
+      {SITE_URL === SITE_URL_PLACEHOLDER && (
+        <p className="mt-4 border-l-4 border-amber bg-amber/10 px-4 py-3 text-[13px] leading-relaxed text-ink2">
+          <strong className="text-ink">Домен пока не настроен:</strong> в canonical-ссылках стоит заглушка{" "}
+          <code className="font-mono">{SITE_URL_PLACEHOLDER}</code>. Когда появится реальный домен, задай его переменной{" "}
+          <code className="font-mono">VITE_SITE_URL</code> при сборке — а текст robots.txt ниже правь прямо здесь (sitemap.xml подхватит домен сам).
+        </p>
+      )}
 
       <div className="mt-5">
         <label className="block">
@@ -121,5 +149,33 @@ export default function AdminSeoSettings() {
         </button>
       </div>
     </div>
+
+    <div className="sheet mt-6 p-5 sm:p-6">
+      <h2 className="font-display text-lg font-bold">robots.txt</h2>
+      <p className="mt-1 text-[12.5px] text-ink2">
+        Отдаётся на <code className="font-mono">/robots.txt</code> сразу после сохранения — без пересборки фронтенда.{" "}
+        <code className="font-mono">/sitemap.xml</code> редактировать не нужно — собирается автоматически из текущего домена и списка страниц выше.
+      </p>
+
+      <div className="mt-5">
+        <textarea
+          value={files.robotsTxt}
+          onChange={(e) => setFiles((f) => ({ ...f, robotsTxt: e.target.value }))}
+          rows={5}
+          spellCheck={false}
+          className="input-blank w-full resize-y rounded-sm px-3 py-2 font-mono text-[12.5px]"
+        />
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <button onClick={() => setFiles(defaultSeoFiles())} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+          <Icon name="refresh" size={14} /> К дефолту (текущий домен)
+        </button>
+        <button onClick={saveFiles} disabled={filesSaving} className="btn btn-blue px-5 py-2.5 text-[13px]">
+          <Icon name="check" size={14} /> {filesSaving ? "Сохраняем…" : "Сохранить"}
+        </button>
+      </div>
+    </div>
+    </>
   );
 }

@@ -9,8 +9,7 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 
 // Домен ещё не куплен — плейсхолдер. Задаётся сборке через VITE_SITE_URL (.env), используется
-// здесь (canonical/og:url), а public/robots.txt и public/sitemap.xml — статические файлы, Vite их
-// не обрабатывает, так что при появлении реального домена их придётся поправить вручную отдельно.
+// здесь (canonical/og:url) и как основа дефолтного текста robots.txt/sitemap.xml ниже.
 export const SITE_URL_PLACEHOLDER = "https://ege-pro.ru";
 export const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) || SITE_URL_PLACEHOLDER;
 
@@ -64,5 +63,40 @@ export async function loadSeoSettings(): Promise<SeoSettings> {
 export async function saveSeoSettings(data: SeoSettings, userId: string): Promise<{ error?: string }> {
   if (!isSupabaseConfigured || !supabase) return { error: "Supabase не подключён — редактирование недоступно в гостевом режиме." };
   const { error } = await supabase.from("content_blocks").upsert({ key: "seo", data, updated_at: new Date().toISOString(), updated_by: userId });
+  return error ? { error: error.message } : {};
+}
+
+// ─────────────────────── robots.txt ───────────────────────
+// Раньше это был статический файл в public/ — при смене домена его приходилось редактировать в
+// репозитории и передеплоивать (см. историю коммитов). Теперь текст хранится в public.app_settings
+// (RLS — только админ, как и остальные ключи там, см. 0008_app_settings.sql) и отдаётся живьём на
+// каждый запрос GET /robots.txt (docker/api/server.js) — правка в админке применяется сразу, без
+// пересборки фронтенда. sitemap.xml, в отличие от robots.txt, — не редактируется вообще: у
+// приложения всего 2 страницы, ради которых есть смысл в поисковой выдаче (см. SEO_PAGE_LABELS
+// выше), так что docker/api/server.js собирает его сам из домена и этого же списка страниц — реже
+// расходится с реальностью, чем текст, который можно забыть обновить руками.
+export interface SeoFiles {
+  robotsTxt: string;
+}
+
+/** Тот же дефолт, что использует docker/api/server.js, если в app_settings ещё ничего не сохранено —
+ * здесь нужен только для того, чтобы форма в админке при первом открытии показывала осмысленный
+ * текст (с настоящим доменом сборки), а не пустую textarea. */
+export function defaultSeoFiles(): SeoFiles {
+  return { robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n` };
+}
+
+export async function loadSeoFiles(): Promise<SeoFiles> {
+  const def = defaultSeoFiles();
+  if (!isSupabaseConfigured || !supabase) return def;
+  const { data, error } = await supabase.from("app_settings").select("value").eq("key", "robots_txt").maybeSingle();
+  if (error || !data) return def;
+  const text = (data.value as { text?: string })?.text;
+  return { robotsTxt: text || def.robotsTxt };
+}
+
+export async function saveSeoFiles(files: SeoFiles, userId: string): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
+  const { error } = await supabase.from("app_settings").upsert({ key: "robots_txt", value: { text: files.robotsTxt }, updated_by: userId });
   return error ? { error: error.message } : {};
 }

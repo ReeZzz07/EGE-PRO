@@ -472,6 +472,41 @@ app.post("/admin/import-archive", authMiddleware, requireAdmin, uploadArchive.si
   });
 });
 
+// ─────────────────────── robots.txt / sitemap.xml ───────────────────────
+// Раньше — статические файлы в public/: смена домена требовала редактировать их в репозитории и
+// передеплоивать (найдено при первом прод-деплое на реальном домене, см. историю коммитов).
+// robots.txt теперь редактируется в /admin → SEO (public.app_settings, ключ robots_txt — та же
+// таблица и RLS, что у ai_provider/ai_system_prompt, см. resolveAiSettings выше) и отдаётся
+// публично (без authMiddleware — поисковым роботам не с чем авторизоваться) на каждый запрос, так
+// что правка в админке применяется сразу же, без пересборки фронтенда. sitemap.xml, в отличие от
+// robots.txt, НЕ редактируется вообще — у приложения всего 2 страницы, ради которых есть смысл в
+// поисковой выдаче (см. SEO_PAGE_LABELS во фронтенде), так что он всегда собирается заново из
+// домена и этого фиксированного списка — реже расходится с реальностью, чем текст, который можно
+// забыть обновить руками.
+function defaultRobotsTxt() {
+  const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  return `User-agent: *\nAllow: /\n${domain ? `\nSitemap: ${domain}/sitemap.xml\n` : ""}`;
+}
+
+app.get("/robots.txt", async (req, res) => {
+  let text;
+  try {
+    const { rows } = await pool.query("select value from public.app_settings where key = 'robots_txt'");
+    text = rows[0]?.value?.text;
+  } catch (e) {
+    console.warn("не удалось прочитать robots_txt из app_settings, отдаю дефолт:", e?.message ?? e);
+  }
+  res.setHeader("content-type", "text/plain; charset=utf-8");
+  res.send(text && text.trim() ? text : defaultRobotsTxt());
+});
+
+app.get("/sitemap.xml", (req, res) => {
+  const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  const entry = (path, freq, priority) => (domain ? `  <url>\n    <loc>${domain}${path}</loc>\n    <changefreq>${freq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n` : "");
+  res.setHeader("content-type", "application/xml; charset=utf-8");
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}</urlset>\n`);
+});
+
 // ─────────────────────── админка: пользователи ───────────────────────
 // Просмотр/поиск/правка + действия, которые требует 152-ФЗ по запросу субъекта персональных
 // данных: полная выгрузка, анонимизация, удаление. См. docker/api/adminUsers.js и миграцию

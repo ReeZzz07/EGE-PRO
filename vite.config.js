@@ -26,6 +26,11 @@ const apiProxy = backendHost
       "/admin": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/ai-tutor": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/health": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      // Раньше — статические файлы в public/ (см. src/lib/seo.ts, docker/api/server.js) — теперь
+      // генерируются api из public.app_settings, редактируются в /admin → SEO. Проксируем их сюда
+      // же, а не отдаём статикой, иначе этот путь конфликтовал бы с уже собранным файлом.
+      "/robots.txt": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/sitemap.xml": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
     }
   : undefined;
 
