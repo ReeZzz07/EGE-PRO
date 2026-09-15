@@ -114,6 +114,80 @@ scripts/backup.sh /куда-угодно    # или в указанный ка�
 api/web, перезаписывает текущие данные, поднимает всё обратно). Необратимо — сначала убедись, что
 если что-то нужно сохранить из текущего состояния, ты уже сделал новый бэкап.
 
+## Прод-деплой
+
+Отдельный конфиг — `docker-compose.prod.yml` (НЕ override над `docker-compose.yml`, а
+самостоятельный файл — см. комментарий в его начале про то, почему override здесь не подходит).
+Отличия от dev-стека: Postgres/PostgREST/`api`/`web` не публикуют порты на хост вообще —
+наружу смотрит только `caddy` (80/443), который сам получает и продлевает TLS-сертификат
+(Let's Encrypt) и проксирует всё на `web`; сборка фронтенда идёт внутри контейнера `web`
+(на Linux-сервере, в отличие от Windows-разработки, штрафа за bind-mount I/O нет — см. выше).
+
+Сервер — VPS с 2 vCPU / 4 ГБ RAM / 100 ГБ NVMe (например VDSina, тариф KVM 2/4/100,
+~1200 ₽/мес) под Ubuntu.
+
+1. **Провизион сервера и Docker**
+
+   ```bash
+   apt-get update && apt-get install -y ca-certificates curl gnupg
+   install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+   chmod a+r /etc/apt/keyrings/docker.asc
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+     https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+     > /etc/apt/sources.list.d/docker.list
+   apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+   ```
+
+2. **Firewall** — `scripts/setup-firewall.sh` (ufw: только 22/80/443, `default deny incoming`).
+
+3. **DNS** — A-запись домена платформы → IP сервера, ДО запуска (Caddy получает TLS-сертификат
+   от Let's Encrypt при первом старте и должен достучаться до домена снаружи).
+
+4. **Код и секреты**
+
+   ```bash
+   git clone <репозиторий> /opt/ege-pro && cd /opt/ege-pro
+   cp .env.example .env
+   ```
+
+   В `.env` — настоящие значения, не заглушки из dev:
+   - `VITE_SUPABASE_URL` — реальный `https://твой-домен` (не `http://localhost:3100`);
+   - `CORS_ORIGIN` — тот же `https://твой-домен`;
+   - `JWT_SECRET`, `POSTGRES_PASSWORD`, `AUTHENTICATOR_PASSWORD` — новые случайные строки
+     (не значения из dev-`.env`, если тот когда-либо был где-то опубликован);
+   - `ANTHROPIC_API_KEY` — опционально (без него ИИ-репетитор работает в офлайн-фолбэке).
+
+5. **Запуск**
+
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --build
+   docker compose -f docker-compose.prod.yml ps   # дождаться healthy у postgres/api/web
+   ```
+
+   Первый запуск `web` дольше обычного — внутри контейнера идёт `npm ci && npm run build`
+   (после этого держится `healthcheck` со `start_period: 90s`).
+
+6. **Первый администратор** — та же процедура, что в dev (см. «Первый администратор» выше),
+   только через реальный домен вместо `localhost:3100`, и `docker exec` — на контейнер
+   `ege-pro-postgres-1` этого сервера.
+
+7. **Бэкапы на расписании** — `scripts/backup.sh` работает без изменений (ходит в Postgres через
+   `docker compose exec`, не через порт — публикация порта в проде и не нужна). Добавь в cron,
+   например копию в отдельное хранилище (второй диск, S3-совместимый бакет) — сам скрипт кладёт
+   файлы только локально в `backups/`:
+
+   ```bash
+   0 3 * * * cd /opt/ege-pro && ./scripts/backup.sh >> /var/log/ege-pro-backup.log 2>&1
+   ```
+
+8. **Обновление после изменений в коде**
+
+   ```bash
+   cd /opt/ege-pro && git pull
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
+
 ## Архитектурные заметки
 
 - **Правки внутри `docker/api/` требуют `docker compose build api` + `docker compose up -d api`**,
