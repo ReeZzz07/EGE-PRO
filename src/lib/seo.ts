@@ -8,6 +8,26 @@
 // а не из поиска, поэтому у них фиксированные заголовки без формы в админке и noindex.
 import { supabase, isSupabaseConfigured } from "./supabase";
 
+const MAX_OG_IMAGE_BYTES = 5 * 1024 * 1024;
+const OG_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+/** Грузит картинку для og:image в отдельный бакет сториджа ("seo", см. docker/api/server.js
+ * KNOWN_BUCKETS) — тот же путь, что у admin-загрузки медиа к заданиям (adminTasks.ts), только
+ * бакет свой. Имя файла с таймстампом, а не фиксированное "og-image.png" — иначе повторная
+ * загрузка отдавала бы старую картинку из годового кэша браузера/CDN (см. cache-control на
+ * GET /storage/:bucket/* в server.js), пока URL не изменится. */
+export async function uploadOgImage(file: File): Promise<{ url?: string; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
+  if (!OG_IMAGE_TYPES.includes(file.type)) return { error: "Поддерживаются только PNG, JPEG, GIF и WEBP." };
+  if (file.size > MAX_OG_IMAGE_BYTES) return { error: "Файл слишком большой — до 5 МБ." };
+
+  const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
+  const path = `og-image-${Date.now()}${ext}`;
+  const { error } = await supabase.storage.from("seo").upload(path, file, { contentType: file.type, upsert: true });
+  if (error) return { error: (error as { message?: string }).message ?? "Не удалось загрузить файл" };
+  return { url: supabase.storage.from("seo").getPublicUrl(path).data.publicUrl };
+}
+
 // Домен ещё не куплен — плейсхолдер. Задаётся сборке через VITE_SITE_URL (.env), используется
 // здесь (canonical/og:url) и как основа дефолтного текста robots.txt/sitemap.xml ниже.
 export const SITE_URL_PLACEHOLDER = "https://ege-pro.ru";

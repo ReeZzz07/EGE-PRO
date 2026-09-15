@@ -3,7 +3,7 @@
 // lib/useDocumentHead.ts. Только Главная и Тарифы — единственные страницы, ради которых вообще
 // есть смысл подбирать текст под поисковую выдачу (см. комментарий в lib/seo.ts); у оферты и
 // политики конфиденциальности заголовки фиксированные в коде, см. lib/legal.ts, LEGAL_SEO.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
@@ -16,6 +16,7 @@ import {
   SEO_PAGE_LABELS,
   SITE_URL,
   SITE_URL_PLACEHOLDER,
+  uploadOgImage,
   type SeoFiles,
   type SeoPageKey,
   type SeoSettings,
@@ -32,6 +33,8 @@ export default function AdminSeoSettings() {
   const [seo, setSeo] = useState<SeoSettings>(DEFAULT_SEO);
   const [files, setFiles] = useState<SeoFiles>(defaultSeoFiles());
   const [filesSaving, setFilesSaving] = useState(false);
+  const [ogImageUploading, setOgImageUploading] = useState(false);
+  const ogImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([loadSeoSettings(), loadSeoFiles()]).then(([s, f]) => {
@@ -52,6 +55,15 @@ export default function AdminSeoSettings() {
     setSaving(false);
     if (res.error) push(res.error, "err");
     else push("Сохранено — заголовки применятся при следующем открытии страницы", "ok");
+  };
+
+  const onUploadOgImage = async (file: File) => {
+    setOgImageUploading(true);
+    const res = await uploadOgImage(file);
+    setOgImageUploading(false);
+    if (res.error) return push(res.error, "err");
+    setSeo((s) => ({ ...s, ogImage: res.url! }));
+    push("Картинка загружена — не забудь «Сохранить» ниже", "ok");
   };
 
   const saveFiles = async () => {
@@ -94,7 +106,7 @@ export default function AdminSeoSettings() {
       <div className="mt-5">
         <label className="block">
           <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">
-            Картинка для превью в соцсетях (og:image) <span className="font-normal normal-case">— полная ссылка на изображение, необязательно</span>
+            Картинка для превью в соцсетях (og:image) <span className="font-normal normal-case">— ссылка на изображение или загрузи файл, необязательно</span>
           </span>
           <input
             value={seo.ogImage}
@@ -103,6 +115,23 @@ export default function AdminSeoSettings() {
             className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 font-mono text-[12.5px]"
           />
         </label>
+        <div className="mt-2 flex flex-wrap items-center gap-2.5">
+          <button onClick={() => ogImageInputRef.current?.click()} disabled={ogImageUploading} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+            <Icon name="upload" size={14} /> {ogImageUploading ? "Загружаем…" : "Загрузить файл"}
+          </button>
+          <input
+            ref={ogImageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUploadOgImage(f);
+              e.target.value = "";
+            }}
+          />
+          {seo.ogImage && <img src={seo.ogImage} alt="" className="h-9 w-16 rounded-sm border-2 border-ink/15 object-cover" />}
+        </div>
       </div>
 
       <div className="mt-6 space-y-4">

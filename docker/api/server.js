@@ -232,13 +232,13 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
 // лимита слишком широко (это всё ещё контентная загрузка только для admin, см. requireAdmin ниже).
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
 
-// Единственные два реальных бакета (см. avatar.ts/adminTasks.ts на фронтенде) — раньше bucket
-// приходил из URL/тела запроса без проверки вообще, и только относительный путь p проверялся на
-// "..". Строка вида "..%2F..%2Fetc" в :bucket из GET /storage/:bucket/* (единственный публичный,
-// без authMiddleware — картинки должны открываться без входа) декодируется Express'ом в "../../etc"
+// Реальные бакеты (см. avatar.ts/adminTasks.ts/seo.ts на фронтенде) — раньше bucket приходил из
+// URL/тела запроса без проверки вообще, и только относительный путь p проверялся на "..". Строка
+// вида "..%2F..%2Fetc" в :bucket из GET /storage/:bucket/* (единственный публичный, без
+// authMiddleware — картинки должны открываться без входа) декодируется Express'ом в "../../etc"
 // ДО того, как попадает в path.join(STORAGE_ROOT, bucket, rel) — обходя проверку p и читая
-// произвольный файл с диска контейнера. Разрешаем только эти два конкретных имени.
-const KNOWN_BUCKETS = new Set(["avatars", "task-media"]);
+// произвольный файл с диска контейнера. Разрешаем только эти конкретные имена.
+const KNOWN_BUCKETS = new Set(["avatars", "task-media", "seo"]);
 
 function safeRelPath(bucket, p) {
   if (!KNOWN_BUCKETS.has(bucket)) throw new Error("неизвестный bucket");
