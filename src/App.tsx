@@ -53,7 +53,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
           <p className="mt-4 font-mono text-[11px] text-paper/40">© 2026 · сделано для тех, кто метит на 100 баллов</p>
           {(legalEntity.inn || legalEntity.ogrnip) && (
             <p className="mt-1 font-mono text-[11px] text-paper/40">
-              {legalEntity.inn && <>ИП, ИНН {legalEntity.inn}</>}
+              {legalEntity.inn && <>ИНН {legalEntity.inn}</>}
               {legalEntity.inn && legalEntity.ogrnip && " · "}
               {legalEntity.ogrnip && <>ОГРНИП {legalEntity.ogrnip}</>}
             </p>
