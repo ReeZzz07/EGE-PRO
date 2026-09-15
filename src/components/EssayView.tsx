@@ -242,6 +242,13 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
             </div>
             <p className="mt-3 border-l-4 border-blue bg-blue/5 px-3 py-2 text-[12.5px] leading-relaxed text-ink2">
               ИИ проверит ответ по критериям и подскажет, что улучшить. Это предварительная оценка — на настоящем ЕГЭ работу проверяют эксперты.
+              {spoken && (
+                <>
+                  {" "}
+                  <strong>Важно:</strong> ИИ читает только текст выше (расшифровку или то, что ты напечатал(а)) — произношение, интонацию и темп речи он не
+                  слышит и не оценивает.
+                </>
+              )}
             </p>
             <button onClick={submit} disabled={!text.trim()} className="btn btn-blue mt-4 px-6 py-3 text-sm">
               Отправить на проверку <Icon name="arrowR" size={16} />
@@ -311,7 +318,10 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
               </div>
             )}
 
-            <p className="mt-4 text-[11.5px] text-ink2">Оценка ИИ является предварительной. На ЕГЭ работу проверяют эксперты по утверждённым критериям.</p>
+            <p className="mt-4 text-[11.5px] text-ink2">
+              Оценка ИИ является предварительной. На ЕГЭ работу проверяют эксперты по утверждённым критериям.
+              {spoken && " Эта оценка — по тексту (расшифровке), а не по звучанию: произношение, интонацию и темп речи ИИ не оценивал."}
+            </p>
 
             <div className="mt-5 flex flex-wrap gap-2.5">
               <button onClick={() => setPhase("write")} className="btn btn-ink px-5 py-2.5 text-sm">

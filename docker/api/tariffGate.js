@@ -102,3 +102,56 @@ export async function releaseDailyAiSlot(reservationId) {
 export function isEssayCheckAllowed(gate) {
   return gate.isAdmin || gate.priceRub > 0;
 }
+
+/** Не тарифный лимит (в отличие от dailyAiLimit — тот вообще не действует на check_essay, см.
+ * countTodayTutorMessages), а защита от накрутки: isEssayCheckAllowed выше — это бинарный доступ
+ * "платный тариф = без числового лимита", но "без лимита" не должно означать "без потолка вообще" —
+ * иначе цикл запись→автора расшифровка→отправка в EssayView (см. ReadAloudView/useVoiceRecorder,
+ * запись голосом снижает трение для повторной отправки сильнее, чем печать вручную) даёт дешёвый
+ * способ прогнать платный ИИ-провайдер (Claude/Qwen) в цикле без реального ограничения. Формально
+ * этот трафик уже проходит через aiTutorLimiter (20 запросов/мин на IP, см. server.js), но это
+ * ограничение на минуту, а не на день, и не защищает конкретно одного пользователя. Число щедрое —
+ * реальному ученику, даже усердно переписывающему черновики, столько за день не нужно.
+ */
+const DAILY_ESSAY_CHECK_LIMIT = 40;
+
+/** Тот же паттерн, что у reserveDailyAiSlot выше (advisory-лок + резервация строки ДО обращения к
+ * модели, атомарно с проверкой) — иначе несколько параллельных check_essay от одного пользователя
+ * читали бы один и тот же "старый" count и все проходили бы проверку разом, как и с hint/chat. */
+export async function reserveEssayCheckSlot(gate, userId, { taskId, content }) {
+  if (gate.isAdmin) return { limited: false };
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`essay:${userId}`]);
+    const { rows } = await client.query(
+      `select count(*)::int as n from public.ai_messages
+       where user_id = $1 and role = 'user' and mode = 'check_essay'
+         and created_at >= date_trunc('day', now())`,
+      [userId]
+    );
+    if (rows[0].n >= DAILY_ESSAY_CHECK_LIMIT) {
+      await client.query("commit");
+      return { limited: true };
+    }
+    const inserted = await client.query(
+      `insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,'check_essay','user',$3) returning id`,
+      [userId, taskId ?? null, content ?? ""]
+    );
+    await client.query("commit");
+    return { limited: false, reservationId: inserted.rows[0].id };
+  } catch (e) {
+    await client.query("rollback").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Откатывает резервацию из reserveEssayCheckSlot, если сам вызов модели после неё не удался —
+ * тот же смысл, что у releaseDailyAiSlot: неудачная попытка не должна стоить ученику одной из его
+ * (щедрых, но конечных) проверок на день. */
+export async function releaseEssayCheckSlot(reservationId) {
+  if (reservationId == null) return;
+  await pool.query("delete from public.ai_messages where id = $1", [reservationId]).catch((e) => console.warn("releaseEssayCheckSlot failed", e));
+}

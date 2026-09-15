@@ -17,7 +17,15 @@ import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintP
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
-import { resolveUserTariffGate, countTodayTutorMessages, reserveDailyAiSlot, releaseDailyAiSlot, isEssayCheckAllowed } from "./tariffGate.js";
+import {
+  resolveUserTariffGate,
+  countTodayTutorMessages,
+  reserveDailyAiSlot,
+  releaseDailyAiSlot,
+  isEssayCheckAllowed,
+  reserveEssayCheckSlot,
+  releaseEssayCheckSlot,
+} from "./tariffGate.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -602,12 +610,28 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
           tierBlocked: true,
         });
       }
-      const assessment = await callClaudeEssayAssessor(settings, policy, task, body.essayText ?? "");
+      // isEssayCheckAllowed выше — это доступ (платный тариф да/нет), а не числовой лимит; сам по
+      // себе он не защищает от накрутки — см. reserveEssayCheckSlot в tariffGate.js. Резервируем
+      // строку СРАЗУ (до обращения к модели), тем же паттерном, что и у hint/chat ниже.
+      const essayLimitCheck = await reserveEssayCheckSlot(gate, userId, { taskId: body.taskId, content: body.essayText ?? "" });
+      if (essayLimitCheck.limited) {
+        return res.json({
+          text: "Дневной лимит проверок сочинений и развёрнутых ответов исчерпан — приходи завтра.",
+          limitReached: true,
+        });
+      }
+      let assessment;
+      try {
+        assessment = await callClaudeEssayAssessor(settings, policy, task, body.essayText ?? "");
+      } catch (e) {
+        // как и у hint/chat — неудачный вызов модели не должен стоить ученику одной из его
+        // (щедрых, но конечных) проверок на день.
+        await releaseEssayCheckSlot(essayLimitCheck.reservationId);
+        throw e;
+      }
+      // user-строка уже записана в reserveEssayCheckSlot выше — здесь дописываем только ответ.
       pool
-        .query(
-          `insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,$3,'user',$4), ($1,$2,$3,'assistant',$5)`,
-          [userId, body.taskId, body.mode, body.essayText ?? "", JSON.stringify(assessment)]
-        )
+        .query(`insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,'check_essay','assistant',$3)`, [userId, body.taskId, JSON.stringify(assessment)])
         .catch((e) => console.warn("audit log failed", e));
       return res.json({ assessment });
     }

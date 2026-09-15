@@ -13,7 +13,16 @@
 // упавшего прогона остался мусор — вызови sweepLeftoverTestUsers() из helpers.js вручную.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { checkDailyAiLimit, countTodayTutorMessages, isEssayCheckAllowed, releaseDailyAiSlot, reserveDailyAiSlot, resolveUserTariffGate } from "../tariffGate.js";
+import {
+  checkDailyAiLimit,
+  countTodayTutorMessages,
+  isEssayCheckAllowed,
+  releaseDailyAiSlot,
+  releaseEssayCheckSlot,
+  reserveDailyAiSlot,
+  reserveEssayCheckSlot,
+  resolveUserTariffGate,
+} from "../tariffGate.js";
 import { createTestUser, deleteTestUser, insertAiMessage, pool } from "./helpers.js";
 
 after(() => pool.end());
@@ -201,3 +210,108 @@ test("isEssayCheckAllowed: платный тариф или админ — да,
   assert.equal(isEssayCheckAllowed({ isAdmin: false, priceRub: 1990 }), true);
   assert.equal(isEssayCheckAllowed({ isAdmin: true, priceRub: 0 }), true);
 });
+
+// isEssayCheckAllowed выше — это допуск (платный тариф да/нет), а не числовой лимит; check_essay
+// не считается countTodayTutorMessages/dailyAiLimit вовсе (свой отдельный гейт) — без собственной
+// защиты платный тариф означал бы "без всякого потолка", что дёшево прогнать в цикле (особенно
+// теперь, когда голосовая запись в EssayView снижает трение для повторной отправки, см.
+// useVoiceRecorder.ts). reserveEssayCheckSlot — щедрый (40/день), но конечный бэкстоп именно от этого.
+test("reserveEssayCheckSlot: под лимитом — резервирует строку и не ограничивает", async () => {
+  const userId = await createTestUser({ tariffId: "attestat" });
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    const result = await reserveEssayCheckSlot(gate, userId, { taskId: "t1", content: "мой ответ" });
+    assert.equal(result.limited, false);
+    assert.ok(result.reservationId);
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("reserveEssayCheckSlot: админ никогда не ограничен, даже с исчерпанным лимитом", async () => {
+  const userId = await createTestUser({ isAdmin: true, tariffId: "free" });
+  try {
+    for (let i = 0; i < 45; i++) await insertAiMessage(userId, { mode: "check_essay", role: "user" });
+    const gate = await resolveUserTariffGate(userId);
+    const result = await reserveEssayCheckSlot(gate, userId, { taskId: "t1", content: "x" });
+    assert.equal(result.limited, false);
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("reserveEssayCheckSlot: hint/chat не влияют на этот лимит — свой отдельный счётчик", async () => {
+  const userId = await createTestUser({ tariffId: "attestat" }); // платный, dailyAiLimit=null (безлимит по hint/chat)
+  try {
+    for (let i = 0; i < 10; i++) await insertAiMessage(userId, { mode: "chat", role: "user" });
+    const gate = await resolveUserTariffGate(userId);
+    const result = await reserveEssayCheckSlot(gate, userId, { taskId: "t1", content: "x" });
+    assert.equal(result.limited, false, "check_essay считается отдельно от hint/chat");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("reserveEssayCheckSlot: на дневном лимите — не резервирует (не пишет строку)", async () => {
+  const userId = await createTestUser({ tariffId: "attestat" });
+  try {
+    for (let i = 0; i < 40; i++) await insertAiMessage(userId, { mode: "check_essay", role: "user" });
+    const gate = await resolveUserTariffGate(userId);
+    const before = await countModeMessages(userId, "check_essay");
+    const result = await reserveEssayCheckSlot(gate, userId, { taskId: "t1", content: "x" });
+    assert.equal(result.limited, true);
+    assert.equal(await countModeMessages(userId, "check_essay"), before, "лимитированная попытка не должна писать новую строку");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+// Тот же TOCTOU-паттерн, что и у reserveDailyAiSlot — конкурентные запросы одного пользователя не
+// должны пробить лимит все разом.
+test("reserveEssayCheckSlot: конкурентные запросы у одного пользователя не превышают лимит", async () => {
+  const userId = await createTestUser({ tariffId: "attestat" });
+  try {
+    for (let i = 0; i < 38; i++) await insertAiMessage(userId, { mode: "check_essay", role: "user" }); // остаётся 2 слота
+    const gate = await resolveUserTariffGate(userId);
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => reserveEssayCheckSlot(gate, userId, { taskId: "t1", content: `попытка ${i}` }))
+    );
+
+    const allowed = results.filter((r) => !r.limited).length;
+    assert.equal(allowed, 2, "ровно два конкурентных запроса должны пройти проверку при 2 оставшихся слотах");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("releaseEssayCheckSlot: откатывает резервацию — счётчик возвращается к прежнему значению", async () => {
+  const userId = await createTestUser({ tariffId: "attestat" });
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    const before = await countModeMessages(userId, "check_essay");
+    const reserved = await reserveEssayCheckSlot(gate, userId, { taskId: "t1", content: "x" });
+    assert.equal(reserved.limited, false);
+    assert.equal(await countModeMessages(userId, "check_essay"), before + 1);
+
+    await releaseEssayCheckSlot(reserved.reservationId);
+    assert.equal(await countModeMessages(userId, "check_essay"), before, "неудачная попытка не должна тратить дневной лимит");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("releaseEssayCheckSlot: reservationId отсутствует (админ/лимит исчерпан) — ничего не делает, не падает", async () => {
+  await assert.doesNotReject(() => releaseEssayCheckSlot(undefined));
+  await assert.doesNotReject(() => releaseEssayCheckSlot(null));
+});
+
+/** countTodayTutorMessages намеренно не считает check_essay (см. её же комментарий) — здесь для
+ *  тестов нужен именно счётчик по этому режиму, прямым запросом. */
+async function countModeMessages(userId, mode) {
+  const { rows } = await pool.query(
+    "select count(*)::int as n from public.ai_messages where user_id = $1 and role = 'user' and mode = $2 and created_at >= date_trunc('day', now())",
+    [userId, mode]
+  );
+  return rows[0].n;
+}
