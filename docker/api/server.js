@@ -27,6 +27,7 @@ import {
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
+import { initiatePayment, handleYookassaWebhook, getPaymentStatus } from "./payments.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -69,6 +70,16 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 // (docker/api/test/*.test.js), который гоняет через эти же роуты десятки запросов за секунды.
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 const aiTutorLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+// Создание платежа — редкое осознанное действие (не то, что ученик делает пачками), но всё же не
+// без лимита: без него можно было бы наплодить в ЮKassa (и в нашей БД) сколько угодно "pending"
+// платежей одним скриптом.
+const paymentsLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+// Вебхук публичный (ЮKassa шлёт его без авторизации, см. комментарий у самого роута) — лимит не
+// для настоящих уведомлений ЮKassa (их в разы меньше), а на случай, если кто-то найдёт URL и
+// начнёт слать туда мусорные id: каждый такой запрос дёргает fetchYookassaPayment (реальный
+// исходящий HTTP к ЮKassa), без лимита это было бы дешёвым способом нагрузить наш сервер чужими
+// исходящими запросами.
+const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 
 function signToken(user, tokenVersion) {
   // 7 дней, а не 30 — токен всё равно можно отозвать раньше (см. token_version ниже), но короче
@@ -592,6 +603,51 @@ ${
 <meta name="twitter:description" content="${escapeHtml(description)}">
 </head><body></body></html>
 `);
+});
+
+// ─────────────────────── оплата (ЮKassa) ───────────────────────
+// Разовая оплата тарифа на срок — без сохранённых карт и автопродления (см. миграцию
+// 0024_payments.sql). Бизнес-логика — в payments.js/yookassa.js, здесь только HTTP-обвязка.
+
+app.post("/payments/create", authMiddleware, paymentsLimiter, async (req, res) => {
+  const tariffId = String(req.body?.tariffId ?? "");
+  if (!tariffId) return res.status(400).json({ error: "Не указан тариф" });
+  const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  if (!siteUrl) return res.status(500).json({ error: "Не настроен домен сайта (CORS_ORIGIN)" });
+  try {
+    const result = await initiatePayment(req.user.sub, tariffId, siteUrl);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Публичный (без authMiddleware) — сюда стучится сама ЮKassa, а не браузер пользователя. Тело
+// вебхука не incoming-аутентифицировано (см. комментарий в payments.js про то, почему), поэтому
+// реальный статус всегда переспрашивается напрямую у ЮKassa внутри handleYookassaWebhook — этот
+// роут только передаёт id платежа, которым можно ошибиться (мусорный/чужой), но не подделать чужую
+// оплату этим запросом. Отвечаем 200 всегда (в т.ч. на мусор) — иначе ЮKassa считает доставку
+// неуспешной и продолжает ретраить уведомление сколько-то дней подряд.
+app.post("/payments/yookassa/webhook", webhookLimiter, async (req, res) => {
+  try {
+    const providerPaymentId = req.body?.object?.id;
+    if (providerPaymentId) await handleYookassaWebhook(providerPaymentId);
+  } catch (e) {
+    console.warn("ошибка обработки вебхука ЮKassa:", e?.message ?? e);
+  }
+  res.status(200).end();
+});
+
+app.get("/payments/:id/status", authMiddleware, async (req, res) => {
+  try {
+    const gate = await resolveUserTariffGate(req.user.sub);
+    const status = await getPaymentStatus(req.params.id, req.user.sub, gate.isAdmin);
+    if (!status) return res.status(404).json({ error: "Платёж не найден" });
+    res.json({ status });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
 });
 
 // ─────────────────────── админка: пользователи ───────────────────────

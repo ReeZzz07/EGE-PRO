@@ -1,12 +1,16 @@
 // Публичная страница тарифов (см. docs/tarifs.md) — видна и гостям (решают, регистрироваться
-// ли), и авторизованным (могут сменить тариф). Оплаты нет: кнопка "Выбрать" — это прямой
-// updateProfile({tariffId}), без списания денег (см. комментарий в supabase/migrations/0009_tariffs.sql).
+// ли), и авторизованным (могут сменить тариф). Бесплатный тариф — прямой updateProfile({tariffId}),
+// без денег; платный — разовая оплата через ЮKassa (см. lib/payments.ts, PaymentReturnView.tsx):
+// кнопка создаёт платёж и уводит на страницу подтверждения ЮKassa, tariff_id/tariff_expires_at
+// профилю выставляет вебхук на сервере (docker/api/payments.js) уже после реальной оплаты, а не
+// эта кнопка напрямую.
 // Администраторы тариф не выбирают вообще — у них полный доступ независимо от tariff_id в БД.
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
+import { createPayment } from "../lib/payments";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
 import { Icon, useToast } from "./ui";
@@ -42,11 +46,21 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       onNav({ name: "auth", mode: "signup" });
       return;
     }
+    if (t.priceRub === 0) {
+      setSwitching(t.id);
+      await updateProfile({ tariffId: t.id });
+      setSwitching(null);
+      push("Готово — активирован бесплатный тариф", "ok");
+      return;
+    }
     setSwitching(t.id);
-    await updateProfile({ tariffId: t.id });
+    const res = await createPayment(t.id);
     setSwitching(null);
-    push(t.priceRub === 0 ? "Готово — активирован бесплатный тариф" : `Готово — тариф «${t.name}» активирован`, "ok");
+    if (res.error) return push(res.error, "err");
+    if (res.confirmationUrl) window.location.href = res.confirmationUrl;
   };
+
+  const discountedPrice = (priceRub: number) => (profile?.discountPercent ? Math.round(priceRub * (1 - profile.discountPercent / 100) * 100) / 100 : null);
 
   if (loading) {
     return <p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка тарифов…</p>;
@@ -93,6 +107,11 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
               ) : (
                 <p className="font-display mt-2 text-2xl font-black">{money(t.priceRub)}</p>
               )}
+              {t.priceRub > 0 && discountedPrice(t.salePriceRub ?? t.priceRub) != null && (
+                <p className="mt-1 font-mono text-[12px] font-bold text-teal">
+                  К оплате с твоей скидкой −{profile!.discountPercent}%: {money(discountedPrice(t.salePriceRub ?? t.priceRub)!)}
+                </p>
+              )}
               <ul className="mt-4 flex-1 space-y-2 text-[13px] text-ink2">
                 {(t.features.length > 0
                   ? t.features
@@ -113,8 +132,13 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
                 disabled={isCurrent || switching === t.id}
                 className={`mt-5 w-full justify-center px-4 py-2.5 text-[13px] ${isCurrent ? "btn btn-ghost" : "btn btn-ink"}`}
               >
-                {isCurrent ? "Текущий тариф" : switching === t.id ? "Применяем…" : profile ? "Выбрать" : "Начать"}
+                {isCurrent ? "Текущий тариф" : switching === t.id ? "Открываем оплату…" : profile ? "Выбрать" : "Начать"}
               </button>
+              {isCurrent && t.priceRub > 0 && profile?.tariffExpiresAt && (
+                <p className="mt-2 text-center font-mono text-[11px] text-ink2">
+                  Оплачено до {new Date(profile.tariffExpiresAt).toLocaleDateString("ru-RU")}
+                </p>
+              )}
             </div>
           );
         })}

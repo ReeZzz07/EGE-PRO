@@ -35,6 +35,16 @@ export async function sweepLeftoverTestUsers() {
   await pool.query(`delete from auth.users where email like $1`, [`%@${TEST_EMAIL_DOMAIN}`]);
 }
 
+/** Строка платежа напрямую в БД, минуя ЮKassa (см. payments.js/yookassa.js) — applySucceededPayment
+ *  работает только с этой таблицей и public.profiles, ей не важно, как платёж туда попал. */
+export async function createTestPayment(userId, { tariffId = "attestat", amountRub = 1990, periodDays = 30, status = "pending" } = {}) {
+  const { rows } = await pool.query(
+    `insert into public.payments (user_id, tariff_id, amount_rub, period_days, status) values ($1,$2,$3,$4,$5) returning id`,
+    [userId, tariffId, amountRub, periodDays, status]
+  );
+  return rows[0].id;
+}
+
 export async function insertAiMessage(userId, { mode, role, createdAt }) {
   await pool.query(
     `insert into public.ai_messages (user_id, mode, role, content, created_at) values ($1, $2, $3, 'test', $4)`,

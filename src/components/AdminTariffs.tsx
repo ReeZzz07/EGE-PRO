@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { loadAllTariffs, createTariff, updateTariff, deleteTariff, type Tariff, type TariffInput } from "../lib/tariffs";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, saveTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
+import AdminPaymentSettings from "./AdminPaymentSettings";
 import { Icon, useToast } from "./ui";
 
 function TariffsPageTextCard() {
@@ -284,11 +285,15 @@ export default function AdminTariffs() {
 
   return (
     <>
-    <TariffsPageTextCard />
+    <AdminPaymentSettings />
+    <div className="mt-6">
+      <TariffsPageTextCard />
+    </div>
     <div className="sheet mt-6 p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">Тарифы</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
-        Видны на публичной странице «Тарифы», если активны. Оплаты пока нет — выбор тарифа пользователем просто записывает код тарифа в профиль.
+        Видны на публичной странице «Тарифы», если активны. Бесплатный тариф выбирается сразу; платные — через разовую оплату ЮKassa (см. карточку выше),
+        цена здесь — то, что показывается и с чего считается сумма к оплате.
       </p>
 
       {!isSupabaseConfigured && (

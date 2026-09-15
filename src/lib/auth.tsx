@@ -27,6 +27,13 @@ export interface Profile {
   /** id тарифа из public.tariffs; по умолчанию "free". Администраторы тариф игнорируют — им
    *  всегда доступно всё, независимо от того, что здесь записано (см. isAdmin). */
   tariffId?: string;
+  /** До какой даты действует платный тариф — null/undefined значит бессрочно (или free, ему
+   *  тариф вообще ни на что не влияет). См. resolveUserTariffGate в docker/api/tariffGate.js —
+   *  после этой даты сервер трактует пользователя так, будто у него free, независимо от tariffId. */
+  tariffExpiresAt?: number;
+  /** Персональная скидка в % на цену тарифа при оплате (см. AdminUsers.tsx) — null/undefined
+   *  значит скидки нет. */
+  discountPercent?: number;
   /** "preset:<id>" (см. lib/avatar.ts AVATAR_PRESETS) или путь к загруженному файлу
    *  ("avatars/<id>.<ext>", см. server.js POST /profile/avatar). Пусто — используем инициал имени. */
   avatarUrl?: string;
@@ -71,6 +78,10 @@ interface AuthCtx {
   /** перечитать profile.subjects из БД — вызывать после addProfileSubject/removeProfileSubject
    *  (см. lib/profileSubjects.ts), эти функции сами по себе локальный profile не трогают. */
   refreshSubjects: () => Promise<void>;
+  /** перечитать весь профиль из БД — нужно после оплаты тарифа (см. PaymentReturnView.tsx): сама
+   *  запись tariff_id/tariff_expires_at происходит на сервере, в вебхуке ЮKassa, а не через
+   *  updateProfile() этой вкладки, так что локальный profile о смене тарифа иначе не узнает. */
+  refreshProfile: () => Promise<void>;
 }
 
 const GUEST_KEY = "ege-pro.guest-profile.v1";
@@ -92,6 +103,28 @@ function saveGuestProfile(p: Profile | null) {
   } catch {
     /* ignore */
   }
+}
+
+/** Общий маппинг строки public.profiles → Profile — используется и при первой загрузке сессии, и
+ *  в refreshProfile() ниже (перечитать после оплаты, см. PaymentReturnView.tsx). */
+function profileFromRow(data: Record<string, unknown>, fallbackEmail: string, fallbackName: string, subjects: Subject[]): Profile {
+  return {
+    id: data.id as string,
+    name: (data.full_name as string) ?? fallbackName,
+    email: fallbackEmail,
+    grade: (data.grade as Grade) ?? undefined,
+    examYear: (data.exam_year as number) ?? undefined,
+    goal: (data.goal as Goal) ?? undefined,
+    dailyMinutes: (data.daily_minutes as number) ?? undefined,
+    primarySubject: (data.primary_subject as Subject) ?? undefined,
+    subjects,
+    onboardedAt: data.onboarded_at ? new Date(data.onboarded_at as string).getTime() : undefined,
+    isAdmin: (data.is_admin as boolean) ?? false,
+    tariffId: (data.tariff_id as string) ?? "free",
+    tariffExpiresAt: data.tariff_expires_at ? new Date(data.tariff_expires_at as string).getTime() : undefined,
+    discountPercent: (data.discount_percent as number) ?? undefined,
+    avatarUrl: (data.avatar_url as string) ?? undefined,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -117,21 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       if (cancelled) return;
       if (data) {
-        setProfile({
-          id: data.id,
-          name: data.full_name ?? fallbackName,
-          email: fallbackEmail,
-          grade: data.grade ?? undefined,
-          examYear: data.exam_year ?? undefined,
-          goal: data.goal ?? undefined,
-          dailyMinutes: data.daily_minutes ?? undefined,
-          primarySubject: data.primary_subject ?? undefined,
-          subjects,
-          onboardedAt: data.onboarded_at ? new Date(data.onboarded_at).getTime() : undefined,
-          isAdmin: data.is_admin ?? false,
-          tariffId: data.tariff_id ?? "free",
-          avatarUrl: data.avatar_url ?? undefined,
-        });
+        setProfile(profileFromRow(data, fallbackEmail, fallbackName, subjects));
       } else {
         setProfile({ id: userId, name: fallbackName, email: fallbackEmail, subjects });
       }
@@ -291,9 +310,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile((prev) => (prev ? { ...prev, subjects } : prev));
   };
 
+  const refreshProfile = async () => {
+    if (!isSupabaseConfigured || !supabase || !profile) return;
+    const [{ data }, subjects] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", profile.id).maybeSingle(),
+      loadProfileSubjects(profile.id),
+    ]);
+    if (data) setProfile(profileFromRow(data, profile.email, profile.name, subjects));
+  };
+
   return (
     <AuthCtx.Provider
-      value={{ profile, loading, isGuestMode: !isSupabaseConfigured, signUp, signIn, signOut, deleteAccount, changePassword, changeEmail, setAvatar, updateProfile, refreshSubjects }}
+      value={{
+        profile,
+        loading,
+        isGuestMode: !isSupabaseConfigured,
+        signUp,
+        signIn,
+        signOut,
+        deleteAccount,
+        changePassword,
+        changeEmail,
+        setAvatar,
+        updateProfile,
+        refreshSubjects,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthCtx.Provider>

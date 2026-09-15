@@ -13,12 +13,18 @@ import type { View } from "../components/Header";
 export function viewToPath(view: View): string {
   if (view.name === "tariffs") return "/tariffs";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
+  // /payment/return не строится через setView() изнутри приложения — на него попадают только
+  // редиректом от ЮKassa (см. PaymentReturnView.tsx) — но path нужен и для симметрии с
+  // pathToView ниже, и на случай, если пользователь обновит эту страницу в браузере.
+  if (view.name === "payment-return") return `/payment/return?paymentId=${encodeURIComponent(view.paymentId)}`;
   return "/";
 }
 
 /** null — путь не из наших публичных роутов (см. AppShell: тогда адресная строка мягко
- *  выправляется на "/", а не остаётся показывать несуществующую страницу). */
-export function pathToView(pathname: string): View | null {
+ *  выправляется на "/", а не остаётся показывать несуществующую страницу). search — сырой
+ *  window.location.search (с "?" или без), нужен только для /payment/return: единственный
+ *  роут здесь, у которого есть значимый параметр запроса, остальные — чистые пути. */
+export function pathToView(pathname: string, search = ""): View | null {
   switch (pathname) {
     case "/tariffs":
       return { name: "tariffs" };
@@ -26,6 +32,10 @@ export function pathToView(pathname: string): View | null {
       return { name: "legal", doc: "offer" };
     case "/privacy":
       return { name: "legal", doc: "privacy" };
+    case "/payment/return": {
+      const paymentId = new URLSearchParams(search).get("paymentId");
+      return paymentId ? { name: "payment-return", paymentId } : null;
+    }
     case "/":
       return { name: "landing" };
     default:
