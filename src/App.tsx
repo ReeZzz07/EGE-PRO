@@ -23,11 +23,17 @@ import SettingsView from "./components/SettingsView";
 import SubjectsView from "./components/SubjectsView";
 import Kim2027Changes from "./components/Kim2027Changes";
 import LegalDoc from "./components/LegalDoc";
+import PaymentReturnView from "./components/PaymentReturnView";
 import { pathToView, viewToPath } from "./lib/routes";
+import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   useTasksVersion();
+  const [legalEntity, setLegalEntity] = useState<LegalEntityInfo>(DEFAULT_LEGAL_ENTITY);
+  useEffect(() => {
+    loadLegalEntityInfo().then(setLegalEntity);
+  }, []);
   return (
     <footer className="border-t-2 border-ink bg-night text-paper">
       <div className="mx-auto grid max-w-[1600px] gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
@@ -45,6 +51,13 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             Учебный проект: не является официальным ресурсом ФИПИ или Рособрнадзора.
           </p>
           <p className="mt-4 font-mono text-[11px] text-paper/40">© 2026 · сделано для тех, кто метит на 100 баллов</p>
+          {(legalEntity.inn || legalEntity.ogrnip) && (
+            <p className="mt-1 font-mono text-[11px] text-paper/40">
+              {legalEntity.inn && <>ИП, ИНН {legalEntity.inn}</>}
+              {legalEntity.inn && legalEntity.ogrnip && " · "}
+              {legalEntity.ogrnip && <>ОГРНИП {legalEntity.ogrnip}</>}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
             <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
             <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>
@@ -139,7 +152,7 @@ function persistView(v: View) {
 function AppShell() {
   // Прямой заход по ссылке на публичный роут (/tariffs, /oferta, /privacy) должен показать именно
   // его сразу, а не landing с последующим морганием — поэтому читаем URL уже в инициализаторе.
-  const [view, setViewRaw] = useState<View>(() => pathToView(window.location.pathname) ?? { name: "landing" });
+  const [view, setViewRaw] = useState<View>(() => pathToView(window.location.pathname, window.location.search) ?? { name: "landing" });
   const { profile, loading } = useAuth();
   const restoredRef = useRef(false);
 
@@ -156,7 +169,7 @@ function AppShell() {
   // неизвестный путь при первой загрузке (не один из наших роутов) — контент уже landing
   // (см. инициализатор выше), поправляем и адресную строку, чтобы не показывать чужой URL.
   useEffect(() => {
-    if (!pathToView(window.location.pathname)) window.history.replaceState(null, "", "/");
+    if (!pathToView(window.location.pathname, window.location.search)) window.history.replaceState(null, "", "/");
   }, []);
 
   // кнопки «назад»/«вперёд» браузера — единственный случай, когда URL меняется В ОБХОД setView()
@@ -165,7 +178,7 @@ function AppShell() {
   // роутится, там просто нет пути, с которым можно было бы разойтись).
   useEffect(() => {
     const onPopState = () => {
-      const next = pathToView(window.location.pathname);
+      const next = pathToView(window.location.pathname, window.location.search);
       if (next) {
         setViewRaw(next);
       } else {
@@ -305,6 +318,7 @@ function AppShell() {
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
+        {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
       <Footer onNav={setView} />
