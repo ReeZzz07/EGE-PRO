@@ -648,6 +648,20 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// Мета-теги подтверждения владения доменом (Яндекс.Вебмастер, Google Search Console и т.п.) —
+// редактируются в /admin → «Почта» (public.app_settings, ключ site_verification, см.
+// src/lib/siteVerification.ts). Значение — уже готовая разметка тега, вставляем как есть (это
+// собственный ввод админа, экранировать нечего — сам текст и есть html).
+async function resolveSiteVerificationMetaTags() {
+  try {
+    const { rows } = await pool.query("select value from public.app_settings where key = 'site_verification'");
+    return rows[0]?.value?.metaTags || "";
+  } catch (e) {
+    console.warn("не удалось прочитать site_verification из app_settings:", e?.message ?? e);
+    return "";
+  }
+}
+
 app.get(["/", "/tariffs"], async (req, res, next) => {
   const pageKey = PAGE_KEY_BY_PATH[req.path];
   const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
@@ -662,6 +676,7 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
   const description = saved?.pages?.[pageKey]?.description || DEFAULT_PAGE_SEO[pageKey].description;
   const ogImage = saved?.ogImage || "";
   const canonicalUrl = `${domain}${req.path}`;
+  const verificationMetaTags = await resolveSiteVerificationMetaTags();
 
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.send(`<!doctype html>
@@ -669,7 +684,7 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 <meta charset="UTF-8">
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
-<meta name="yandex-verification" content="adf10d386b40cf55">
+${verificationMetaTags}
 ${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ""}
 <meta property="og:site_name" content="ЕГЭ·ПРО">
 <meta property="og:type" content="website">
