@@ -682,7 +682,11 @@ function escapeHtml(s) {
 async function resolveSiteVerificationMetaTags() {
   try {
     const { rows } = await pool.query("select value from public.app_settings where key = 'site_verification'");
-    return rows[0]?.value?.metaTags || "";
+    const v = rows[0]?.value || {};
+    const tags = [];
+    if (v.yandex) tags.push(`<meta name="yandex-verification" content="${escapeHtml(v.yandex)}">`);
+    if (v.google) tags.push(`<meta name="google-site-verification" content="${escapeHtml(v.google)}">`);
+    return tags.join("\n");
   } catch (e) {
     console.warn("не удалось прочитать site_verification из app_settings:", e?.message ?? e);
     return "";

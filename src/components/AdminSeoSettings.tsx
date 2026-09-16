@@ -21,6 +21,7 @@ import {
   type SeoPageKey,
   type SeoSettings,
 } from "../lib/seo";
+import { DEFAULT_SITE_VERIFICATION, loadSiteVerification, saveSiteVerification, type SiteVerificationSettings } from "../lib/siteVerification";
 import { Icon, useToast } from "./ui";
 
 const PAGE_PATH: Record<SeoPageKey, string> = { home: "/", tariffs: "/tariffs" };
@@ -35,11 +36,14 @@ export default function AdminSeoSettings() {
   const [filesSaving, setFilesSaving] = useState(false);
   const [ogImageUploading, setOgImageUploading] = useState(false);
   const ogImageInputRef = useRef<HTMLInputElement>(null);
+  const [verification, setVerification] = useState<SiteVerificationSettings>(DEFAULT_SITE_VERIFICATION);
+  const [verificationSaving, setVerificationSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([loadSeoSettings(), loadSeoFiles()]).then(([s, f]) => {
+    Promise.all([loadSeoSettings(), loadSeoFiles(), loadSiteVerification()]).then(([s, f, v]) => {
       setSeo(s);
       setFiles(f);
+      setVerification(v);
       setLoading(false);
     });
   }, []);
@@ -64,6 +68,15 @@ export default function AdminSeoSettings() {
     if (res.error) return push(res.error, "err");
     setSeo((s) => ({ ...s, ogImage: res.url! }));
     push("Картинка загружена — не забудь «Сохранить» ниже", "ok");
+  };
+
+  const saveVerification = async () => {
+    if (!profile) return;
+    setVerificationSaving(true);
+    const res = await saveSiteVerification(verification, profile.id);
+    setVerificationSaving(false);
+    if (res.error) push(res.error, "err");
+    else push("Сохранено — коды сразу подхватят поисковые роботы", "ok");
   };
 
   const saveFiles = async () => {
@@ -177,6 +190,44 @@ export default function AdminSeoSettings() {
           <Icon name="check" size={14} /> {saving ? "Сохраняем…" : "Сохранить"}
         </button>
       </div>
+    </div>
+
+    <div className="sheet mt-6 p-5 sm:p-6">
+      <h2 className="font-display text-lg font-bold">Подтверждение прав на домен</h2>
+      <p className="mt-1 text-[12.5px] text-ink2">
+        Код из личного кабинета Яндекс.Вебмастера или Google Search Console (способ подтверждения — «HTML-тег» / «meta-тег»), не весь тег целиком — сервер сам
+        соберёт из него правильную разметку. Применяется сразу, без пересборки, но только для поисковых роботов и ботов соцсетей: обычным посетителям браузер
+        отдаёт статическую страницу сайта, собранную заранее, поэтому это не подходит для проверок, которые открывает не робот, а человек.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Яндекс.Вебмастер</span>
+          <input
+            value={verification.yandex}
+            onChange={(e) => setVerification((v) => ({ ...v, yandex: e.target.value.trim() }))}
+            placeholder="adf10d386b40cf55"
+            className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 font-mono text-[13px]"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Google Search Console</span>
+          <input
+            value={verification.google}
+            onChange={(e) => setVerification((v) => ({ ...v, google: e.target.value.trim() }))}
+            placeholder="AbCdEf1234…"
+            className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 font-mono text-[13px]"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+      </div>
+
+      <button onClick={saveVerification} disabled={verificationSaving} className="btn btn-blue mt-4 px-5 py-2.5 text-[13px]">
+        <Icon name="check" size={14} /> {verificationSaving ? "Сохраняем…" : "Сохранить"}
+      </button>
     </div>
 
     <div className="sheet mt-6 p-5 sm:p-6">
