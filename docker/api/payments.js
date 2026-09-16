@@ -23,9 +23,9 @@ export async function initiatePayment(userId, tariffId, siteUrl) {
   if (!settings) return { error: "Приём оплаты пока не настроен — обратись к администратору." };
 
   const { rows } = await pool.query(
-    `select t.price_rub, t.sale_price_rub, t.name, p.discount_percent
-     from public.tariffs t, public.profiles p
-     where t.id = $1 and p.id = $2 and t.is_active`,
+    `select t.price_rub, t.sale_price_rub, t.name, p.discount_percent, u.email
+     from public.tariffs t, public.profiles p, auth.users u
+     where t.id = $1 and p.id = $2 and u.id = $2 and t.is_active`,
     [tariffId, userId]
   );
   const row = rows[0];
@@ -52,6 +52,7 @@ export async function initiatePayment(userId, tariffId, siteUrl) {
       description: `ЕГЭ·ПРО — тариф «${row.name}» на ${PERIOD_DAYS} дней`,
       returnUrl: `${siteUrl}/payment/return?paymentId=${paymentId}`,
       metadata: { paymentId },
+      customerEmail: row.email,
       // Свой же id строки — готовый уникальный ключ, отдельный randomUUID() не нужен: повторный
       // POST /payments/create с тем же paymentId (ретрай на сетевой сбой) не создаст в ЮKassa
       // второй платёж на ту же попытку и не спишет деньги дважды.

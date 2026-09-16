@@ -41,11 +41,18 @@ export async function resolveYookassaSettings() {
   return null;
 }
 
+// Чек обязателен по 54-ФЗ — без него ЮKassa отвечает 400 "Receipt is missing or illegal" и платёж
+// не создаётся вовсе (проверено на живом магазине). vat_code=1 — "без НДС": ИП на УСН «доходы» НДС
+// не платит. Если налоговый режим сменится (например, на ОСНО с реальной ставкой) — поменять
+// только здесь.
+const VAT_CODE_NO_VAT = 1;
+
 /** Создаёt платёж с подтверждением через редирект — возвращает { id, status, confirmationUrl }.
  *  idempotenceKey обязателен для ЮKassa (заголовок Idempotence-Key): повторный запрос с тем же
  *  ключом (например, из-за ретрая на сетевой сбой) возвращает тот же платёж, а не создаёт второй
  *  и не списывает деньги дважды. */
-export async function createYookassaPayment({ shopId, secretKey }, { amountRub, description, returnUrl, metadata, idempotenceKey }) {
+export async function createYookassaPayment({ shopId, secretKey }, { amountRub, description, returnUrl, metadata, idempotenceKey, customerEmail }) {
+  const amountValue = amountRub.toFixed(2);
   const resp = await fetchWithTimeout(`${YOOKASSA_API}/payments`, {
     method: "POST",
     headers: {
@@ -54,11 +61,24 @@ export async function createYookassaPayment({ shopId, secretKey }, { amountRub, 
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      amount: { value: amountRub.toFixed(2), currency: "RUB" },
+      amount: { value: amountValue, currency: "RUB" },
       capture: true,
       confirmation: { type: "redirect", return_url: returnUrl },
       description,
       metadata,
+      receipt: {
+        customer: { email: customerEmail },
+        items: [
+          {
+            description: description.slice(0, 128), // лимит ЮKassa на текст позиции в чеке
+            quantity: "1.00",
+            amount: { value: amountValue, currency: "RUB" },
+            vat_code: VAT_CODE_NO_VAT,
+            payment_mode: "full_payment",
+            payment_subject: "service",
+          },
+        ],
+      },
     }),
   });
   const data = await resp.json().catch(() => ({}));
