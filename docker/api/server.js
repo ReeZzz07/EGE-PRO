@@ -669,6 +669,7 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 <meta charset="UTF-8">
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
+<meta name="yandex-verification" content="adf10d386b40cf55">
 ${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ""}
 <meta property="og:site_name" content="ЕГЭ·ПРО">
 <meta property="og:type" content="website">
