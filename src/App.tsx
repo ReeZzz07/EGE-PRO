@@ -24,6 +24,7 @@ import SubjectsView from "./components/SubjectsView";
 import Kim2027Changes from "./components/Kim2027Changes";
 import LegalDoc from "./components/LegalDoc";
 import PaymentReturnView from "./components/PaymentReturnView";
+import ResetPasswordView from "./components/ResetPasswordView";
 import { pathToView, viewToPath } from "./lib/routes";
 import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
 
@@ -319,6 +320,7 @@ function AppShell() {
         {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
+        {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
       <Footer onNav={setView} />

@@ -25,6 +25,7 @@ export type View =
   | { name: "kim2027" }
   | { name: "legal"; doc: "offer" | "privacy" }
   | { name: "payment-return"; paymentId: string }
+  | { name: "reset-password"; token: string }
   | { name: "admin" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */

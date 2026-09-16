@@ -3,6 +3,7 @@
 // 0024_payments.sql и docker/api/yookassa.js (сам HTTP-клиент ЮKassa).
 import { pool } from "./db.js";
 import { createYookassaPayment, fetchYookassaPayment, resolveYookassaSettings } from "./yookassa.js";
+import { sendPaymentReceiptEmail } from "./mailer.js";
 
 const PERIOD_DAYS = 30;
 
@@ -95,6 +96,21 @@ export async function applySucceededPayment(paymentId) {
       newExpiry.toISOString(),
     ]);
     await client.query("commit");
+
+    // Чек — вне транзакции и best-effort: тариф уже применён, письмо не должно ни задерживать,
+    // ни (тем более) откатывать уже совершённое продление, если почта временно недоступна.
+    const receipt = await pool.query(
+      `select u.email, t.name as tariff_name from auth.users u, public.tariffs t where u.id = $1 and t.id = $2`,
+      [payment.user_id, payment.tariff_id]
+    );
+    if (receipt.rows[0]) {
+      sendPaymentReceiptEmail(receipt.rows[0].email, {
+        tariffName: receipt.rows[0].tariff_name,
+        amountRub: payment.amount_rub,
+        periodDays: payment.period_days,
+        expiresAt: newExpiry.toISOString(),
+      }).catch((e) => console.warn("не удалось отправить чек об оплате:", e?.message ?? e));
+    }
   } catch (e) {
     await client.query("rollback").catch(() => {});
     throw e;

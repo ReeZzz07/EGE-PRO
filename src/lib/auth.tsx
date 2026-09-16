@@ -68,6 +68,12 @@ interface AuthCtx {
   deleteAccount: (password: string) => Promise<AuthResult>;
   /** недоступно в гостевом режиме — там пароля никогда не было (см. signIn). */
   changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
+  /** Не раскрывает, зарегистрирован ли такой email — см. POST /auth/forgot-password: ответ
+   *  одинаковый в обоих случаях, письмо реально уходит только если аккаунт нашёлся. */
+  forgotPassword: (email: string) => Promise<AuthResult>;
+  /** Успешный вызов сразу логинит (см. authShim.resetPassword) — не заставляем ещё раз вводить
+   *  email/пароль на странице, куда и так только что попали по одноразовой ссылке из письма. */
+  resetPassword: (token: string, newPassword: string) => Promise<AuthResult>;
   /** возвращает свежую сессию под капотом (см. supabase.ts authShim.changeEmail) — profile.email
    *  обновится сам через onAuthStateChange, вызывать updateProfile для этого не нужно. */
   changeEmail: (password: string, newEmail: string) => Promise<AuthResult>;
@@ -227,6 +233,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return error ? { error: error.message } : {};
   };
 
+  const forgotPassword = async (email: string): Promise<AuthResult> => {
+    if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме пароля нет — сбрасывать нечего." };
+    const { error } = await supabase.auth.forgotPassword(email);
+    return error ? { error: error.message } : {};
+  };
+
+  const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
+    if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме пароля нет — сбрасывать нечего." };
+    const { error } = await supabase.auth.resetPassword(token, newPassword);
+    return error ? { error: error.message } : {};
+  };
+
   const changeEmail = async (password: string, newEmail: string): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме email — просто локальная метка, менять негде." };
     const { error } = await supabase.auth.changeEmail(password, newEmail);
@@ -330,6 +348,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         deleteAccount,
         changePassword,
+        forgotPassword,
+        resetPassword,
         changeEmail,
         setAvatar,
         updateProfile,

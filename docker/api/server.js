@@ -28,6 +28,8 @@ import {
 } from "./tariffGate.js";
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { initiatePayment, handleYookassaWebhook, getPaymentStatus } from "./payments.js";
+import { createActionToken, consumeActionToken } from "./authTokens.js";
+import { sendVerifyEmail, sendPasswordResetEmail } from "./mailer.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -131,15 +133,27 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
     const existing = await pool.query("select id from auth.users where email = $1", [email]);
     if (existing.rows.length) return res.status(400).json({ error: { message: "Пользователь с таким email уже существует" } });
     const hash = await bcrypt.hash(password, 10);
+    // email_confirmed_at раньше выставлялся сразу при регистрации (never null) — честнее оставить
+    // null здесь и проставить его по-настоящему только после перехода по ссылке из письма (см.
+    // GET /auth/verify-email ниже). Сам вход и доступ к приложению это НЕ блокирует — не хотим
+    // добавлять трение на регистрацию ради этого; просто теперь это поле значит то, что говорит.
     const { rows } = await pool.query(
-      `insert into auth.users (email, encrypted_password, raw_user_meta_data, email_confirmed_at)
-       values ($1, $2, $3, now()) returning id, email`,
+      `insert into auth.users (email, encrypted_password, raw_user_meta_data)
+       values ($1, $2, $3) returning id, email`,
       [email, hash, JSON.stringify({ full_name: full_name ?? "" })]
     );
     const user = rows[0];
     // свежий аккаунт — token_version всегда 0 (см. миграцию 0022, default), профиль ещё создаётся
     // триггером handle_new_user асинхронно с этим же insert, читать его здесь незачем.
     res.json({ data: { user }, error: null, access_token: signToken(user, 0) });
+    // Письмо — после ответа клиенту и best-effort: не должно ни задерживать регистрацию, ни ронять
+    // её при временной проблеме с почтой (SMTP ещё не настроен админом, провайдер недоступен и т.п.).
+    const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+    if (siteUrl) {
+      createActionToken(user.id, "verify_email")
+        .then((token) => sendVerifyEmail(user.email, `${siteUrl}/auth/verify-email?token=${encodeURIComponent(token)}`))
+        .catch((e) => console.warn("не удалось отправить письмо подтверждения email:", e?.message ?? e));
+    }
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
@@ -231,6 +245,74 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
     await pool.query("update auth.users set email = $2 where id = $1", [req.user.sub, newEmail]);
     const user = { id: req.user.sub, email: newEmail };
     res.json({ data: { user }, error: null, access_token: signToken(user, req.user.tv) });
+  } catch (e) {
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
+  }
+});
+
+// Ссылка из письма (см. sendVerifyEmail) — открывается напрямую в браузере, не через SPA, поэтому
+// просто рендерит готовую HTML-страницу с результатом, а не JSON. GET, а не POST: авторизация тут
+// не сессия пользователя, а сам факт владения токеном из ссылки — как и everywhere в этом файле,
+// где "аутентификация" — это возможность прочитать письмо, а не залогиненность в браузере.
+app.get("/auth/verify-email", async (req, res) => {
+  const token = String(req.query.token ?? "");
+  let ok = false;
+  try {
+    const userId = await consumeActionToken(token, "verify_email");
+    if (userId) {
+      await pool.query("update auth.users set email_confirmed_at = now() where id = $1", [userId]);
+      ok = true;
+    }
+  } catch (e) {
+    console.warn("ошибка подтверждения email:", e?.message ?? e);
+  }
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.send(`<!doctype html><html lang="ru"><body style="font-family:sans-serif;max-width:420px;margin:80px auto;text-align:center;color:#15172e;">
+${ok ? "<h2>Email подтверждён ✅</h2><p>Можешь закрыть эту вкладку и вернуться в приложение.</p>" : "<h2>Ссылка недействительна или устарела</h2><p>Запроси новое письмо подтверждения из личного кабинета.</p>"}
+</body></html>`);
+});
+
+// Намеренно ничем не выдаёт, есть ли такой email в базе — иначе этот эндпоинт стал бы способом
+// проверить, зарегистрирован ли конкретный человек на платформе (перечисление пользователей).
+// Ответ одинаковый в обоих случаях, письмо реально уходит только если аккаунт нашёлся.
+app.post("/auth/forgot-password", authLimiter, async (req, res) => {
+  const email = String(req.body?.email ?? "").trim();
+  const genericResponse = { data: { message: "Если такой email зарегистрирован, на него отправлено письмо со ссылкой для сброса пароля." }, error: null };
+  if (!email) return res.status(400).json({ error: { message: "Введи email" } });
+  try {
+    const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+    const { rows } = await pool.query("select id, email from auth.users where email = $1", [email]);
+    if (rows[0] && siteUrl) {
+      const token = await createActionToken(rows[0].id, "reset_password");
+      sendPasswordResetEmail(rows[0].email, `${siteUrl}/reset-password?token=${encodeURIComponent(token)}`).catch((e) =>
+        console.warn("не удалось отправить письмо сброса пароля:", e?.message ?? e)
+      );
+    }
+    res.json(genericResponse);
+  } catch (e) {
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
+  }
+});
+
+app.post("/auth/reset-password", authLimiter, async (req, res) => {
+  const { token, newPassword } = req.body ?? {};
+  if (!token || !newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: { message: "Новый пароль должен быть не короче 6 символов" } });
+  }
+  try {
+    const userId = await consumeActionToken(token, "reset_password");
+    if (!userId) return res.status(400).json({ error: { message: "Ссылка недействительна или устарела — запроси сброс пароля ещё раз" } });
+    const hash = await bcrypt.hash(newPassword, 10);
+    // Бампаем token_version, как и при обычной смене пароля (см. /auth/change-password) — все
+    // токены, выпущенные до сброса (в т.ч. те, что могли утечь вместе со скомпрометированным
+    // паролем), сразу перестают работать.
+    const { rows } = await pool.query(
+      "update auth.users set encrypted_password = $2 where id = $1 returning email",
+      [userId, hash]
+    );
+    const upd = await pool.query("update public.profiles set token_version = token_version + 1 where id = $1 returning token_version", [userId]);
+    const user = { id: userId, email: rows[0].email };
+    res.json({ data: { user }, error: null, access_token: signToken(user, upd.rows[0]?.token_version ?? 1) });
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }

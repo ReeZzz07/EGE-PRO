@@ -13,6 +13,7 @@ import AdminTariffs from "./AdminTariffs";
 import AdminLegalDocs from "./AdminLegalDocs";
 import AdminSeoSettings from "./AdminSeoSettings";
 import AdminScoreScales from "./AdminScoreScales";
+import AdminMailSettings from "./AdminMailSettings";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -71,7 +72,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [legalEntity, setLegalEntity] = useState<LegalEntityInfo>(DEFAULT_LEGAL_ENTITY);
@@ -187,6 +188,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         >
           SEO
         </button>
+        <button
+          onClick={() => setTab("mail")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "mail" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Почта
+        </button>
       </div>
 
       {tab === "tasks" && (
@@ -234,6 +241,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       {tab === "seo" && (
         <div className="mt-6">
           <AdminSeoSettings />
+        </div>
+      )}
+
+      {tab === "mail" && (
+        <div className="mt-6">
+          <AdminMailSettings />
         </div>
       )}
 

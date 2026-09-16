@@ -17,6 +17,9 @@ export function viewToPath(view: View): string {
   // редиректом от ЮKassa (см. PaymentReturnView.tsx) — но path нужен и для симметрии с
   // pathToView ниже, и на случай, если пользователь обновит эту страницу в браузере.
   if (view.name === "payment-return") return `/payment/return?paymentId=${encodeURIComponent(view.paymentId)}`;
+  // /reset-password — из письма (см. docker/api/mailer.js sendPasswordResetEmail), как и
+  // payment-return, изнутри приложения на этот экран не переходят через setView().
+  if (view.name === "reset-password") return `/reset-password?token=${encodeURIComponent(view.token)}`;
   return "/";
 }
 
@@ -35,6 +38,10 @@ export function pathToView(pathname: string, search = ""): View | null {
     case "/payment/return": {
       const paymentId = new URLSearchParams(search).get("paymentId");
       return paymentId ? { name: "payment-return", paymentId } : null;
+    }
+    case "/reset-password": {
+      const token = new URLSearchParams(search).get("token");
+      return token ? { name: "reset-password", token } : null;
     }
     case "/":
       return { name: "landing" };

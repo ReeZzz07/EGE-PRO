@@ -125,6 +125,28 @@ const authShim = {
     setSession(session, "SIGNED_IN");
     return { error: null };
   },
+  async forgotPassword(email: string) {
+    const resp = await apiFetch("/auth/forgot-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    return { error: null };
+  },
+  async resetPassword(token: string, newPassword: string) {
+    const resp = await apiFetch("/auth/reset-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, newPassword }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    const session = { access_token: json.access_token, user: json.data.user };
+    setSession(session, "SIGNED_IN");
+    return { error: null };
+  },
   async changeEmail(password: string, newEmail: string) {
     const resp = await apiFetch("/auth/change-email", {
       method: "POST",
