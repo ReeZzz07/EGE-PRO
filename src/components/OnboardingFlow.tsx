@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
 import { useTasksVersion } from "../lib/dbTasks";
@@ -7,6 +7,43 @@ import AuthScreen from "./AuthScreen";
 import type { View } from "./Header";
 
 type Step = "subject" | "quiz" | "auth" | "explainer";
+
+/** Черновик анкеты (шаги "subject"/"quiz") — сохраняется в localStorage, а не только в памяти
+ *  компонента: между шагом "auth" (создать профиль) и реальным входом теперь есть разрыв —
+ *  подтверждение email по ссылке из письма (см. AuthScreen.tsx/VerifyEmailView.tsx), которое почти
+ *  всегда открывается в НОВОЙ вкладке/окне, то есть в новом экземпляре этого компонента с пустым
+ *  состоянием. localStorage — единственное, что переживает такой переход (тот же origin, общий для
+ *  всех вкладок браузера). Очищается после успешного finalizeAndGo — дальше он не нужен. */
+const DRAFT_KEY = "ege-pro.onboarding-draft.v1";
+interface OnboardingDraft {
+  subject?: Subject;
+  grade?: Grade | null;
+  year?: "this" | "next" | null;
+  goal?: Goal | null;
+  minutes?: number | null;
+}
+function loadOnboardingDraft(): OnboardingDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? (JSON.parse(raw) as OnboardingDraft) : null;
+  } catch {
+    return null;
+  }
+}
+function saveOnboardingDraft(draft: OnboardingDraft) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* ignore */
+  }
+}
+function clearOnboardingDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** экспортируются — переиспользуются на странице профиля (см. ProfileView.tsx) для тех же полей,
  *  но уже РЕДАКТИРУЕМЫХ после онбординга, а не только при первом заполнении анкеты */
@@ -64,18 +101,47 @@ export default function OnboardingFlow({
 }) {
   const { profile, updateProfile } = useAuth();
   useTasksVersion();
-  const [step, setStep] = useState<Step>(initialSubject ? "quiz" : "subject");
-  const [subject, setSubject] = useState<Subject | undefined>(initialSubject);
-  const [grade, setGrade] = useState<Grade | null>(null);
-  const [year, setYear] = useState<"this" | "next" | null>(null);
-  const [goal, setGoal] = useState<Goal | null>(null);
-  const [minutes, setMinutes] = useState<number | null>(null);
+  // читаем черновик ровно один раз, при монтировании — если он есть, это и есть тот самый случай
+  // "вернулись по ссылке из письма подтверждения email" (см. комментарий у DRAFT_KEY выше).
+  // initialSubject — явный выбор предмета (например, ссылка "Пройди тест по физике" в подвале) —
+  // приоритетнее черновика; grade/year/goal/minutes от предмета не зависят, восстанавливаем их
+  // независимо от того, совпал ли предмет.
+  const [draft] = useState(() => loadOnboardingDraft());
+  const [subject, setSubject] = useState<Subject | undefined>(initialSubject ?? draft?.subject);
+  const [grade, setGrade] = useState<Grade | null>(draft?.grade ?? null);
+  const [year, setYear] = useState<"this" | "next" | null>(draft?.year ?? null);
+  const [goal, setGoal] = useState<Goal | null>(draft?.goal ?? null);
+  const [minutes, setMinutes] = useState<number | null>(draft?.minutes ?? null);
+  const [step, setStep] = useState<Step>(() => {
+    const effectiveSubject = initialSubject ?? draft?.subject;
+    if (!effectiveSubject) return "subject";
+    if (!(draft?.grade && draft?.year && draft?.goal && draft?.minutes)) return "quiz";
+    return profile ? "explainer" : "auth";
+  });
 
   const quizComplete = !!(grade && year && goal && minutes);
+
+  // синхронизируем черновик на каждое изменение анкеты — включая момент прямо перед уходом на
+  // шаг "auth" (создать профиль), после которого может случиться разрыв на подтверждение email.
+  useEffect(() => {
+    if (!subject) return;
+    saveOnboardingDraft({ subject, grade, year, goal, minutes });
+  }, [subject, grade, year, goal, minutes]);
+
+  // profile из useAuth() подгружается асинхронно даже после того, как сессия уже реально вошла
+  // (см. supabase.ts setSession → onAuthStateChange → loadProfile) — сразу после подтверждения
+  // email по ссылке (см. VerifyEmailView.tsx) он на первый рендер ещё null, хотя вход уже
+  // произошёл. Раз восстановленный черновик уже показывает анкету завершённой, а мы всё ещё на
+  // шаге "auth" — значит profile просто пока не успел долиться, довершаем переход сюда же, как
+  // только он появится (то же самое, что делает кнопка "Далее" на шаге "quiz" выше).
+  useEffect(() => {
+    if (step === "auth" && profile && quizComplete) setStep("explainer");
+  }, [step, profile, quizComplete]);
 
   const finalizeAndGo = (dest: "diagnostic" | "bank") => {
     const examYear = new Date().getFullYear() + (year === "next" ? 1 : 0);
     updateProfile({ grade: grade!, examYear, goal: goal!, dailyMinutes: minutes!, primarySubject: subject!, onboardedAt: Date.now() });
+    clearOnboardingDraft();
     if (dest === "diagnostic") onFinishToDiagnostic(subject!);
     else onFinishToBank();
   };

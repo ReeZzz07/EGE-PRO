@@ -25,6 +25,8 @@ import Kim2027Changes from "./components/Kim2027Changes";
 import LegalDoc from "./components/LegalDoc";
 import PaymentReturnView from "./components/PaymentReturnView";
 import ResetPasswordView from "./components/ResetPasswordView";
+import CheckEmailView from "./components/CheckEmailView";
+import VerifyEmailView from "./components/VerifyEmailView";
 import { pathToView, viewToPath } from "./lib/routes";
 import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
 
@@ -127,7 +129,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
 
 const VIEW_KEY = "ege-pro.lastView.v1";
 /** Экраны, которые не имеет смысла восстанавливать после перезагрузки страницы (переходные/гостевые). */
-const NON_RESUMABLE_VIEWS: View["name"][] = ["landing", "auth", "onboarding", "session-summary"];
+const NON_RESUMABLE_VIEWS: View["name"][] = ["landing", "auth", "onboarding", "session-summary", "check-email"];
 
 function loadPersistedView(): View | null {
   try {
@@ -248,10 +250,18 @@ function AppShell() {
         )}
 
         {view.name === "auth" && (
-          // регистрация (в отличие от входа) обязана пройти онбординг — иначе видит "0 предметов"
-          // с одной надписью "Пройди онбординг", хотя рус+база уже подключены автоматически
-          // (см. supabase/migrations/0015) и осталось только заполнить анкету
-          <AuthScreen onSuccess={(usedMode) => setView(usedMode === "signup" ? { name: "onboarding" } : { name: "home" })} initialMode={view.mode} onNav={setView} />
+          // onSuccess срабатывает только для входа — успешная регистрация сама уводит на
+          // check-email (аккаунт нерабочий до подтверждения, см. AuthScreen.tsx), а не сюда.
+          <AuthScreen onSuccess={() => setView({ name: "home" })} initialMode={view.mode} onNav={setView} />
+        )}
+
+        {view.name === "check-email" && <CheckEmailView email={view.email} onNav={setView} />}
+
+        {view.name === "verify-email" && (
+          // регистрация обязана пройти онбординг — иначе видит "0 предметов" с одной надписью
+          // "Пройди онбординг", хотя рус+база уже подключены автоматически (см. supabase/migrations/0015)
+          // и осталось только заполнить анкету
+          <VerifyEmailView token={view.token} onNav={setView} />
         )}
 
         {view.name === "onboarding" && (

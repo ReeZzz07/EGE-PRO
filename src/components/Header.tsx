@@ -26,6 +26,8 @@ export type View =
   | { name: "legal"; doc: "offer" | "privacy" }
   | { name: "payment-return"; paymentId: string }
   | { name: "reset-password"; token: string }
+  | { name: "check-email"; email: string }
+  | { name: "verify-email"; token: string }
   | { name: "admin" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */

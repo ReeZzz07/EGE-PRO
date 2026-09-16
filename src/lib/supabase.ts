@@ -79,10 +79,11 @@ const authShim = {
       body: JSON.stringify({ email, password, full_name: options?.data?.full_name ?? "" }),
     });
     const json = await resp.json();
-    if (!resp.ok) return { data: { user: null }, error: json.error ?? { message: resp.statusText } };
-    const session = { access_token: json.access_token, user: { ...json.data.user, user_metadata: { full_name: options?.data?.full_name ?? "" } } };
-    setSession(session, "SIGNED_IN");
-    return { data: { user: session.user }, error: null };
+    if (!resp.ok) return { data: { user: null, needsVerification: false }, error: json.error ?? { message: resp.statusText } };
+    // Не логиним — email пока не подтверждён (сервер больше не выдаёт access_token на signup, см.
+    // POST /auth/signup): аккаунт рабочий только после перехода по ссылке из письма, см. verifyEmail
+    // ниже. auth.tsx по needsVerification уводит на экран "проверь почту".
+    return { data: { user: json.data.user, needsVerification: true }, error: null };
   },
   async signInWithPassword({ email, password }: { email: string; password: string }) {
     const resp = await apiFetch("/auth/login", {
@@ -145,6 +146,28 @@ const authShim = {
     if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
     const session = { access_token: json.access_token, user: json.data.user };
     setSession(session, "SIGNED_IN");
+    return { error: null };
+  },
+  async verifyEmail(token: string) {
+    const resp = await apiFetch("/auth/verify-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
+    const session = { access_token: json.access_token, user: json.data.user };
+    setSession(session, "SIGNED_IN");
+    return { error: null };
+  },
+  async resendVerification(email: string) {
+    const resp = await apiFetch("/auth/resend-verification", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const json = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    if (!resp.ok) return { error: json.error ?? { message: resp.statusText } };
     return { error: null };
   },
   async changeEmail(password: string, newEmail: string) {

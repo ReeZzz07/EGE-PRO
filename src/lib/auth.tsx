@@ -52,6 +52,12 @@ export function effectivePrimarySubject(profile: Pick<Profile, "primarySubject" 
 
 interface AuthResult {
   error?: string;
+  /** машиночитаемый код ошибки — сейчас только "EMAIL_NOT_CONFIRMED" (см. signIn), по нему
+   *  AuthScreen показывает кнопку "отправить письмо ещё раз" вместо простого текста ошибки. */
+  code?: string;
+  /** true после успешной регистрации — аккаунт создан, но вход заблокирован до перехода по
+   *  ссылке из письма (см. signUp, POST /auth/verify-email). */
+  needsVerification?: boolean;
 }
 
 interface AuthCtx {
@@ -74,6 +80,12 @@ interface AuthCtx {
   /** Успешный вызов сразу логинит (см. authShim.resetPassword) — не заставляем ещё раз вводить
    *  email/пароль на странице, куда и так только что попали по одноразовой ссылке из письма. */
   resetPassword: (token: string, newPassword: string) => Promise<AuthResult>;
+  /** Успешный вызов сразу логинит (см. authShim.verifyEmail) — по клику на кнопку на странице
+   *  /verify-email (см. VerifyEmailView.tsx), не при самом открытии ссылки из письма. */
+  verifyEmail: (token: string) => Promise<AuthResult>;
+  /** Не раскрывает, зарегистрирован ли email и подтверждён ли — тот же анти-энумерация паттерн,
+   *  что у forgotPassword. */
+  resendVerification: (email: string) => Promise<AuthResult>;
   /** возвращает свежую сессию под капотом (см. supabase.ts authShim.changeEmail) — profile.email
    *  обновится сам через onAuthStateChange, вызывать updateProfile для этого не нужно. */
   changeEmail: (password: string, newEmail: string) => Promise<AuthResult>;
@@ -183,18 +195,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, name: string): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) {
+      // гостевой режим: нет настоящего бэкенда/почты — подтверждение email не имеет смысла,
+      // логиним сразу же, как и раньше.
       const p: Profile = { id: "guest-" + Date.now(), name, email, subjects: [] };
       saveGuestProfile(p);
       setProfile(p);
       return {};
     }
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+    const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
     if (error) return { error: error.message };
-    if (data.user) {
-      // профиль создастся триггером handle_new_user; подстрахуемся локальным значением сразу
-      setProfile({ id: data.user.id, name, email, subjects: [] });
-    }
-    return {};
+    // profile не устанавливаем — сессии нет, аккаунт рабочий только после подтверждения email
+    // (см. authShim.signUp). AuthScreen по needsVerification уводит на экран "проверь почту".
+    return { needsVerification: true };
   };
 
   const signIn = async (email: string, password: string): Promise<AuthResult> => {
@@ -207,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: "В гостевом режиме нет реальной проверки пароля — зарегистрируйся с этим email." };
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
+    if (error) return { error: error.message, code: error.code };
     return {};
   };
 
@@ -242,6 +254,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме пароля нет — сбрасывать нечего." };
     const { error } = await supabase.auth.resetPassword(token, newPassword);
+    return error ? { error: error.message } : {};
+  };
+
+  const verifyEmail = async (token: string): Promise<AuthResult> => {
+    if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме подтверждать нечего — аккаунт уже рабочий." };
+    const { error } = await supabase.auth.verifyEmail(token);
+    return error ? { error: error.message } : {};
+  };
+
+  const resendVerification = async (email: string): Promise<AuthResult> => {
+    if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме подтверждать нечего — аккаунт уже рабочий." };
+    const { error } = await supabase.auth.resendVerification(email);
     return error ? { error: error.message } : {};
   };
 
@@ -350,6 +374,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         changePassword,
         forgotPassword,
         resetPassword,
+        verifyEmail,
+        resendVerification,
         changeEmail,
         setAvatar,
         updateProfile,

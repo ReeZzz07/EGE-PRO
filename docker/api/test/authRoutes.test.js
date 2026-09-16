@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "node:crypto";
 import { deleteTestUser, pool } from "./helpers.js";
+import { createActionToken } from "../authTokens.js";
 
 const BASE_URL = process.env.API_TEST_BASE_URL || "http://localhost:3100";
 const TEST_EMAIL_DOMAIN = "authroutes-test.local";
@@ -27,6 +28,23 @@ async function login(body) {
   return { status: resp.status, json: await resp.json() };
 }
 
+async function verifyEmail(body) {
+  const resp = await fetch(`${BASE_URL}/auth/verify-email`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return { status: resp.status, json: await resp.json() };
+}
+
+async function resendVerification(body) {
+  const resp = await fetch(`${BASE_URL}/auth/resend-verification`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return { status: resp.status, json: await resp.json() };
+}
+
+/** signup() больше не подтверждает email (см. POST /auth/signup) — тесты, которым нужен рабочий
+ *  аккаунт без прохождения по ссылке из письма, подтверждают его прямым SQL, как и остальной QA
+ *  в этом проекте. */
+async function confirmEmail(userId) {
+  await pool.query("update auth.users set email_confirmed_at = now() where id = $1", [userId]);
+}
+
 after(() => pool.end());
 
 test("/auth/signup: без email или password — 400 с понятным сообщением, ничего не создаёт", async () => {
@@ -41,7 +59,7 @@ test("/auth/signup: без email или password — 400 с понятным с�
   assert.equal(r3.status, 400);
 });
 
-test("/auth/signup: успех — 200, access_token — валидный JWT с sub=id и правильным email", async () => {
+test("/auth/signup: успех — 200, needsVerification=true, БЕЗ access_token (email ещё не подтверждён)", async () => {
   const email = testEmail();
   const r = await signup({ email, password: "testpass123", full_name: "Тест Тестов" });
   try {
@@ -49,11 +67,8 @@ test("/auth/signup: успех — 200, access_token — валидный JWT с
     assert.equal(r.json.error, null);
     assert.equal(r.json.data.user.email, email);
     assert.ok(r.json.data.user.id);
-
-    const payload = jwt.decode(r.json.access_token);
-    assert.equal(payload.sub, r.json.data.user.id);
-    assert.equal(payload.role, "authenticated");
-    assert.equal(payload.email, email);
+    assert.equal(r.json.needsVerification, true);
+    assert.equal(r.json.access_token, undefined);
   } finally {
     await deleteTestUser(r.json.data.user.id);
   }
@@ -84,16 +99,83 @@ test("/auth/signup: повторная регистрация с тем же ema
   }
 });
 
-test("/auth/login: верные email+пароль — 200, access_token валиден", async () => {
+test("/auth/login: неподтверждённый email — 403, code EMAIL_NOT_CONFIRMED (даже с верным паролем)", async () => {
   const email = testEmail();
   const su = await signup({ email, password: "testpass123" });
   try {
+    const r = await login({ email, password: "testpass123" });
+    assert.equal(r.status, 403);
+    assert.equal(r.json.error.code, "EMAIL_NOT_CONFIRMED");
+  } finally {
+    await deleteTestUser(su.json.data.user.id);
+  }
+});
+
+test("/auth/login: верные email+пароль после подтверждения email — 200, access_token валиден", async () => {
+  const email = testEmail();
+  const su = await signup({ email, password: "testpass123" });
+  try {
+    await confirmEmail(su.json.data.user.id);
     const r = await login({ email, password: "testpass123" });
     assert.equal(r.status, 200);
     assert.equal(r.json.error, null);
     assert.equal(r.json.data.user.email, email);
     const payload = jwt.decode(r.json.access_token);
     assert.equal(payload.sub, su.json.data.user.id);
+  } finally {
+    await deleteTestUser(su.json.data.user.id);
+  }
+});
+
+test("/auth/verify-email: валидный токен — подтверждает email, отдаёт рабочий access_token, дальше логин проходит", async () => {
+  const email = testEmail();
+  const su = await signup({ email, password: "testpass123" });
+  try {
+    const token = await createActionToken(su.json.data.user.id, "verify_email");
+    const r = await verifyEmail({ token });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.error, null);
+    assert.equal(r.json.data.user.email, email);
+    const payload = jwt.decode(r.json.access_token);
+    assert.equal(payload.sub, su.json.data.user.id);
+
+    const login2 = await login({ email, password: "testpass123" });
+    assert.equal(login2.status, 200);
+  } finally {
+    await deleteTestUser(su.json.data.user.id);
+  }
+});
+
+test("/auth/verify-email: токен нельзя использовать дважды", async () => {
+  const email = testEmail();
+  const su = await signup({ email, password: "testpass123" });
+  try {
+    const token = await createActionToken(su.json.data.user.id, "verify_email");
+    const first = await verifyEmail({ token });
+    const second = await verifyEmail({ token });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 400);
+  } finally {
+    await deleteTestUser(su.json.data.user.id);
+  }
+});
+
+test("/auth/verify-email: неизвестный/пустой токен — 400, не падает", async () => {
+  const r1 = await verifyEmail({ token: "not-a-real-token" });
+  assert.equal(r1.status, 400);
+  const r2 = await verifyEmail({});
+  assert.equal(r2.status, 400);
+});
+
+test("/auth/resend-verification: не палит, существует ли email — одинаковый ответ для существующего неподтверждённого и незарегистрированного", async () => {
+  const email = testEmail();
+  const su = await signup({ email, password: "testpass123" });
+  try {
+    const existing = await resendVerification({ email });
+    const unknown = await resendVerification({ email: testEmail() });
+    assert.equal(existing.status, 200);
+    assert.equal(unknown.status, 200);
+    assert.equal(existing.json.data.message, unknown.json.data.message);
   } finally {
     await deleteTestUser(su.json.data.user.id);
   }

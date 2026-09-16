@@ -133,25 +133,24 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
     const existing = await pool.query("select id from auth.users where email = $1", [email]);
     if (existing.rows.length) return res.status(400).json({ error: { message: "Пользователь с таким email уже существует" } });
     const hash = await bcrypt.hash(password, 10);
-    // email_confirmed_at раньше выставлялся сразу при регистрации (never null) — честнее оставить
-    // null здесь и проставить его по-настоящему только после перехода по ссылке из письма (см.
-    // GET /auth/verify-email ниже). Сам вход и доступ к приложению это НЕ блокирует — не хотим
-    // добавлять трение на регистрацию ради этого; просто теперь это поле значит то, что говорит.
+    // email_confirmed_at остаётся null до перехода по ссылке из письма (см. POST /auth/verify-email
+    // ниже) — и до этого момента аккаунт нерабочий: signup НЕ возвращает access_token, а
+    // POST /auth/login ниже отдельно отказывает по паролю, если email не подтверждён. Раньше это
+    // поле не блокировало ничего (сразу логинили) — сейчас оно значит то, что говорит.
     const { rows } = await pool.query(
       `insert into auth.users (email, encrypted_password, raw_user_meta_data)
        values ($1, $2, $3) returning id, email`,
       [email, hash, JSON.stringify({ full_name: full_name ?? "" })]
     );
     const user = rows[0];
-    // свежий аккаунт — token_version всегда 0 (см. миграцию 0022, default), профиль ещё создаётся
-    // триггером handle_new_user асинхронно с этим же insert, читать его здесь незачем.
-    res.json({ data: { user }, error: null, access_token: signToken(user, 0) });
+    res.json({ data: { user }, error: null, needsVerification: true });
     // Письмо — после ответа клиенту и best-effort: не должно ни задерживать регистрацию, ни ронять
     // её при временной проблеме с почтой (SMTP ещё не настроен админом, провайдер недоступен и т.п.).
+    // Если письмо реально не уйдёт — аккаунт останется нерабочим до POST /auth/resend-verification.
     const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
     if (siteUrl) {
       createActionToken(user.id, "verify_email")
-        .then((token) => sendVerifyEmail(user.email, `${siteUrl}/auth/verify-email?token=${encodeURIComponent(token)}`))
+        .then((token) => sendVerifyEmail(user.email, `${siteUrl}/verify-email?token=${encodeURIComponent(token)}`))
         .catch((e) => console.warn("не удалось отправить письмо подтверждения email:", e?.message ?? e));
     }
   } catch (e) {
@@ -163,13 +162,20 @@ app.post("/auth/login", authLimiter, async (req, res) => {
   const { email, password } = req.body ?? {};
   try {
     const { rows } = await pool.query(
-      `select u.id, u.email, u.encrypted_password, coalesce(p.token_version, 0) as token_version
+      `select u.id, u.email, u.encrypted_password, u.email_confirmed_at, coalesce(p.token_version, 0) as token_version
        from auth.users u left join public.profiles p on p.id = u.id where u.email = $1`,
       [email]
     );
     const row = rows[0];
     if (!row || !(await bcrypt.compare(password ?? "", row.encrypted_password))) {
       return res.status(400).json({ error: { message: "Неверный email или пароль" } });
+    }
+    // код EMAIL_NOT_CONFIRMED — фронтенд по нему показывает кнопку "отправить письмо ещё раз"
+    // (POST /auth/resend-verification), а не просто текст ошибки, см. AuthScreen.tsx.
+    if (!row.email_confirmed_at) {
+      return res
+        .status(403)
+        .json({ error: { message: "Подтверди почту — мы прислали письмо со ссылкой при регистрации.", code: "EMAIL_NOT_CONFIRMED" } });
     }
     res.json({ data: { user: { id: row.id, email: row.email } }, error: null, access_token: signToken(row, row.token_version) });
   } catch (e) {
@@ -250,26 +256,47 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
   }
 });
 
-// Ссылка из письма (см. sendVerifyEmail) — открывается напрямую в браузере, не через SPA, поэтому
-// просто рендерит готовую HTML-страницу с результатом, а не JSON. GET, а не POST: авторизация тут
-// не сессия пользователя, а сам факт владения токеном из ссылки — как и everywhere в этом файле,
-// где "аутентификация" — это возможность прочитать письмо, а не залогиненность в браузере.
-app.get("/auth/verify-email", async (req, res) => {
-  const token = String(req.query.token ?? "");
-  let ok = false;
+// Ссылка из письма (см. sendVerifyEmail) ведёт на фронтенд-роут /verify-email (см. routes.ts) —
+// он и вызывает этот эндпоинт по клику на кнопку внутри страницы, не при самом открытии ссылки.
+// Так намеренно: некоторые корпоративные антифишинг-сканеры (Outlook Safe Links и т.п.) сами
+// открывают все ссылки из письма ещё до реального пользователя — если бы страница подтверждала
+// email сразу при открытии, одноразовый токен сгорал бы от сканера, а не от настоящего клика.
+// Успех отдаёт свежий access_token (как login) — фронтенд сразу логинит и ведёт на онбординг.
+app.post("/auth/verify-email", authLimiter, async (req, res) => {
+  const token = String(req.body?.token ?? "");
+  if (!token) return res.status(400).json({ error: { message: "Токен обязателен" } });
   try {
     const userId = await consumeActionToken(token, "verify_email");
-    if (userId) {
-      await pool.query("update auth.users set email_confirmed_at = now() where id = $1", [userId]);
-      ok = true;
-    }
+    if (!userId) return res.status(400).json({ error: { message: "Ссылка недействительна или устарела — запроси новое письмо" } });
+    const { rows } = await pool.query("update auth.users set email_confirmed_at = now() where id = $1 returning id, email", [userId]);
+    const user = rows[0];
+    const tv = await pool.query("select coalesce(token_version, 0) as token_version from public.profiles where id = $1", [userId]);
+    res.json({ data: { user }, error: null, access_token: signToken(user, tv.rows[0]?.token_version ?? 0) });
   } catch (e) {
-    console.warn("ошибка подтверждения email:", e?.message ?? e);
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
-  res.setHeader("content-type", "text/html; charset=utf-8");
-  res.send(`<!doctype html><html lang="ru"><body style="font-family:sans-serif;max-width:420px;margin:80px auto;text-align:center;color:#15172e;">
-${ok ? "<h2>Email подтверждён ✅</h2><p>Можешь закрыть эту вкладку и вернуться в приложение.</p>" : "<h2>Ссылка недействительна или устарела</h2><p>Запроси новое письмо подтверждения из личного кабинета.</p>"}
-</body></html>`);
+});
+
+// Анти-энумерация — тот же паттерн, что у /auth/forgot-password ниже: ответ одинаковый независимо
+// от того, существует ли email и подтверждён ли он, письмо реально уходит только если аккаунт
+// нашёлся и ещё не подтверждён.
+app.post("/auth/resend-verification", authLimiter, async (req, res) => {
+  const email = String(req.body?.email ?? "").trim();
+  const genericResponse = { data: { message: "Если такой email зарегистрирован и ещё не подтверждён, на него отправлено новое письмо." }, error: null };
+  if (!email) return res.status(400).json({ error: { message: "Введи email" } });
+  try {
+    const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+    const { rows } = await pool.query("select id, email from auth.users where email = $1 and email_confirmed_at is null", [email]);
+    if (rows[0] && siteUrl) {
+      const token = await createActionToken(rows[0].id, "verify_email");
+      sendVerifyEmail(rows[0].email, `${siteUrl}/verify-email?token=${encodeURIComponent(token)}`).catch((e) =>
+        console.warn("не удалось отправить письмо подтверждения email:", e?.message ?? e)
+      );
+    }
+    res.json(genericResponse);
+  } catch (e) {
+    res.status(500).json({ error: { message: String(e?.message ?? e) } });
+  }
 });
 
 // Намеренно ничем не выдаёт, есть ли такой email в базе — иначе этот эндпоинт стал бы способом

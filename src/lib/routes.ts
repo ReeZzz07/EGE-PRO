@@ -20,6 +20,9 @@ export function viewToPath(view: View): string {
   // /reset-password — из письма (см. docker/api/mailer.js sendPasswordResetEmail), как и
   // payment-return, изнутри приложения на этот экран не переходят через setView().
   if (view.name === "reset-password") return `/reset-password?token=${encodeURIComponent(view.token)}`;
+  // /verify-email — из письма подтверждения (см. docker/api/server.js POST /auth/signup), та же
+  // логика, что и у reset-password выше.
+  if (view.name === "verify-email") return `/verify-email?token=${encodeURIComponent(view.token)}`;
   return "/";
 }
 
@@ -42,6 +45,10 @@ export function pathToView(pathname: string, search = ""): View | null {
     case "/reset-password": {
       const token = new URLSearchParams(search).get("token");
       return token ? { name: "reset-password", token } : null;
+    }
+    case "/verify-email": {
+      const token = new URLSearchParams(search).get("token");
+      return token ? { name: "verify-email", token } : null;
     }
     case "/":
       return { name: "landing" };

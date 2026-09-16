@@ -14,6 +14,8 @@ function testEmail() {
   return `t-${randomUUID()}@${TEST_EMAIL_DOMAIN}`;
 }
 
+// signup() больше не отдаёт access_token напрямую (email не подтверждён, см. POST /auth/signup) —
+// подтверждаем прямым SQL и логинимся за токеном, как и в остальных тестах этого проекта.
 async function signup() {
   const email = testEmail();
   const resp = await fetch(`${BASE_URL}/auth/signup`, {
@@ -22,7 +24,15 @@ async function signup() {
     body: JSON.stringify({ email, password: PASSWORD, full_name: "Тест Удаление" }),
   });
   const json = await resp.json();
-  return { id: json.data.user.id, token: json.access_token };
+  const id = json.data.user.id;
+  await pool.query("update auth.users set email_confirmed_at = now() where id = $1", [id]);
+  const loginResp = await fetch(`${BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password: PASSWORD }),
+  });
+  const loginJson = await loginResp.json();
+  return { id, token: loginJson.access_token };
 }
 
 async function deleteAccount(token, password) {

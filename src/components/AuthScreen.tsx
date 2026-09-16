@@ -17,7 +17,7 @@ export default function AuthScreen({
   initialMode?: "signup" | "login";
   onNav: (v: View) => void;
 }) {
-  const { signUp, signIn, forgotPassword, isGuestMode } = useAuth();
+  const { signUp, signIn, forgotPassword, resendVerification, isGuestMode } = useAuth();
   const [mode, setMode] = useState<"signup" | "login" | "forgot">(initialMode);
   const [forgotSent, setForgotSent] = useState(false);
   const [name, setName] = useState("");
@@ -27,9 +27,25 @@ export default function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // true — вход отказал именно из-за неподтверждённого email (см. POST /auth/login,
+  // code: "EMAIL_NOT_CONFIRMED"), тогда вместо простого текста ошибки показываем кнопку
+  // "отправить письмо ещё раз" вместо неё.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
+
+  const resend = async () => {
+    setResendBusy(true);
+    const res = await resendVerification(email.trim());
+    setResendBusy(false);
+    if (res.error) setError(res.error);
+    else setResendSent(true);
+  };
 
   const submit = async () => {
     setError(null);
+    setUnconfirmedEmail(false);
+    setResendSent(false);
     if (mode === "forgot") {
       if (!email.trim()) return setError("Введи email.");
       setBusy(true);
@@ -45,8 +61,13 @@ export default function AuthScreen({
     setBusy(true);
     const result = mode === "signup" ? await signUp(email.trim(), password, name.trim()) : await signIn(email.trim(), password);
     setBusy(false);
-    if (result.error) setError(result.error);
-    else onSuccess(mode);
+    if (result.error) {
+      setError(result.error);
+      if (result.code === "EMAIL_NOT_CONFIRMED") setUnconfirmedEmail(true);
+      return;
+    }
+    if (mode === "signup" && result.needsVerification) return onNav({ name: "check-email", email: email.trim() });
+    onSuccess(mode);
   };
 
   return (
@@ -166,6 +187,17 @@ export default function AuthScreen({
               <p className="anim-rise mt-3 flex items-center gap-2 text-[13px] font-bold text-red">
                 <Icon name="alert" size={15} /> {error}
               </p>
+            )}
+            {unconfirmedEmail && (
+              resendSent ? (
+                <p className="anim-rise mt-2 flex items-center gap-2 text-[12.5px] font-bold text-blue">
+                  <Icon name="check" size={14} /> Письмо отправлено повторно
+                </p>
+              ) : (
+                <button onClick={resend} disabled={resendBusy} className="link-slide mt-2 block text-[12.5px] font-bold text-ink2 hover:text-ink">
+                  {resendBusy ? "Секунду…" : "Отправить письмо подтверждения ещё раз"}
+                </button>
+              )
             )}
 
             <button onClick={submit} disabled={busy} className="btn btn-blue mt-5 w-full px-5 py-3 text-sm">
