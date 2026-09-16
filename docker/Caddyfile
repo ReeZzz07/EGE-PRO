@@ -19,8 +19,13 @@
 	# их отдельно направляем на api, который отдаёт готовый HTML с актуальными og-тегами из БД (см.
 	# docker/api/server.js). Обычные браузеры на тех же путях продолжают идти в SPA как раньше —
 	# matcher строго по User-Agent, ничего в поведении для людей не меняется.
+	# "google" отдельно от "bot": верификатор Search Console шлёт
+	# "Mozilla/5.0 (compatible; Google-Site-Verification/1.0)" — без слова "bot" вообще, "bot" там
+	# ловит только настоящий Googlebot-краулер. Без этого слова верификация подтверждения домена
+	# через /admin → SEO молча не работала (страница ловила статический index.html без meta-тега,
+	# см. историю коммитов про Google-site-verification).
 	@bot {
-		header_regexp User-Agent "(?i)(bot|facebookexternalhit|telegrambot|vkshare|whatsapp|twitterbot|slackbot|discordbot|linkedinbot|redditbot|skypeuripreview|viber|odnoklassniki|pinterest)"
+		header_regexp User-Agent "(?i)(bot|google|facebookexternalhit|telegrambot|vkshare|whatsapp|twitterbot|slackbot|discordbot|linkedinbot|redditbot|skypeuripreview|viber|odnoklassniki|pinterest)"
 		path / /tariffs
 	}
 	handle @bot {
