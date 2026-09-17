@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import katex from "katex";
 
 /* ─────────── Иконки (свои, штриховые) ─────────── */
 const PATHS: Record<string, ReactNode> = {
@@ -271,48 +272,107 @@ export function useToast() {
 
 /* ─────────── Разметка текста репетитора (**жирный**, • маркеры) ─────────── */
 /** Разбивает строку на текст/**bold** сегменты — общая логика для обычных строк и заголовков. */
-function inlineFormat(body: string): ReactNode[] {
-  const parts = body.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+// Модель (особенно на математике/физике/химии) регулярно пишет формулы в LaTeX — \[ ... \] для
+// формулы на отдельной строке, \( ... \) внутри фразы — а не голым текстом. Без разбора это шло в
+// TutorText как есть: сырые "\cdot", "\frac{}{}", обратные слэши и скобки прямо в тексте ответа
+// (см. живой пример — жалоба на "лишние символы"). Формулы других видов (LaTeX $ $ / $$ $$) в
+// живых ответах модели не встречались — этот проект не претендует на полный LaTeX, только на то,
+// что модель реально пишет по построению промпта.
+const INLINE_MATH_RE = /\\\(([\s\S]+?)\\\)/g;
+// \[ ... \] у модели нередко разбит по строкам ("\[\n\cos(x) = 0,6\n\]") — раз в TutorText текст
+// сперва режется по "\n" на параграфы, регэксп внутри ОДНОЙ строки такой блок никогда не увидит.
+// Поэтому блочные формулы вырезаются из ВСЕГО текста ДО построчной разбивки (см. splitDisplayMath).
+const DISPLAY_MATH_BLOCK_RE = /\\\[([\s\S]*?)\\\]/g;
+
+function renderMath(latex: string, displayMode: boolean, key: string | number): ReactNode {
+  try {
+    const html = katex.renderToString(latex, { displayMode, throwOnError: true, output: "html" });
+    return <span key={key} className={displayMode ? "my-1 block text-center" : "px-0.5"} dangerouslySetInnerHTML={{ __html: html }} />;
+  } catch {
+    // Модель иногда пишет невалидный LaTeX — тогда честнее показать исходный текст, чем сломанную
+    // формулу или блок с katex-ошибкой на весь экран.
+    const raw = displayMode ? `\\[${latex}\\]` : `\\(${latex}\\)`;
+    return <span key={key}>{raw}</span>;
+  }
+}
+
+function formatBold(text: string, keyPrefix: string): ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return parts.map((p, j) =>
     p.startsWith("**") && p.endsWith("**") ? (
-      <strong key={j} className="font-extrabold">
+      <strong key={`${keyPrefix}-${j}`} className="font-extrabold">
         {p.slice(2, -2)}
       </strong>
     ) : (
-      <span key={j}>{p}</span>
+      <span key={`${keyPrefix}-${j}`}>{p}</span>
     )
   );
 }
 
+/** Инлайн-форматирование ОДНОЙ строки прозы: \( ... \) формулы (однострочные по построению — это
+ *  разметка "внутри фразы") и **bold**. Блочные \[ ... \] сюда не попадают — они вырезаны раньше. */
+function inlineFormat(body: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let segmentIndex = 0;
+  for (const m of body.matchAll(INLINE_MATH_RE)) {
+    if (m.index! > lastIndex) nodes.push(...formatBold(body.slice(lastIndex, m.index), `t${segmentIndex}`));
+    nodes.push(renderMath(m[1].trim(), false, `m${segmentIndex}`));
+    lastIndex = m.index! + m[0].length;
+    segmentIndex++;
+  }
+  if (lastIndex < body.length) nodes.push(...formatBold(body.slice(lastIndex), `t${segmentIndex}`));
+  return nodes;
+}
+
+/** Режет весь текст на прозу и блочные \[ ... \] формулы (которые могут занимать несколько строк
+ *  внутри самих \[ \]). Прозу дальше режет на строки/параграфы вызывающий код, как раньше. */
+function splitDisplayMath(text: string): Array<{ math: string } | { prose: string }> {
+  const parts: Array<{ math: string } | { prose: string }> = [];
+  let lastIndex = 0;
+  for (const m of text.matchAll(DISPLAY_MATH_BLOCK_RE)) {
+    if (m.index! > lastIndex) parts.push({ prose: text.slice(lastIndex, m.index) });
+    parts.push({ math: m[1].trim() });
+    lastIndex = m.index! + m[0].length;
+  }
+  if (lastIndex < text.length) parts.push({ prose: text.slice(lastIndex) });
+  return parts;
+}
+
 /** Лёгкий markdown-lite рендер ответов ИИ-репетитора (чат + подсказки в SolveView): модель время
- *  от времени отвечает не голым текстом, а с "###"-заголовками, списками через "•"/"-" и **bold** —
- *  без разбора это выглядело сырым текстом с видимыми решётками/звёздочками. Не полноценный
- *  markdown (кода/ссылок/таблиц не бывает в этих ответах по построению промпта), нарочно минимально. */
+ *  от времени отвечает не голым текстом, а с "###"-заголовками, списками через "•"/"-", **bold** и
+ *  LaTeX-формулами — без разбора это выглядело сырым текстом с видимыми решётками/звёздочками/
+ *  обратными слэшами. Не полноценный markdown (кода/ссылок/таблиц не бывает в этих ответах по
+ *  построению промпта), нарочно минимально. */
 export function TutorText({ text, light = false }: { text: string; light?: boolean }) {
-  const lines = text.split("\n").filter((l) => l.trim() !== "");
   const textCls = light ? "text-paper/85" : "text-ink/85";
+  const parts = splitDisplayMath(text);
   return (
     <div className="space-y-1.5">
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-        const heading = trimmed.match(/^#{1,6}\s+(.+)/);
-        if (heading) {
+      {parts.map((part, pi) => {
+        if ("math" in part) return renderMath(part.math, true, `dm${pi}`);
+        const lines = part.prose.split("\n").filter((l) => l.trim() !== "");
+        return lines.map((line, i) => {
+          const trimmed = line.trim();
+          const heading = trimmed.match(/^#{1,6}\s+(.+)/);
+          if (heading) {
+            return (
+              <p key={`${pi}-${i}`} className={`font-bold ${light ? "text-paper" : "text-ink"}`}>
+                {inlineFormat(heading[1])}
+              </p>
+            );
+          }
+          // "• " и "- " — оба часто встречаются как маркер списка у модели; нумерация вида "1)"
+          // намеренно не трогаем — это цифры пунктов самого задания в тексте, а не список подсказки.
+          const isBullet = /^[•-]\s/.test(trimmed);
+          const body = trimmed.replace(/^[•-]\s*/, "");
           return (
-            <p key={i} className={`font-bold ${light ? "text-paper" : "text-ink"}`}>
-              {inlineFormat(heading[1])}
+            <p key={`${pi}-${i}`} className={isBullet ? `flex gap-2 ${textCls}` : textCls}>
+              {isBullet && <span className={`mt-[0.5em] h-1.5 w-1.5 shrink-0 rotate-45 ${light ? "bg-hl" : "bg-blue"}`} />}
+              <span>{inlineFormat(body)}</span>
             </p>
           );
-        }
-        // "• " и "- " — оба часто встречаются как маркер списка у модели; нумерация вида "1)"
-        // намеренно не трогаем — это цифры пунктов самого задания в тексте, а не список подсказки.
-        const isBullet = /^[•-]\s/.test(trimmed);
-        const body = trimmed.replace(/^[•-]\s*/, "");
-        return (
-          <p key={i} className={isBullet ? `flex gap-2 ${textCls}` : textCls}>
-            {isBullet && <span className={`mt-[0.5em] h-1.5 w-1.5 shrink-0 rotate-45 ${light ? "bg-hl" : "bg-blue"}`} />}
-            <span>{inlineFormat(body)}</span>
-          </p>
-        );
+        });
       })}
     </div>
   );
