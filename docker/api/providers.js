@@ -30,50 +30,74 @@ async function fetchWithTimeout(url, options) {
   }
 }
 
+// 700 — старый дефолт — регулярно не хватало на "объясни решение" уже после того, как этот режим
+// стал по-настоящему разбирать условие задания по шагам (см. buildExplainPrompt в prompt.js):
+// ответ обрубался посреди слова, ни stop_reason/finish_reason, ни сам факт обрыва никем не
+// проверялись — усечённый текст просто уходил ученику как есть (живой пример: "4. Торможение
+// услов", см. отчёт проверки). MAX_RETRY_BUDGET — потолок, чтобы не раздувать бюджет до
+// бесконечности на реально длинных диалогах.
+const MAX_RETRY_BUDGET = 4000;
+
 /** Простой текстовый ответ (hint/explain_topic/chat) — без принудительного вызова инструмента. */
-export async function callText(settings, system, messages, maxTokens = 700) {
+export async function callText(settings, system, messages, maxTokens = 1600) {
   if (settings.provider === "qwen") return callQwenText(settings, system, messages, maxTokens);
   return callAnthropicText(settings, system, messages, maxTokens);
 }
 
 /** Структурированный ответ через принудительный вызов tool (check_essay). */
-export async function callTool(settings, system, userContent, tool, maxTokens = 1500) {
+export async function callTool(settings, system, userContent, tool, maxTokens = 2000) {
   if (settings.provider === "qwen") return callQwenTool(settings, system, userContent, tool, maxTokens);
   return callAnthropicTool(settings, system, userContent, tool, maxTokens);
 }
 
 async function callAnthropicText(settings, system, messages, maxTokens) {
   const model = settings.model || ANTHROPIC_DEFAULT_MODEL;
-  const resp = await fetchWithTimeout(ANTHROPIC_URL, {
-    method: "POST",
-    headers: { "x-api-key": settings.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages }),
-  });
-  if (!resp.ok) throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
-  const data = await resp.json();
-  const block = (data.content ?? []).find((c) => c.type === "text");
-  return (block?.text ?? "").trim();
+  let budget = maxTokens;
+  for (let attempt = 0; ; attempt++) {
+    const resp = await fetchWithTimeout(ANTHROPIC_URL, {
+      method: "POST",
+      headers: { "x-api-key": settings.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: budget, system, messages }),
+    });
+    if (!resp.ok) throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    // Последняя попытка отдаёт то, что есть, даже если снова max_tokens — иначе рискуем вообще
+    // не ответить ученику вместо того, чтобы отдать пусть не идеальный, но полный по смыслу текст.
+    if (data.stop_reason === "max_tokens" && budget < MAX_RETRY_BUDGET && attempt < 2) {
+      budget = Math.min(budget * 2, MAX_RETRY_BUDGET);
+      continue; // не отдаём ученику ответ, обрубленный посередине фразы — пробуем ещё раз пошире
+    }
+    const block = (data.content ?? []).find((c) => c.type === "text");
+    return (block?.text ?? "").trim();
+  }
 }
 
 async function callAnthropicTool(settings, system, userContent, tool, maxTokens) {
   const model = settings.model || ANTHROPIC_DEFAULT_MODEL;
-  const resp = await fetchWithTimeout(ANTHROPIC_URL, {
-    method: "POST",
-    headers: { "x-api-key": settings.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: userContent }],
-      tools: [tool],
-      tool_choice: { type: "tool", name: tool.name },
-    }),
-  });
-  if (!resp.ok) throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
-  const data = await resp.json();
-  const toolUse = (data.content ?? []).find((c) => c.type === "tool_use");
-  if (!toolUse) throw new Error("Модель не вернула структурированную оценку");
-  return toolUse.input;
+  let budget = maxTokens;
+  for (let attempt = 0; ; attempt++) {
+    const resp = await fetchWithTimeout(ANTHROPIC_URL, {
+      method: "POST",
+      headers: { "x-api-key": settings.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: budget,
+        system,
+        messages: [{ role: "user", content: userContent }],
+        tools: [tool],
+        tool_choice: { type: "tool", name: tool.name },
+      }),
+    });
+    if (!resp.ok) throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    if (data.stop_reason === "max_tokens" && budget < MAX_RETRY_BUDGET && attempt < 2) {
+      budget = Math.min(budget * 2, MAX_RETRY_BUDGET);
+      continue;
+    }
+    const toolUse = (data.content ?? []).find((c) => c.type === "tool_use");
+    if (!toolUse) throw new Error("Модель не вернула структурированную оценку");
+    return toolUse.input;
+  }
 }
 
 function toOpenAiTool(tool) {
@@ -83,19 +107,26 @@ function toOpenAiTool(tool) {
 async function callQwenText(settings, system, messages, maxTokens) {
   const baseUrl = (settings.baseUrl || QWEN_DEFAULT_BASE_URL).replace(/\/+$/, "");
   const model = settings.model || QWEN_DEFAULT_MODEL;
-  const resp = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${settings.apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: "system", content: system }, ...messages],
-      enable_thinking: false,
-    }),
-  });
-  if (!resp.ok) throw new Error(`Qwen API ${resp.status}: ${(await resp.text()).slice(0, 500)}`);
-  const data = await resp.json();
-  return (data.choices?.[0]?.message?.content ?? "").trim();
+  let budget = maxTokens;
+  for (let attempt = 0; ; attempt++) {
+    const resp = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${settings.apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: budget,
+        messages: [{ role: "system", content: system }, ...messages],
+        enable_thinking: false,
+      }),
+    });
+    if (!resp.ok) throw new Error(`Qwen API ${resp.status}: ${(await resp.text()).slice(0, 500)}`);
+    const data = await resp.json();
+    if (data.choices?.[0]?.finish_reason === "length" && budget < MAX_RETRY_BUDGET && attempt < 2) {
+      budget = Math.min(budget * 2, MAX_RETRY_BUDGET);
+      continue;
+    }
+    return (data.choices?.[0]?.message?.content ?? "").trim();
+  }
 }
 
 async function callQwenTool(settings, system, userContent, tool, maxTokens) {
@@ -103,6 +134,7 @@ async function callQwenTool(settings, system, userContent, tool, maxTokens) {
   const model = settings.model || QWEN_DEFAULT_MODEL;
   const apiUrl = `${baseUrl}/chat/completions`;
   let lastErr;
+  let budget = maxTokens;
   // Qwen3 (гибридные thinking-модели) иногда не подавляют thinking-режим через enable_thinking:false,
   // и тогда принудительный tool_choice конфликтует с ним (400 "does not support ... in thinking mode").
   // После первого такого случая переключаемся на tool_choice:"auto" + явную просьбу вызвать функцию.
@@ -121,7 +153,7 @@ async function callQwenTool(settings, system, userContent, tool, maxTokens) {
         headers: { Authorization: `Bearer ${settings.apiKey}`, "content-type": "application/json" },
         body: JSON.stringify({
           model,
-          max_tokens: maxTokens,
+          max_tokens: budget,
           messages,
           tools: [toOpenAiTool(tool)],
           tool_choice: forceAutoToolChoice ? "auto" : { type: "function", function: { name: tool.name } },
@@ -138,6 +170,13 @@ async function callQwenTool(settings, system, userContent, tool, maxTokens) {
         throw new Error(`Qwen API ${resp.status}: ${text.slice(0, 500)}`);
       }
       const data = await resp.json();
+      // Обрубленный tool-call почти наверняка не парсится как JSON ниже и всё равно уйдёт в retry
+      // через catch — но если parse случайно прошёл на обрезанном куске, аргументы будут неполными
+      // (например, оценка сочинения без части критериев), поэтому проверяем finish_reason явно.
+      if (data.choices?.[0]?.finish_reason === "length" && budget < MAX_RETRY_BUDGET) {
+        budget = Math.min(budget * 2, MAX_RETRY_BUDGET);
+        continue;
+      }
       const call = data.choices?.[0]?.message?.tool_calls?.[0];
       if (!call) throw new Error("Модель не вызвала tool");
       return JSON.parse(call.function.arguments);
