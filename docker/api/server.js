@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pool } from "./db.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
-import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, DEFAULT_POLICY } from "./prompt.js";
+import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, stripSequenceAnswer, DEFAULT_POLICY } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
@@ -1103,10 +1103,16 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     // россыпью. Применяется во всех режимах с заданием (не только hint) — explain/chat страдали
     // этим не меньше (см. живую проверку). check_essay сюда не попадает — это структурированный
     // tool-вызов, не текст, и уже отдельно возвращён выше.
+    // Третий фильтр — та же логика, но для заданий на упорядочивание/соответствие: не вердикт по
+    // пунктам, а прямое произнесение готовой последовательности цифр ("должна быть следующей:
+    // 1-4-3-5-2-6"). Гоняем по результату первого фильтра — если он уже что-то обрубил, второй
+    // ищет утечку в оставшемся тексте, а не в исходном.
     if (task && (body.mode === "hint" || body.mode === "explain_topic" || body.mode === "chat")) {
-      const stripped = stripPerItemVerdicts(text);
+      let stripped = stripPerItemVerdicts(text);
+      const seqStripped = stripSequenceAnswer(stripped.text);
+      if (seqStripped.trimmed) stripped = seqStripped;
       if (stripped.trimmed) {
-        console.warn("postfilter: вердикт по нескольким пунктам подряд — обрублено", { taskId: body.taskId, mode: body.mode, userId });
+        console.warn("postfilter: утечка готового ответа — обрублено", { taskId: body.taskId, mode: body.mode, userId });
         text = stripped.text;
       }
     }

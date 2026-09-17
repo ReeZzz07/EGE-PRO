@@ -5,7 +5,7 @@
 // это единственная защита от прямой утечки ответа через сам системный промпт.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, DEFAULT_POLICY } from "../prompt.js";
+import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, stripSequenceAnswer, DEFAULT_POLICY } from "../prompt.js";
 
 const task = {
   topic: "Логарифмические уравнения",
@@ -211,4 +211,59 @@ test("stripPerItemVerdicts: обычная прозаическая подска
   const result = stripPerItemVerdicts(plainHint);
   assert.equal(result.trimmed, false);
   assert.equal(result.text, plainHint);
+});
+
+// ─────────────────────── stripSequenceAnswer — вторая утечка (готовая цепочка цифр) ───────────────────────
+// Реальный ответ модели на bio-75896 ("Установите последовательность расположения нервных центров...",
+// живой прогон при проверке фикса усечения по max_tokens) — построчного вердикта тут нет вообще
+// (stripPerItemVerdicts его пропускает), но в конце модель прямо продиктовала готовую
+// последовательность цифр для бланка ответа. Текст записан как есть, без изменений.
+test("stripSequenceAnswer: реальный ответ модели на bio-75896 — дефис-цепочка «1-4-3-5-2-6» — обрубается с начала этого предложения", () => {
+  const liveResponse = `Конечно, давай разберем это задание по шагам. Нам нужно установить последовательность расположения нервных центров в организме человека в порядке их приближения к коре больших полушарий.
+
+Теперь, давай расположим их в правильном порядке:
+
+1. Ядра симпатической нервной системы, регулирующие работу сердца
+2. Ядра парасимпатической нервной системы, регулирующие мочевыделение
+3. Слюноотделительный центр
+4. Центр эндокринной регуляции
+5. Центр ориентировочных рефлексов на зрительный стимул
+6. Речевой центр Брока
+
+Таким образом, последовательность должна быть следующей: 1-4-3-5-2-6. Теперь, когда у нас есть эта последовательность, осталось только записать соответствующие цифры в том порядке, как они указаны в условии.
+
+Последний шаг — запишите эту последовательность цифр в ответ. Вы готовы сделать это?`;
+
+  const result = stripSequenceAnswer(liveResponse);
+  assert.equal(result.trimmed, true);
+  // Разбор по пунктам (метод) остаётся — это не вердикт, это перечисление структур из учебника.
+  assert.match(result.text, /Слюноотделительный центр/);
+  // Само предложение с готовой цепочкой цифр и всё, что после него, вырезано целиком.
+  assert.doesNotMatch(result.text, /1-4-3-5-2-6/);
+  assert.doesNotMatch(result.text, /следующей/);
+  assert.doesNotMatch(result.text, /Вы готовы сделать это/);
+  assert.match(result.text, /Саму последовательность запиши сам/i);
+});
+
+test("stripSequenceAnswer: список через запятую после двоеточия («в порядке: 3, 1, 4, 2») — тоже ловится", () => {
+  const withCommaList = `Разберём по шагам, где какое событие.
+
+Теперь, когда мы знаем даты, распределим события в порядке: 3, 1, 4, 2. Это и есть искомая последовательность.`;
+  const result = stripSequenceAnswer(withCommaList);
+  assert.equal(result.trimmed, true);
+  assert.doesNotMatch(result.text, /3, 1, 4, 2/);
+});
+
+test("stripSequenceAnswer: даты (например, «1941-1945») не считаются утечкой последовательности", () => {
+  const withDateRange = "Великая Отечественная война длилась с 1941-1945 год. Это важный период истории.";
+  const result = stripSequenceAnswer(withDateRange);
+  assert.equal(result.trimmed, false);
+  assert.equal(result.text, withDateRange);
+});
+
+test("stripSequenceAnswer: обычный текст без цепочки цифр — не трогает текст", () => {
+  const plain = "Подумай, какое событие произошло раньше — сравни века, в которых они случились.";
+  const result = stripSequenceAnswer(plain);
+  assert.equal(result.trimmed, false);
+  assert.equal(result.text, plain);
 });
