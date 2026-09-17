@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pool } from "./db.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
-import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, DEFAULT_POLICY } from "./prompt.js";
+import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, DEFAULT_POLICY } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
@@ -1095,6 +1095,20 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     if (body.mode === "hint" && leaksAnswer(text, body.taskId)) {
       console.warn("postfilter: подозрение на утечку ответа", { taskId: body.taskId, userId });
       text = "Кажется, я чуть не сказал больше, чем должен был 🙂 Давай по-другому: какой следующий шаг ты бы сделал сам, опираясь на предыдущую подсказку?";
+    }
+
+    // Второй, независимый фильтр — на многовариантных заданиях (нумерованный список сам и есть
+    // варианты ответа) модель иногда проговаривает вердикт "верно/неверно" по каждому пункту
+    // подряд, хотя финальную строку цифр не печатает: по сути это тот же самый ответ, просто
+    // россыпью. Применяется во всех режимах с заданием (не только hint) — explain/chat страдали
+    // этим не меньше (см. живую проверку). check_essay сюда не попадает — это структурированный
+    // tool-вызов, не текст, и уже отдельно возвращён выше.
+    if (task && (body.mode === "hint" || body.mode === "explain_topic" || body.mode === "chat")) {
+      const stripped = stripPerItemVerdicts(text);
+      if (stripped.trimmed) {
+        console.warn("postfilter: вердикт по нескольким пунктам подряд — обрублено", { taskId: body.taskId, mode: body.mode, userId });
+        text = stripped.text;
+      }
     }
 
     if (body.mode === "hint") {
