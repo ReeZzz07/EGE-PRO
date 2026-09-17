@@ -5,7 +5,17 @@
 // это единственная защита от прямой утечки ответа через сам системный промпт.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, stripSequenceAnswer, DEFAULT_POLICY } from "../prompt.js";
+import {
+  buildChatPrompt,
+  buildEssaySystemPrompt,
+  buildExplainPrompt,
+  buildHintPrompt,
+  stripPerItemVerdicts,
+  stripSequenceAnswer,
+  stripAnswerDeclaration,
+  stripFinalBareNumberFormula,
+  DEFAULT_POLICY,
+} from "../prompt.js";
 
 const task = {
   topic: "Логарифмические уравнения",
@@ -74,12 +84,13 @@ test("buildExplainPrompt: без задания — не падает и нич�
   assert.doesNotMatch(prompt, /Контекст задания/);
 });
 
-test("buildExplainPrompt: с заданием — подставляет реальную тему, требует разбирать САМО задание и запрещает называть финальный ответ", () => {
+test("buildExplainPrompt: с заданием — подставляет реальную тему, требует разбирать САМО задание, запрещает называть финальный ответ и требует закончить вопросом", () => {
   const prompt = buildExplainPrompt("policy", task);
   assert.match(prompt, /«Логарифмические уравнения»/);
   assert.match(prompt, /Решите уравнение log2\(x-1\)=3/);
   assert.match(prompt, /реальные числа, слова, варианты и данные из условия/i);
-  assert.match(prompt, /само итоговое число\/слово\/набор цифр для бланка ответа не называй/i);
+  assert.match(prompt, /сформулируй именно ЕГО как явный вопрос ученику/i);
+  assert.match(prompt, /не завершённой формулой с названным числом/i);
 });
 
 test("buildChatPrompt: включает контекст задания, когда оно есть", () => {
@@ -266,4 +277,110 @@ test("stripSequenceAnswer: обычный текст без цепочки ци�
   const result = stripSequenceAnswer(plain);
   assert.equal(result.trimmed, false);
   assert.equal(result.text, plain);
+});
+
+// ─────────────────────── stripAnswerDeclaration — третья, ЧАСТИЧНАЯ утечка ───────────────────────
+// Живой пример на задании "Найдите cos(x)..." (математика, ЕГЭ №11) — модель довела вычисление до
+// конца и прямо провозгласила результат финальным ответом, несмотря на прямой запрет в промпте.
+test("stripAnswerDeclaration: реальный ответ модели про cos(x) — явное «это и есть ответ» обрубается", () => {
+  const liveResponse = `Шаг 5: Определим знак cos(x)
+
+Поскольку x находится во второй четверти, cos(x) должен быть отрицательным. Поэтому:
+
+\\[
+\\cos(x) = -0,6
+\\]
+
+Заключение
+
+Мы нашли, что cos(x) = -0,6. Это и есть ответ на задание!`;
+
+  const result = stripAnswerDeclaration(liveResponse);
+  assert.equal(result.trimmed, true);
+  assert.doesNotMatch(result.text, /Это и есть ответ/i);
+  assert.match(result.text, /Последний шаг — твой/i);
+});
+
+// Известное и задокументированное ограничение (см. комментарий у stripAnswerDeclaration в
+// prompt.js): без явной фразы-декларации ("это ответ") фильтр НЕ ловит утечку — реальный пример на
+// физике (fiz-25069, модуль перемещения), где модель сама вычислила и назвала итоговое число, но не
+// подтвердила его словом "ответ". Тест фиксирует это ограничение, а не проверяет его исправление.
+test("stripAnswerDeclaration: известное ограничение — завершение без слова «ответ» не ловится", () => {
+  const liveResponsePhysics = `Таким образом, последним действием нужно взять абсолютное значение полученного перемещения. В данном случае, оно уже равно нулю, поэтому модуль тоже равен нулю.
+
+Если у тебя есть вопросы по какому-то из шагов или ты хочешь проверить свои расчеты, дай знать!`;
+  const result = stripAnswerDeclaration(liveResponsePhysics);
+  assert.equal(result.trimmed, false);
+});
+
+test("stripAnswerDeclaration: обычные упоминания слова «ответ» (вопрос, инструкция) — не трогает текст", () => {
+  const plain = "Теперь запиши ответ на бланке. Какой ответ ты получишь, если подставишь эти числа?";
+  const result = stripAnswerDeclaration(plain);
+  assert.equal(result.trimmed, false);
+  assert.equal(result.text, plain);
+});
+
+// ─────────────────── stripFinalBareNumberFormula — утечка БЕЗ слова "ответ" ───────────────────
+// Живой пример на задании про куб (math-31517, "Найдите диагональ куба, если его объём равен...")
+// после усиления формулировки промпта (требование заканчивать вопросом) — модель всё равно довела
+// последнюю формулу до голого числа, а вопрос после неё стал бессмысленным (ответ уже назван).
+test("stripFinalBareNumberFormula: реальный ответ модели про куб — последняя формула сведена до голого числа, обрубается", () => {
+  const liveResponse = `### Шаг 4: Упростим выражение
+Упростим выражение:
+\\[ d = 4\\sqrt{3} \\times \\sqrt{3} \\]
+\\[ d = 4 \\times 3 \\]
+\\[ d = 12 \\]
+
+### Итоговый вопрос
+Теперь осталось выполнить последнее действие. Какой результат получится, если вычислить это выражение?`;
+
+  const result = stripFinalBareNumberFormula(liveResponse);
+  assert.equal(result.trimmed, true);
+  // Предпоследняя формула (ход решения) остаётся — вырезана только последняя, "= 12", и всё после.
+  assert.match(result.text, /d = 4\\sqrt\{3\} \\times \\sqrt\{3\}/);
+  assert.doesNotMatch(result.text, /= 12/);
+  assert.doesNotMatch(result.text, /Итоговый вопрос/);
+  assert.match(result.text, /вычисли сам/i);
+});
+
+// Живой пример БЕЗ утечки на том же типе задания (math-31519, "Найдите диагональ куба, если площадь
+// его поверхности равна 450") — модель честно остановилась перед последним умножением, оставив
+// правую часть невыполненной. Фильтр не должен резать легитимный ответ, где всё сделано правильно.
+test("stripFinalBareNumberFormula: хороший случай (последняя формула НЕ доведена до числа) — не трогает текст", () => {
+  const liveGoodResponse = `Подставим найденное значение \\( a \\):
+\\[ d = (5\\sqrt{3})\\sqrt{3} \\]
+
+Теперь осталось выполнить последнее действие. Какой результат получится, если вычислить это выражение?`;
+
+  const result = stripFinalBareNumberFormula(liveGoodResponse);
+  assert.equal(result.trimmed, false);
+  assert.equal(result.text, liveGoodResponse);
+});
+
+// Живой пример БЕЗ утечки на физике (fiz-25069) — последняя формула оставляет модуль невычисленным
+// ("|0|", а не голое "0"), поэтому это НЕ совпадает с "голым числом" и не режется.
+test("stripFinalBareNumberFormula: модуль/корень/выражение в правой части (не голое число) — не трогает текст", () => {
+  const liveGoodResponse = `### Шаг 4: Определим модуль перемещения
+
+Модуль перемещения — это абсолютное значение перемещения:
+
+\\[ |\\Delta x| = |0| \\]
+
+Какое значение получится, если вычислить это выражение?`;
+
+  const result = stripFinalBareNumberFormula(liveGoodResponse);
+  assert.equal(result.trimmed, false);
+});
+
+test("stripFinalBareNumberFormula: промежуточная формула вида «X = число», но НЕ последняя в тексте — не трогает текст", () => {
+  const withIntermediateStep = `\\[ a^2 = 75 \\]
+
+Теперь найдём \\( a \\):
+\\[ a = \\sqrt{75} \\]
+
+Что получится, если вычислить корень?`;
+
+  const result = stripFinalBareNumberFormula(withIntermediateStep);
+  assert.equal(result.trimmed, false);
+  assert.equal(result.text, withIntermediateStep);
 });

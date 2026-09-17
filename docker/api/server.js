@@ -13,7 +13,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { pool } from "./db.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
-import { buildChatPrompt, buildEssaySystemPrompt, buildExplainPrompt, buildHintPrompt, stripPerItemVerdicts, stripSequenceAnswer, DEFAULT_POLICY } from "./prompt.js";
+import {
+  buildChatPrompt,
+  buildEssaySystemPrompt,
+  buildExplainPrompt,
+  buildHintPrompt,
+  stripPerItemVerdicts,
+  stripSequenceAnswer,
+  stripAnswerDeclaration,
+  stripFinalBareNumberFormula,
+  DEFAULT_POLICY,
+} from "./prompt.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
@@ -1107,10 +1117,22 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     // пунктам, а прямое произнесение готовой последовательности цифр ("должна быть следующей:
     // 1-4-3-5-2-6"). Гоняем по результату первого фильтра — если он уже что-то обрубил, второй
     // ищет утечку в оставшемся тексте, а не в исходном.
+    // Четвёртый фильтр — словесное подтверждение готового ответа ("это и есть ответ на задание!"),
+    // характерное для заданий с ОДНИМ конкретным ответом (математика, физика, химия): вердикт по
+    // пунктам и последовательность здесь ни при чём — модель просто доводит вычисление до конца и
+    // прямо это провозглашает. Частичное покрытие — см. комментарий у stripAnswerDeclaration в
+    // prompt.js: сама утечка (формула с числом) обычно уже стоит ВЫШЕ этой фразы в тексте.
+    // Пятый фильтр — тот же класс утечки, но БЕЗ словесного подтверждения: последняя формула в
+    // ответе сама сведена до голого числа ("d = 4×3" → "d = 12"). См. stripFinalBareNumberFormula
+    // в prompt.js про эвристику и её ложноположительные случаи.
     if (task && (body.mode === "hint" || body.mode === "explain_topic" || body.mode === "chat")) {
       let stripped = stripPerItemVerdicts(text);
       const seqStripped = stripSequenceAnswer(stripped.text);
       if (seqStripped.trimmed) stripped = seqStripped;
+      const declStripped = stripAnswerDeclaration(stripped.text);
+      if (declStripped.trimmed) stripped = declStripped;
+      const bareStripped = stripFinalBareNumberFormula(stripped.text);
+      if (bareStripped.trimmed) stripped = bareStripped;
       if (stripped.trimmed) {
         console.warn("postfilter: утечка готового ответа — обрублено", { taskId: body.taskId, mode: body.mode, userId });
         text = stripped.text;
