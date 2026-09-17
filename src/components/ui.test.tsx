@@ -83,4 +83,22 @@ describe("TutorText", () => {
     expect(screen.getByText("Шаг 4:")).toBeInTheDocument();
     expect(screen.getByText("Шаг 5: определим знак.")).toBeInTheDocument();
   });
+
+  // Живая проверка по просьбе пользователя ("проверь физику и химию, там тоже много формул") —
+  // реальные ответы модели (записаны как есть): chem-8226, термохимическое уравнение, с \text{} для
+  // формул веществ и кириллицей внутри \text{}; fiz-25069, модуль перемещения, со степенью, \cdot и
+  // модулем |...|. Рендерер не завязан на предмет, но эти команды в предыдущих тестах не встречались.
+  it("формулы по химии (\\text{}, кириллица внутри \\text{}, нижние индексы) — рендерятся без сырого LaTeX", () => {
+    const { container } = render(
+      <TutorText text={"\\[ \\text{H}^+ (р-р) + \\text{OH}^- (р-р) = \\text{H}_2\\text{O} (ж) + 56 \\, \\text{кДж} \\]"} />
+    );
+    expect(container.textContent).not.toMatch(/\\text|\\frac|\\\[|\\\]/);
+    expect(container.querySelector(".katex-display")).toBeTruthy();
+  });
+
+  it("формулы по физике (степень, \\cdot, модуль |...|, \\Delta) — рендерятся без сырого LaTeX", () => {
+    const { container } = render(<TutorText text={"\\[ x(6) = -1 + 6 \\cdot 6 - 6^2 \\]\n\\[ |\\Delta x| = |0| \\]"} />);
+    expect(container.textContent).not.toMatch(/\\cdot|\\Delta|\^2|\\\[/);
+    expect(container.querySelectorAll(".katex-display").length).toBe(2);
+  });
 });
