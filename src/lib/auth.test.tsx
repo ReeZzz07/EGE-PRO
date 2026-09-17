@@ -282,16 +282,18 @@ describe("AuthProvider — режим с бэкендом (isSupabaseConfigured=
     expect(result.current.profile).toBeNull();
   });
 
-  it("signUp: успех — оптимистично выставляет профиль с пустыми subjects до подтверждения от БД", async () => {
+  it("signUp: успех — НЕ логинит и не выставляет профиль, email пока не подтверждён", async () => {
     const { AuthProvider, useAuth, mock } = await loadAuthConfigured({ session: null });
-    mock.signUp.mockResolvedValue({ data: { user: { id: "new-1" } }, error: null });
+    mock.signUp.mockResolvedValue({ data: { user: { id: "new-1" }, needsVerification: true }, error: null });
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let res: { needsVerification?: boolean } = {};
     await act(async () => {
-      await result.current.signUp("a@b.com", "pw", "Аня");
+      res = await result.current.signUp("a@b.com", "pw", "Аня");
     });
-    expect(result.current.profile).toEqual({ id: "new-1", name: "Аня", email: "a@b.com", subjects: [] });
+    expect(res.needsVerification).toBe(true);
+    expect(result.current.profile).toBeNull();
   });
 
   it("signIn: ошибка от Supabase пробрасывается как есть", async () => {

@@ -1000,6 +1000,20 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     const task = body.taskId ? safeTaskById(body.taskId) ?? (await dbSafeTaskById(body.taskId)) : undefined;
     const gate = await resolveUserTariffGate(userId);
 
+    // Экзамен-режим (SolveView.tsx) блокирует кнопки подсказок 1/2/3 на клиенте, но чат с
+    // репетитором — отдельный компонент (TutorChat.tsx), и раньше эта блокировка на него не
+    // распространялась вовсе: прямой вопрос "подсказка" в свободном чате получал полный ответ,
+    // даже пока идёт таймер экзамена (найдено при живой проверке — реальный обход, не в теории).
+    // 200 с готовым текстом, а не 4xx — тот же паттерн, что и у дневного лимита ниже: клиент не
+    // должен молча уйти в офлайн-фолбэк, ученик должен увидеть именно этот текст. Не расходует
+    // дневную квоту и не долетает до модели — проверяем раньше any обращения к ней.
+    if (body.examMode && (body.mode === "hint" || body.mode === "explain_topic" || body.mode === "chat")) {
+      return res.json({
+        text: "Во время экзамен-режима подсказки и объяснения от репетитора недоступны — реши задание самостоятельно, как на настоящем ЕГЭ. Вернись к репетитору после того, как закончишь.",
+        examBlocked: true,
+      });
+    }
+
     if (body.mode === "check_essay") {
       if (!task) return res.status(404).json({ error: "task not found" });
       if (!isEssayCheckAllowed(gate)) {

@@ -49,9 +49,13 @@ function hasImage(content) {
  * @param {number} [opts.maxTokens]
  * @returns {Promise<object>} — распарсенные аргументы вызова функции
  */
+// См. тот же комментарий в lib/anthropic.mjs: finish_reason "length" — это OpenAI-совместимый
+// эквивалент stop_reason "max_tokens", раньше никем не проверялся, и обрезанный (но иногда всё
+// ещё парсящийся как JSON) arguments уходил в БД как есть.
 export async function callWithTool({ apiKey, system, content, tool, maxTokens = 1500 }) {
   const model = hasImage(content) ? VISION_MODEL : TEXT_MODEL;
   let lastErr;
+  let budget = maxTokens;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const resp = await fetch(API_URL, {
@@ -59,7 +63,7 @@ export async function callWithTool({ apiKey, system, content, tool, maxTokens = 
         headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
         body: JSON.stringify({
           model,
-          max_tokens: maxTokens,
+          max_tokens: budget,
           messages: [
             { role: "system", content: system },
             { role: "user", content },
@@ -83,6 +87,10 @@ export async function callWithTool({ apiKey, system, content, tool, maxTokens = 
       totalPromptTokens += data.usage?.prompt_tokens ?? 0;
       totalCompletionTokens += data.usage?.completion_tokens ?? 0;
 
+      if (data.choices?.[0]?.finish_reason === "length") {
+        budget = Math.min(budget * 2, 8000);
+        throw new Error(`length (${maxTokens}) — ответ обрезан, увеличиваю бюджет до ${budget} и пробую снова`);
+      }
       const call = data.choices?.[0]?.message?.tool_calls?.[0];
       if (!call) throw new Error("Модель не вызвала tool (проверь, поддерживает ли выбранная модель tool_choice)");
       return JSON.parse(call.function.arguments);

@@ -148,7 +148,13 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
           рядом с остальными личными настройками, а не здесь */}
       {profile && (
         <p className="mt-8 text-center text-[12.5px] text-ink2">
-          Подключено {profile.subjects.length} из {tariffs.find((t) => t.id === profile.tariffId)?.subjectsCount ?? "?"} предметов —{" "}
+          {profile.isAdmin ? (
+            <>
+              <strong className="text-ink">Ты администратор</strong> — тариф не ограничивает число предметов, подключено {profile.subjects.length}.
+            </>
+          ) : (
+            <>Подключено {profile.subjects.length} из {tariffs.find((t) => t.id === profile.tariffId)?.subjectsCount ?? "?"} предметов.</>
+          )}{" "}
           <button onClick={() => onNav({ name: "subjects" })} className="link-slide font-bold text-ink2 hover:text-ink">
             управлять в «Мои предметы»
           </button>

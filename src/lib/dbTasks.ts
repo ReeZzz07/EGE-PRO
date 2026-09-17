@@ -28,6 +28,28 @@ interface DbTaskRow {
   task_media: { storage_path: string; position: number }[];
 }
 
+// Часть заданий в банке (импорт через LLM-решатель, см. scripts/import/solve-tasks.mjs) хранит
+// разбор, обрезанный посередине шага — модель упёрлась в лимит токенов при генерации, и шаг вида
+// "01  По графику Тогда Значит," (или вовсе пустой "4)") попал в БД как есть. Полная переразметка
+// всего банка — отдельная задача (нужно заново прогнать LLM); здесь — защита на чтение: как
+// только встретили шаг без внятного окончания, отрезаем его и всё, что после (там только хуже) —
+// лучше показать 2 полных шага, чем 4, из которых последний обрывается на полуслове.
+function isCompleteStep(step: string): boolean {
+  const body = step.trim().replace(/^\d+[).]\s*/, "").trim();
+  if (body.length < 3) return false;
+  return /[.!?»")]\s*$/.test(step.trim());
+}
+
+/** Экспортируется ради юнит-теста (см. dbTasks.test.ts) — сама по себе чистая функция, без БД. */
+export function sanitizeExplanation(steps: string[]): string[] {
+  const kept: string[] = [];
+  for (const step of steps) {
+    if (!isCompleteStep(step)) break;
+    kept.push(step);
+  }
+  return kept;
+}
+
 function confidenceToDifficulty(confidence: string | null): 1 | 2 | 3 {
   if (confidence === "high") return 1;
   if (confidence === "low") return 3;
@@ -86,7 +108,7 @@ function toEgeTask(row: DbTaskRow): EgeTask {
     images: images.length ? images : undefined,
     answers: row.answer ? [row.answer] : [],
     answerNote: "см. формат ответа в условии задания",
-    explanation: (row.explanation ?? "").split(/\n+/).filter(Boolean),
+    explanation: sanitizeExplanation((row.explanation ?? "").split(/\n+/).filter(Boolean)),
     hints: hints3,
   };
 }

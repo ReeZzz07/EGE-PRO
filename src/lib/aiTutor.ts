@@ -16,6 +16,11 @@ export interface AiTutorRequest {
   hintLevel?: number;
   essayText?: string;
   history?: ChatTurn[];
+  /** true — ученик сейчас в экзамен-режиме (см. SolveView.tsx) — сервер отказывает в помощи по
+   *  этому запросу тем же способом, что и дневной лимит (limitReached-подобный текстовый ответ,
+   *  без обращения к модели и без траты дневной квоты). Дублирует блокировку кнопок 1/2/3 на
+   *  клиенте — та легко обходится прямым запросом к /ai-tutor, если не проверять и на сервере. */
+  examMode?: boolean;
 }
 
 export interface EssayCriterionScore {
@@ -46,6 +51,9 @@ export interface AiTutorResponse {
   /** true — проверка сочинений недоступна на бесплатном тарифе (см. docker/api/server.js) — text
    *  содержит готовое сообщение об этом, assessment не приходит. */
   tierBlocked?: boolean;
+  /** true — запрос отклонён, потому что ученик в экзамен-режиме (см. examMode выше); text уже
+   *  содержит готовое сообщение об этом. */
+  examBlocked?: boolean;
 }
 
 export interface AiQuota {

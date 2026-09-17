@@ -21,7 +21,12 @@ const apiProxy = backendHost
   ? {
       "/rest/v1": { target: `http://postgrest:3000`, changeOrigin: true, rewrite: (p) => p.replace(/^\/rest\/v1/, ""), ...XFWD },
       "/auth": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
-      "/profile": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      // Именно "/profile/avatar", не голый "/profile" — единственные реальные роуты под этим
+      // префиксом (POST/DELETE .../avatar в docker/api/server.js). Голый префикс перехватывал бы и
+      // просто "/profile" (никакой ссылки на него в приложении нет, но прямой заход по такому URL
+      // раньше улетал на api и получал сырой Express "Cannot GET /profile" вместо страницы сайта —
+      // SPA-фолбэк из App.tsx для неизвестных путей до него просто не долетал).
+      "/profile/avatar": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/storage": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/admin": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/ai-tutor": { target: `http://api:8787`, changeOrigin: true, ...XFWD },

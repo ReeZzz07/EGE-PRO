@@ -66,3 +66,41 @@ describe("getAvailableSubjects", () => {
     expect(getAvailableSubjects()).toEqual([]);
   });
 });
+
+// Часть банка (LLM-решатель, см. scripts/import/solve-tasks.mjs) хранит разбор, обрезанный
+// посередине шага — модель упёрлась в лимит токенов при генерации (см. историю правок этого
+// файла). sanitizeExplanation — защита на чтение: отрезает такой шаг и всё, что после него.
+describe("sanitizeExplanation", () => {
+  it("полностью нормальный разбор — возвращает как есть", async () => {
+    const { sanitizeExplanation } = await import("./dbTasks");
+    const steps = ["1) Первый шаг решения.", "2) Второй шаг решения.", "Ответ: 42."];
+    expect(sanitizeExplanation(steps)).toEqual(steps);
+  });
+
+  it("обрыв на полуслове без знака конца предложения — обрубает начиная с этого шага", async () => {
+    const { sanitizeExplanation } = await import("./dbTasks");
+    const steps = ["1) По графику Тогда", "2) следовательно,", "3) Подставим точку", "4)"];
+    expect(sanitizeExplanation(steps)).toEqual([]);
+  });
+
+  it("обрыв в СЕРЕДИНЕ разбора — сохраняет только полные шаги до него", async () => {
+    const { sanitizeExplanation } = await import("./dbTasks");
+    const steps = [
+      "1) Производственный кооператив «Максим» – это пример предприятия как частного субъекта экономики.",
+      "2) ГУП «Мосэлектротранс» – государственные унитарные предприятия.",
+      "3) Министерство экономического развития РФ – государственный орган.",
+      "4) Общество с ограниченной",
+    ];
+    expect(sanitizeExplanation(steps)).toEqual(steps.slice(0, 3));
+  });
+
+  it("пустой шаг-заглушка (только номер, без текста) — тоже считается обрывом", async () => {
+    const { sanitizeExplanation } = await import("./dbTasks");
+    expect(sanitizeExplanation(["1) Шаг с текстом.", "2)"])).toEqual(["1) Шаг с текстом."]);
+  });
+
+  it("шаг, заканчивающийся закрывающей кавычкой/скобкой — не считается обрывом", async () => {
+    const { sanitizeExplanation } = await import("./dbTasks");
+    expect(sanitizeExplanation(['Смотри правило («важно»)'])).toEqual(['Смотри правило («важно»)']);
+  });
+});

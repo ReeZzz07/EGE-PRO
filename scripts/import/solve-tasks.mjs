@@ -177,8 +177,12 @@ async function solveAuto(apiKey, cleanedText, answerType, images) {
   const userText = `${cleanedText}\n\n${hint}`;
   const content = [textBlock(userText), ...images];
 
-  const first = await callWithTool({ apiKey, system: SOLVE_SYSTEM, content, tool: SOLVE_TOOL });
-  const second = await callWithTool({ apiKey, system: SOLVE_SYSTEM, content, tool: SOLVE_TOOL });
+  // 1500 (дефолт callWithTool) регулярно не хватало на многошаговый reasoning — модель упиралась
+  // в max_tokens посреди объяснения (см. комментарий в lib/anthropic.mjs/lib/qwen.mjs про обрывы
+  // в БД). 2500 — запас на задания с длинным разбором; callWithTool сам удвоит его ещё раз, если
+  // и этого не хватит.
+  const first = await callWithTool({ apiKey, system: SOLVE_SYSTEM, content, tool: SOLVE_TOOL, maxTokens: 2500 });
+  const second = await callWithTool({ apiKey, system: SOLVE_SYSTEM, content, tool: SOLVE_TOOL, maxTokens: 2500 });
 
   if (answersMatch(first.answer, second.answer)) {
     return {
@@ -195,7 +199,7 @@ async function solveAuto(apiKey, cleanedText, answerType, images) {
     ),
     ...images,
   ];
-  const verdict = await callWithTool({ apiKey, system: SOLVE_SYSTEM, content: adjContent, tool: ADJUDICATE_TOOL });
+  const verdict = await callWithTool({ apiKey, system: SOLVE_SYSTEM, content: adjContent, tool: ADJUDICATE_TOOL, maxTokens: 2500 });
 
   return {
     answer: verdict.correct_answer || first.answer,
@@ -207,7 +211,11 @@ async function solveAuto(apiKey, cleanedText, answerType, images) {
 
 async function solveEssay(apiKey, cleanedText, images) {
   const content = [textBlock(cleanedText), ...images];
-  const result = await callWithTool({ apiKey, system: ESSAY_SYSTEM, content, tool: ESSAY_TOOL, maxTokens: 1200 });
+  // 1200 регулярно не хватало на полный набор критериев (реальные задания ЕГЭ с развёрнутым
+  // ответом — по 4-5 критериев с описанием) — модель обрубалась на 2 критериях из положенных
+  // 5, и итоговая сумма баллов расходилась с заявленными в задании (см. живую проверку: сочинение
+  // на 18 первичных баллов, а критериев показано на 2). 2200 — запас под реальный размер рубрики.
+  const result = await callWithTool({ apiKey, system: ESSAY_SYSTEM, content, tool: ESSAY_TOOL, maxTokens: 2200 });
   return { criteria: result.criteria, minWords: result.minWords ?? null, notes: result.notes };
 }
 

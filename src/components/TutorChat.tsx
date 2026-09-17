@@ -23,7 +23,21 @@ const WELCOME: Msg = {
   actions: ["Что ты умеешь?", "Составь план подготовки", "Объясни вероятность"],
 };
 
-export default function TutorChat({ contextTask, compact = false, onNavigate }: { contextTask?: EgeTask; compact?: boolean; onNavigate?: (dest: string) => void }) {
+export default function TutorChat({
+  contextTask,
+  compact = false,
+  onNavigate,
+  examMode = false,
+}: {
+  contextTask?: EgeTask;
+  compact?: boolean;
+  onNavigate?: (dest: string) => void;
+  /** true — ученик сейчас в экзамен-режиме (см. SolveView.tsx): чат не даёт подсказок и разборов,
+   *  тем же самым текстом, что и заблокированные кнопки 1/2/3 рядом с бланком ответа. Запрос всё
+   *  равно уходит на сервер с этим же флагом (см. POST /ai-tutor) — тот же текст, если чат
+   *  вызвали в обход интерфейса. */
+  examMode?: boolean;
+}) {
   const { derived } = useProgress();
   const [messages, setMessages] = useState<Msg[]>(() => {
     // чат привязан к конкретному заданию (compact-режим в SolveView) — начинаем с чистого листа,
@@ -158,7 +172,7 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
       .map((m) => ({ role: (m.role === "bot" ? "assistant" : "user") as "assistant" | "user", content: m.text }));
 
     callAiTutor(
-      { mode, message: text, taskId: contextTask?.id, hintLevel: hintLevelRef.current, history },
+      { mode, message: text, taskId: contextTask?.id, hintLevel: hintLevelRef.current, history, examMode },
       { mistakeTasks, solvedCount: derived.solvedIds.size }
     ).then((res) => {
       const replyText = res.text ?? "Не получилось получить ответ — попробуй ещё раз.";
@@ -169,7 +183,7 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
   };
 
   const last = messages[messages.length - 1];
-  const showChips = last?.role === "bot" && !last.streaming && last.actions && !busy;
+  const showChips = last?.role === "bot" && !last.streaming && last.actions && !busy && !examMode;
 
   return (
     // lg:h — начиная с десктопного брейкпоинта чат заполняет доступную высоту экрана вместо
@@ -266,6 +280,9 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
 
       {/* поле ввода */}
       <div className="border-t border-white/10 bg-night p-3">
+        {examMode ? (
+          <p className="font-mono py-1.5 text-center text-[11px] font-bold uppercase tracking-widest text-red">чат заблокирован в экзамен-режиме</p>
+        ) : (
         <div className="flex items-center gap-2">
           <input
             value={input}
@@ -285,13 +302,16 @@ export default function TutorChat({ contextTask, compact = false, onNavigate }: 
             </svg>
           </button>
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {["мои ошибки", "объясни логарифмы", "советы на экзамен", "сколько нужно баллов"].map((s) => (
-            <button key={s} onClick={() => send(s)} disabled={busy} className="rounded-full border border-white/12 px-2.5 py-0.5 text-[11px] text-paper/55 transition hover:border-hl/50 hover:text-hl disabled:opacity-40">
-              {s}
-            </button>
-          ))}
-        </div>
+        )}
+        {!examMode && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {["мои ошибки", "объясни логарифмы", "советы на экзамен", "сколько нужно баллов"].map((s) => (
+              <button key={s} onClick={() => send(s)} disabled={busy} className="rounded-full border border-white/12 px-2.5 py-0.5 text-[11px] text-paper/55 transition hover:border-hl/50 hover:text-hl disabled:opacity-40">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

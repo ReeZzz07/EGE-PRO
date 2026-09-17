@@ -59,23 +59,27 @@ test("buildHintPrompt: уровень зажимается сверху до п�
 
 test("buildHintPrompt: содержит явный запрет называть финальный ответ и текст условия задания", () => {
   const prompt = buildHintPrompt("policy", task, 0);
-  assert.match(prompt, /не называй финальный ответ/i);
+  assert.match(prompt, /не произноси финальное число/i);
   assert.match(prompt, /Решите уравнение log2\(x-1\)=3/);
-  assert.match(prompt, /ответ этого задания тебе намеренно не передан/i);
+  assert.match(prompt, /тебе не передан правильный ответ этого задания/i);
 });
 
 test("buildHintPrompt: policy-текст из БД всегда идёт первым — редактируемая часть, не теряется", () => {
   assert.ok(buildHintPrompt("МОЙ КАСТОМНЫЙ ПРОМПТ", task, 0).startsWith("МОЙ КАСТОМНЫЙ ПРОМПТ"));
 });
 
-test("buildExplainPrompt: без задания — «тема не указана», не падает и не выдумывает тему", () => {
-  assert.match(buildExplainPrompt("policy", undefined), /тему «не указана»/i);
+test("buildExplainPrompt: без задания — не падает и ничего не выдумывает про отсутствующее задание", () => {
+  const prompt = buildExplainPrompt("policy", undefined);
+  assert.match(prompt, /как решать это задание/i);
+  assert.doesNotMatch(prompt, /Контекст задания/);
 });
 
-test("buildExplainPrompt: с заданием — подставляет реальную тему и просит не решать текущее задание", () => {
+test("buildExplainPrompt: с заданием — подставляет реальную тему, требует разбирать САМО задание и запрещает называть финальный ответ", () => {
   const prompt = buildExplainPrompt("policy", task);
   assert.match(prompt, /«Логарифмические уравнения»/);
-  assert.match(prompt, /не решай текущее задание/i);
+  assert.match(prompt, /Решите уравнение log2\(x-1\)=3/);
+  assert.match(prompt, /реальные числа, слова, варианты и данные из условия/i);
+  assert.match(prompt, /само итоговое число\/слово\/набор цифр для бланка ответа не называй/i);
 });
 
 test("buildChatPrompt: включает контекст задания, когда оно есть", () => {

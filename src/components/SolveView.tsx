@@ -489,7 +489,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
           <p className="font-mono mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.25em] text-ink2">
             <Icon name="chat" size={14} /> репетитор рядом
           </p>
-          <TutorChat contextTask={task} compact onNavigate={(dest) => goTo({ name: dest } as View)} />
+          <TutorChat contextTask={task} compact examMode={examMode} onNavigate={(dest) => goTo({ name: dest } as View)} />
           <p className="mt-2 text-[11.5px] leading-relaxed text-ink2">
             Сложность: <strong>{DIFF_LABEL[task.difficulty]}</strong> · тема входит в задание №{task.egeNumber} ЕГЭ. Первичных баллов за задание: {task.points}.
           </p>
