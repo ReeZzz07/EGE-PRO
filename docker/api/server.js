@@ -12,6 +12,7 @@ import bcrypt from "bcryptjs";
 import fs from "node:fs";
 import path from "node:path";
 import { pool } from "./db.js";
+import { escapeHtml, renderBotHtml } from "./botHtml.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
   buildChatPrompt,
@@ -681,10 +682,6 @@ const DEFAULT_PAGE_SEO = {
 };
 const PAGE_KEY_BY_PATH = { "/": "home", "/tariffs": "tariffs" };
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 // Мета-теги подтверждения владения доменом (Яндекс.Вебмастер, Google Search Console и т.п.) —
 // редактируются в /admin → «Почта» (public.app_settings, ключ site_verification, см.
 // src/lib/siteVerification.ts). Значение — уже готовая разметка тега, вставляем как есть (это
@@ -720,28 +717,7 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
   const verificationMetaTags = await resolveSiteVerificationMetaTags();
 
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.send(`<!doctype html>
-<html lang="ru"><head>
-<meta charset="UTF-8">
-<title>${escapeHtml(title)}</title>
-<meta name="description" content="${escapeHtml(description)}">
-${verificationMetaTags}
-${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ""}
-<meta property="og:site_name" content="ЕГЭ·ПРО">
-<meta property="og:type" content="website">
-<meta property="og:locale" content="ru_RU">
-${canonicalUrl ? `<meta property="og:url" content="${escapeHtml(canonicalUrl)}">` : ""}
-<meta property="og:title" content="${escapeHtml(title)}">
-<meta property="og:description" content="${escapeHtml(description)}">
-${
-  ogImage
-    ? `<meta property="og:image" content="${escapeHtml(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image" content="${escapeHtml(ogImage)}">`
-    : `<meta name="twitter:card" content="summary">`
-}
-<meta name="twitter:title" content="${escapeHtml(title)}">
-<meta name="twitter:description" content="${escapeHtml(description)}">
-</head><body></body></html>
-`);
+  res.send(renderBotHtml({ title, description, canonicalUrl, ogImage, verificationMetaTags }));
 });
 
 // ─────────────────────── оплата (ЮKassa) ───────────────────────
