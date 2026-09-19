@@ -21,6 +21,7 @@ import {
   type SeoPageKey,
   type SeoSettings,
 } from "../lib/seo";
+import { parseMetrikaId } from "../lib/metrika";
 import { DEFAULT_SITE_VERIFICATION, loadSiteVerification, saveSiteVerification, type SiteVerificationSettings } from "../lib/siteVerification";
 import { Icon, useToast } from "./ui";
 
@@ -38,10 +39,13 @@ export default function AdminSeoSettings() {
   const ogImageInputRef = useRef<HTMLInputElement>(null);
   const [verification, setVerification] = useState<SiteVerificationSettings>(DEFAULT_SITE_VERIFICATION);
   const [verificationSaving, setVerificationSaving] = useState(false);
+  const [metrikaInput, setMetrikaInput] = useState("");
+  const [metrikaSaving, setMetrikaSaving] = useState(false);
 
   useEffect(() => {
     Promise.all([loadSeoSettings(), loadSeoFiles(), loadSiteVerification()]).then(([s, f, v]) => {
       setSeo(s);
+      setMetrikaInput(s.metrikaId);
       setFiles(f);
       setVerification(v);
       setLoading(false);
@@ -68,6 +72,28 @@ export default function AdminSeoSettings() {
     if (res.error) return push(res.error, "err");
     setSeo((s) => ({ ...s, ogImage: res.url! }));
     push("Картинка загружена — не забудь «Сохранить» ниже", "ok");
+  };
+
+  // Хранится в том же ключе "seo", что и заголовки (публичное чтение — счётчик нужен всем
+  // посетителям), поэтому сохраняется весь объект seo: несохранённые правки заголовков выше
+  // уедут вместе с номером счётчика — это одна форма с одним состоянием.
+  const saveMetrika = async () => {
+    if (!profile) return;
+    const raw = metrikaInput.trim();
+    let id = "";
+    if (raw) {
+      const parsed = parseMetrikaId(raw);
+      if (!parsed) return push("Не нашёл номер счётчика — вставь номер (например, 12345678) или код счётчика целиком", "err");
+      id = parsed;
+    }
+    const next = { ...seo, metrikaId: id };
+    setMetrikaSaving(true);
+    const res = await saveSeoSettings(next, profile.id);
+    setMetrikaSaving(false);
+    if (res.error) return push(res.error, "err");
+    setSeo(next);
+    setMetrikaInput(id);
+    push(id ? `Сохранено — счётчик ${id} подключится при следующей загрузке сайта` : "Счётчик Метрики отключён", "ok");
   };
 
   const saveVerification = async () => {
@@ -183,13 +209,44 @@ export default function AdminSeoSettings() {
       </div>
 
       <div className="mt-5 flex gap-2">
-        <button onClick={() => setSeo(DEFAULT_SEO)} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+        <button onClick={() => setSeo((s) => ({ ...DEFAULT_SEO, metrikaId: s.metrikaId }))} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
           <Icon name="refresh" size={14} /> К дефолту
         </button>
         <button onClick={save} disabled={saving} className="btn btn-blue px-5 py-2.5 text-[13px]">
           <Icon name="check" size={14} /> {saving ? "Сохраняем…" : "Сохранить"}
         </button>
       </div>
+    </div>
+
+    <div className="sheet mt-6 p-5 sm:p-6">
+      <h2 className="font-display text-lg font-bold">Яндекс.Метрика</h2>
+      <p className="mt-1 text-[12.5px] text-ink2">
+        Номер счётчика или весь код, который Метрика показывает при создании счётчика — из кода сайт возьмёт только номер и сам подключит счётчик на всех
+        страницах (включая возврат после оплаты), скрипт из этого поля на сайт не попадает. Пустое поле — счётчик отключён. Вебвизор выключен: на платформе
+        занимаются школьники, а в адресах части страниц есть служебные токены. Применяется при следующей загрузке сайта, без пересборки.
+      </p>
+
+      <label className="mt-4 block">
+        <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Номер или код счётчика</span>
+        <textarea
+          value={metrikaInput}
+          onChange={(e) => setMetrikaInput(e.target.value)}
+          rows={3}
+          placeholder="12345678 — или вставь код счётчика целиком"
+          className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2.5 font-mono text-[12.5px]"
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+      {seo.metrikaId && (
+        <p className="mt-2 font-mono text-[11.5px] text-ink2">
+          Подключён счётчик: <strong className="text-ink">{seo.metrikaId}</strong>
+        </p>
+      )}
+
+      <button onClick={saveMetrika} disabled={metrikaSaving} className="btn btn-blue mt-4 px-5 py-2.5 text-[13px]">
+        <Icon name="check" size={14} /> {metrikaSaving ? "Сохраняем…" : "Сохранить"}
+      </button>
     </div>
 
     <div className="sheet mt-6 p-5 sm:p-6">

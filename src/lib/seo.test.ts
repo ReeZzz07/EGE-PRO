@@ -44,8 +44,20 @@ describe("loadSeoSettings", () => {
   });
 
   it("полностью заполненные данные — используются как есть, без подмешивания дефолта", async () => {
-    const full = { ogImage: "og.png", pages: { home: { title: "H", description: "HD" }, tariffs: { title: "T", description: "TD" } } };
+    const full = { ogImage: "og.png", metrikaId: "98765432", pages: { home: { title: "H", description: "HD" }, tariffs: { title: "T", description: "TD" } } };
     vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: full }, error: null }) as never);
     expect(await loadSeoSettings()).toEqual(full);
+  });
+
+  it("настройки без metrikaId (сохранены до появления поля) — счётчик выключен, остальное не тронуто", async () => {
+    vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: { ogImage: "og.png" } }, error: null }) as never);
+    const res = await loadSeoSettings();
+    expect(res.metrikaId).toBe("");
+    expect(res.ogImage).toBe("og.png");
+  });
+
+  it("metrikaId из БД, не похожий на номер (испорченные данные) — отбрасывается, а не подставляется на страницу", async () => {
+    vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: { metrikaId: '"><script>x</script>' } }, error: null }) as never);
+    expect((await loadSeoSettings()).metrikaId).toBe("");
   });
 });
