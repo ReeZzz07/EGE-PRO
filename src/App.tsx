@@ -27,6 +27,7 @@ import PaymentReturnView from "./components/PaymentReturnView";
 import ResetPasswordView from "./components/ResetPasswordView";
 import CheckEmailView from "./components/CheckEmailView";
 import VerifyEmailView from "./components/VerifyEmailView";
+import CookieBanner from "./components/CookieBanner";
 import { pathToView, viewToPath } from "./lib/routes";
 import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
 
@@ -63,8 +64,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
           )}
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
             <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
-            <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>
-          </div>
+            <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>          </div>
         </div>
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Предметы</p>
@@ -334,6 +334,7 @@ function AppShell() {
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
       </main>
       <Footer onNav={setView} />
+      <CookieBanner onNav={setView} />
     </div>
   );
 }
