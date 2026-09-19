@@ -11,6 +11,7 @@ import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { createPayment } from "../lib/payments";
+import { reachGoal } from "../lib/metrika";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
 import { Icon, useToast } from "./ui";
@@ -57,7 +58,14 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
     const res = await createPayment(t.id);
     setSwitching(null);
     if (res.error) return push(res.error, "err");
-    if (res.confirmationUrl) window.location.href = res.confirmationUrl;
+    if (res.confirmationUrl) {
+      // редирект — только после того, как Метрика приняла событие (или через 1 с): иначе уход со
+      // страницы обрывал бы отправку цели
+      const url = res.confirmationUrl;
+      reachGoal("checkout_start", { tariff: t.id, price: t.priceRub }, () => {
+        window.location.href = url;
+      });
+    }
   };
 
   const discountedPrice = (priceRub: number) => (profile?.discountPercent ? Math.round(priceRub * (1 - profile.discountPercent / 100) * 100) / 100 : null);

@@ -11,6 +11,7 @@ import TutorChat from "./TutorChat";
 import EssayView from "./EssayView";
 import ReadAloudView from "./ReadAloudView";
 import { Burst, Icon, MediaItem, Stamp, StatementLine, TutorText, useToast, usedImageMarkerIndices } from "./ui";
+import { reachGoalOnce } from "../lib/metrika";
 
 type Phase = "solve" | "wrong" | "correct" | "revealed";
 
@@ -113,6 +114,11 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
     hydrateSubjectTasks(task.subject);
   }, [task.subject]);
 
+  // цель Метрики: начал заниматься (открыл задание) — раз за сессию, не на каждое из сотни заданий
+  useEffect(() => {
+    reachGoalOnce("task_opened", "task_opened", "session");
+  }, []);
+
   // список для переключения «предыдущее/следующее» — тот же фильтр, с которым ушли из банка
   // заданий, если он относится к текущему предмету; иначе просто в рамках предмета решаемого
   // задания (не по всей базе — так пролистывание остаётся осмысленным)
@@ -161,6 +167,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
     if (examMode) return; // не даём выключить посреди режима
     setExamMode(true);
     setExamLeft(300);
+    reachGoalOnce("exam_mode_start", "exam_mode_start", "session");
     push("Экзамен-режим: 5 минут, без подсказок", "info");
   };
 

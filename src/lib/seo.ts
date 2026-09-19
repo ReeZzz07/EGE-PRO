@@ -50,6 +50,8 @@ export interface SeoSettings {
   ogImage: string;
   /** номер счётчика Яндекс.Метрики (только цифры, см. lib/metrika.ts); пустая строка — счётчик выключен */
   metrikaId: string;
+  /** свой код (цели Метрики и т. п.), вставляется на все страницы как есть — см. lib/metrika.ts, injectCustomCode */
+  customCode: string;
   pages: Record<SeoPageKey, SeoPageMeta>;
 }
 
@@ -61,6 +63,7 @@ export const SEO_PAGE_LABELS: Record<SeoPageKey, string> = {
 export const DEFAULT_SEO: SeoSettings = {
   ogImage: "",
   metrikaId: "",
+  customCode: "",
   pages: {
     home: {
       title: "ЕГЭ·ПРО — тренажёр с ИИ-репетитором",
@@ -84,6 +87,8 @@ export async function loadSeoSettings(): Promise<SeoSettings> {
     // Значение из БД подставляется на страницу как номер счётчика — всё, что не похоже на номер
     // (испорченные данные), отбрасываем, а не доверяем на слово.
     metrikaId: typeof saved.metrikaId === "string" ? (parseMetrikaId(saved.metrikaId) ?? "") : DEFAULT_SEO.metrikaId,
+    // Свой код — это и есть «как есть»: не разбираем и не фильтруем (см. комментарий в lib/metrika.ts).
+    customCode: typeof saved.customCode === "string" ? saved.customCode : DEFAULT_SEO.customCode,
     pages: {
       home: { ...DEFAULT_SEO.pages.home, ...saved.pages?.home },
       tariffs: { ...DEFAULT_SEO.pages.tariffs, ...saved.pages?.tariffs },

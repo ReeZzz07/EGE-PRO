@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { addProfileSubject, loadProfileSubjects, removeProfileSubject } from "./profileSubjects";
 import type { Subject } from "../data/tasks";
+import { reachGoal } from "./metrika";
 
 export type Grade = "10" | "11" | "grad";
 export type Goal = "threshold" | "70plus" | "80plus" | "olympiad";
@@ -206,6 +207,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { error: error.message };
     // profile не устанавливаем — сессии нет, аккаунт рабочий только после подтверждения email
     // (см. authShim.signUp). AuthScreen по needsVerification уводит на экран "проверь почту".
+    // Цель Метрики — здесь, в том же визите, что и клик по рекламе (подтверждение email — позже и
+    // часто в другом браузере, атрибуция там теряется).
+    reachGoal("signup");
     return { needsVerification: true };
   };
 

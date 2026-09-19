@@ -44,7 +44,7 @@ describe("loadSeoSettings", () => {
   });
 
   it("полностью заполненные данные — используются как есть, без подмешивания дефолта", async () => {
-    const full = { ogImage: "og.png", metrikaId: "98765432", pages: { home: { title: "H", description: "HD" }, tariffs: { title: "T", description: "TD" } } };
+    const full = { ogImage: "og.png", metrikaId: "98765432", customCode: "<script>1</script>", pages: { home: { title: "H", description: "HD" }, tariffs: { title: "T", description: "TD" } } };
     vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: full }, error: null }) as never);
     expect(await loadSeoSettings()).toEqual(full);
   });
@@ -54,6 +54,13 @@ describe("loadSeoSettings", () => {
     const res = await loadSeoSettings();
     expect(res.metrikaId).toBe("");
     expect(res.ogImage).toBe("og.png");
+  });
+
+  it("customCode: сохранённый код возвращается как есть, а если его нет или он не строка — пусто", async () => {
+    vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: { customCode: "<script>ym(1,'reachGoal','x')</script>" } }, error: null }) as never);
+    expect((await loadSeoSettings()).customCode).toBe("<script>ym(1,'reachGoal','x')</script>");
+    vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: { customCode: 42 } }, error: null }) as never);
+    expect((await loadSeoSettings()).customCode).toBe("");
   });
 
   it("metrikaId из БД, не похожий на номер (испорченные данные) — отбрасывается, а не подставляется на страницу", async () => {

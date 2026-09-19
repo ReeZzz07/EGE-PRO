@@ -4,7 +4,7 @@ import "./index.css";
 import App from "./App.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { loadSubjectAggregates } from "./lib/dbTasks";
-import { initMetrika } from "./lib/metrika";
+import { initMetrika, injectCustomCode } from "./lib/metrika";
 import { loadSeoSettings } from "./lib/seo";
 
 // Задания подгружаются лениво по предмету (см. lib/dbTasks.ts) — рендерим сразу, не дожидаясь сети.
@@ -20,4 +20,8 @@ loadSubjectAggregates();
 // Счётчик Метрики — на старте приложения, а не в Landing/Tariffs: он нужен на любой странице
 // входа (например, при возврате из ЮKassa прямо на /payment/return). Номер задаётся в /admin → SEO.
 // Подключается сразу: пользователя об этом уведомляет баннер (CookieBanner.tsx), а не спрашивает.
-loadSeoSettings().then((s) => initMetrika(s.metrikaId));
+loadSeoSettings().then((s) => {
+  initMetrika(s.metrikaId);
+  // после счётчика: своему коду из админки уже доступен ym() и window.dataLayer
+  injectCustomCode(s.customCode);
+});

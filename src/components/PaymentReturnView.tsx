@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { getPaymentStatus, type PaymentStatus } from "../lib/payments";
+import { trackPurchase } from "../lib/metrika";
 import { Icon } from "./ui";
 import type { View } from "./Header";
 
@@ -29,6 +30,7 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
         return;
       }
       if (res.status === "succeeded") {
+        trackPurchase({ paymentId, amountRub: res.amountRub, tariffId: res.tariffId });
         setStatus("succeeded");
         await refreshProfile();
         return;

@@ -10,6 +10,7 @@ import { convertByFraction, isGradeSubject, loadLatestScoreScale, lookupSecondar
 import { getExamStructure, pickExamVariant } from "../lib/examVariant";
 import { getExamAttempt, saveExamAttempt } from "../lib/examAttempts";
 import { Icon, Reveal } from "./ui";
+import { reachGoalOnce } from "../lib/metrika";
 
 type Phase = "setup" | "running" | "grading" | "result";
 const PART1_SECONDS_PER_TASK = 90;
@@ -144,6 +145,7 @@ export default function MockExam({
     setAnswers({});
     setEssayAssessments({});
     setPhase("running");
+    reachGoalOnce("exam_mode_start", "exam_mode_start", "session");
   };
 
   const finish = async () => {

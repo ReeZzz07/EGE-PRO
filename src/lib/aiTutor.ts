@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured, apiFetch } from "./supabase";
 import { taskById, type EgeTask, type Subject } from "../data/tasks";
 import { getTutorReply, type TutorCtx } from "../data/tutor";
+import { reachGoal, reachGoalOnce } from "./metrika";
 
 export type AiMode = "explain_topic" | "hint" | "check_essay" | "chat";
 
@@ -84,12 +85,27 @@ export async function callAiTutor(req: AiTutorRequest, ctx: { mistakeTasks: EgeT
     try {
       const { data, error } = await supabase.functions.invoke("ai-tutor", { body: req });
       if (error) throw error;
-      return { offline: false, ...(data as Omit<AiTutorResponse, "offline">) };
+      const res: AiTutorResponse = { offline: false, ...(data as Omit<AiTutorResponse, "offline">) };
+      trackAiGoals(req, res);
+      return res;
     } catch (e) {
       console.warn("ai-tutor Edge Function недоступна, переключаюсь в офлайн-режим:", e);
     }
   }
   return offlineFallback(req, ctx);
+}
+
+/** Цели Метрики по результату настоящего ответа сервера (офлайн-заглушка не считается).
+ *  Лимит — раз в день (он и сбрасывается ежедневно), первое обращение — раз на браузер. */
+export function trackAiGoals(req: AiTutorRequest, res: AiTutorResponse): void {
+  if (res.limitReached) {
+    reachGoalOnce(`ai_limit_reached:${new Date().toISOString().slice(0, 10)}`, "ai_limit_reached");
+    return;
+  }
+  if (res.examBlocked || res.tierBlocked) return;
+  if (!res.text && !res.assessment) return;
+  if (req.mode === "check_essay" && res.assessment) reachGoal("essay_check_used");
+  reachGoalOnce("first_ai_use", "first_ai_use");
 }
 
 function offlineFallback(req: AiTutorRequest, ctx: { mistakeTasks: EgeTask[]; solvedCount: number }): AiTutorResponse {
