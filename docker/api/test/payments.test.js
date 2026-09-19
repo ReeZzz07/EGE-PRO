@@ -4,7 +4,7 @@
 // её можно проверить напрямую, без реального HTTP к ЮKassa. Запуск: `npm test` из docker/api.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { applySucceededPayment, priceWithDiscount } from "../payments.js";
+import { applySucceededPayment, getPaymentSummary, priceWithDiscount } from "../payments.js";
 import { createTestUser, deleteTestUser, createTestPayment, pool } from "./helpers.js";
 
 after(() => pool.end());
@@ -115,4 +115,18 @@ test("applySucceededPayment: идемпотентна — повторный в�
 
 test("applySucceededPayment: платёж на несуществующий id — не падает, ничего не делает", async () => {
   await assert.doesNotReject(() => applySucceededPayment("00000000-0000-0000-0000-000000000000"));
+});
+
+test("getPaymentSummary: возвращает сумму числом и тариф платежа — для выручки в цели Метрики «purchase»", async () => {
+  const userId = await createTestUser();
+  try {
+    const paymentId = await createTestPayment(userId, { tariffId: "attestat", amountRub: 1990 });
+    assert.deepEqual(await getPaymentSummary(paymentId), { amountRub: 1990, tariffId: "attestat" });
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("getPaymentSummary: несуществующий платёж — null", async () => {
+  assert.equal(await getPaymentSummary("00000000-0000-0000-0000-000000000000"), null);
 });

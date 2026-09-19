@@ -164,3 +164,12 @@ export async function getPaymentStatus(paymentId, userId, isAdmin) {
   const fresh = await pool.query("select status from public.payments where id = $1", [paymentId]);
   return fresh.rows[0]?.status ?? row.status;
 }
+
+/** Сумма и тариф проведённого платежа — фронтенд передаёт их в цель Метрики «purchase» (выручка и
+ *  электронная коммерция, см. src/lib/metrika.ts). Права на платёж уже проверены getPaymentStatus,
+ *  сюда вызывается только после него. null — платежа нет. */
+export async function getPaymentSummary(paymentId) {
+  const { rows } = await pool.query("select amount_rub, tariff_id from public.payments where id = $1", [paymentId]);
+  if (!rows[0]) return null;
+  return { amountRub: Number(rows[0].amount_rub), tariffId: rows[0].tariff_id };
+}

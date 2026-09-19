@@ -38,7 +38,7 @@ import {
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
-import { initiatePayment, handleYookassaWebhook, getPaymentStatus } from "./payments.js";
+import { initiatePayment, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
 import { createActionToken, consumeActionToken } from "./authTokens.js";
 import { sendVerifyEmail, sendPasswordResetEmail } from "./mailer.js";
 
@@ -759,7 +759,9 @@ app.get("/payments/:id/status", authMiddleware, async (req, res) => {
     const gate = await resolveUserTariffGate(req.user.sub);
     const status = await getPaymentStatus(req.params.id, req.user.sub, gate.isAdmin);
     if (!status) return res.status(404).json({ error: "Платёж не найден" });
-    res.json({ status });
+    // сумма и тариф — только для проведённого платежа: фронтенд шлёт их в цель Метрики «purchase»
+    const summary = status === "succeeded" ? await getPaymentSummary(req.params.id) : null;
+    res.json({ status, ...(summary ?? {}) });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
