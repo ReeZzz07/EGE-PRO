@@ -1,7 +1,7 @@
 // Настройки — параметры подготовки (класс, год сдачи, цель, время в день; раньше задавались один
 // раз на онбординге и больше нигде не редактировались) и опасная зона (удаление аккаунта). Личные
 // данные — в "Профиль" (ProfileView.tsx), предметы и тариф — в "Мои предметы" (SubjectsView.tsx).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
 import { ChoiceRow, GOAL_OPTS, GRADE_OPTS, TIME_OPTS } from "./OnboardingFlow";
 import { Icon, useToast } from "./ui";
@@ -10,7 +10,7 @@ import type { View } from "./Header";
 const CURRENT_YEAR = new Date().getFullYear();
 const EXAM_YEAR_OPTS = [CURRENT_YEAR, CURRENT_YEAR + 1, CURRENT_YEAR + 2].map((y) => ({ v: y, l: String(y) }));
 
-export default function SettingsView({ onNav }: { onNav: (v: View) => void }) {
+export default function SettingsView({ onNav, highlightPrep }: { onNav: (v: View) => void; highlightPrep?: boolean }) {
   const { profile, updateProfile, changePassword, deleteAccount, isGuestMode } = useAuth();
   const { push } = useToast();
 
@@ -19,6 +19,16 @@ export default function SettingsView({ onNav }: { onNav: (v: View) => void }) {
   const [goal, setGoal] = useState<Goal | null>(profile?.goal ?? null);
   const [dailyMinutes, setDailyMinutes] = useState<number | null>(profile?.dailyMinutes ?? null);
   const [saving, setSaving] = useState(false);
+
+  // Подсветка блока "Параметры подготовки" — пришли сюда по кнопке "Заполнить" из напоминалки на
+  // главной (см. Dashboard.tsx → OnboardingNudge, highlightPrep в навигации к этому виду). Гаснет
+  // после первого сохранения (см. save() ниже) — не привязана к тому, заполнены ли поля, поэтому
+  // подсказывает "заполни и сохрани", а не "все клетки должны быть непустыми".
+  const [showHighlight, setShowHighlight] = useState(!!highlightPrep);
+  const prepRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (highlightPrep) prepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [highlightPrep]);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -43,8 +53,21 @@ export default function SettingsView({ onNav }: { onNav: (v: View) => void }) {
 
   const save = async () => {
     setSaving(true);
-    await updateProfile({ grade: grade ?? undefined, examYear: examYear ?? undefined, goal: goal ?? undefined, dailyMinutes: dailyMinutes ?? undefined });
+    // онбординг обычно проходят через OnboardingFlow.tsx (4 шага сразу), но не все ученики его
+    // доходят до конца (см. напоминалку на главной — Dashboard.tsx, OnboardingNudge) — если он
+    // донабирает те же 4 поля здесь, это тоже полноценное прохождение анкеты: ставим onboardedAt
+    // сами, тем же способом, что finalizeAndGo в OnboardingFlow.tsx. Не перезаписываем, если уже
+    // стоит — исходная дата прохождения не должна съезжать при обычной правке цели/класса позже.
+    const quizComplete = !!(grade && examYear && goal && dailyMinutes);
+    await updateProfile({
+      grade: grade ?? undefined,
+      examYear: examYear ?? undefined,
+      goal: goal ?? undefined,
+      dailyMinutes: dailyMinutes ?? undefined,
+      ...(quizComplete && !profile.onboardedAt ? { onboardedAt: Date.now() } : {}),
+    });
     setSaving(false);
+    setShowHighlight(false);
     push("Изменения сохранены", "ok");
   };
 
@@ -84,7 +107,15 @@ export default function SettingsView({ onNav }: { onNav: (v: View) => void }) {
       <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">настройки</p>
       <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">Параметры подготовки</h1>
 
-      <section className="sheet mt-6 space-y-4 p-5 sm:p-6">
+      <section
+        ref={prepRef}
+        className={`sheet mt-6 space-y-4 p-5 sm:p-6 transition-shadow ${showHighlight ? "ring-2 ring-amber ring-offset-2 ring-offset-paper" : ""}`}
+      >
+        {showHighlight && (
+          <p className="anim-rise flex items-center gap-2 border-l-4 border-amber bg-amber/10 px-3 py-2 text-[12.5px] font-bold text-ink">
+            <Icon name="target" size={14} className="shrink-0 text-amber" /> Заполни это и сохрани — тогда «План» и «Пробник» будут знать твой предмет и темп.
+          </p>
+        )}
         <ChoiceRow label="класс" options={GRADE_OPTS} value={grade} onChange={setGrade} />
         <ChoiceRow label="год сдачи ЕГЭ" options={EXAM_YEAR_OPTS} value={examYear} onChange={setExamYear} />
         <ChoiceRow label="цель" options={GOAL_OPTS} value={goal} onChange={setGoal} />

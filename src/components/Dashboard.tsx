@@ -126,6 +126,37 @@ function examTarget(): { date: Date; year: number } {
   return { date: next, year: next.getFullYear() };
 }
 
+/** Баннер-напоминалка на главной — пока анкета подготовки (класс/цель/время в день) не заполнена,
+ *  «План» и «Пробник» не знают, какой предмет открыть по умолчанию (effectivePrimarySubject в
+ *  lib/auth.tsx требует primarySubject), а эвристика плана (lib/plan.ts) берёт время на подготовку
+ *  наугад вместо реального. Крестик прячет баннер только до конца этой сессии (state, не
+ *  localStorage) — при следующем входе (см. App.tsx: AuthScreen.onSuccess → view "home" → сюда)
+ *  показывается заново, пока onboardedAt не проставится (см. SettingsView.tsx — save() ставит его
+ *  сама, как только все четыре поля анкеты заполнены хотя бы один раз, необязательно через
+ *  полноценный OnboardingFlow.tsx). */
+function OnboardingNudge({ onNav }: { onNav: (v: View) => void }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="anim-rise mt-6 flex flex-wrap items-center justify-between gap-3 border-l-4 border-amber bg-amber/10 px-4 py-3.5 sm:px-5">
+      <div className="flex items-start gap-3">
+        <Icon name="target" size={18} className="mt-0.5 shrink-0 text-amber" />
+        <p className="text-[13px] leading-relaxed text-ink2">
+          <strong className="text-ink">Донастрой параметры подготовки</strong> — класс, цель и время в день. Без них «План» и «Пробник» не знают, по какому предмету и в каком темпе тебя вести.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button onClick={() => onNav({ name: "settings", highlightPrep: true })} className="btn btn-ink px-3.5 py-2 text-[12.5px]">
+          Заполнить
+        </button>
+        <button onClick={() => setDismissed(true)} aria-label="Скрыть до следующего входа" className="btn btn-ghost px-2.5 py-2 text-[12.5px]">
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
   useTasksVersion();
@@ -186,6 +217,8 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4">
+      {profile && !profile.onboardedAt && !isGuestMode && <OnboardingNudge onNav={onNav} />}
+
       {/* ─── БЛАНК № 1 ─── */}
       <section className="sheet sheet-holes gridpaper relative mt-6 overflow-hidden">
         <div className="absolute right-5 top-5 hidden text-ink/70 sm:block" aria-hidden>

@@ -20,7 +20,7 @@ export type View =
   | { name: "session-summary" }
   | { name: "tariffs" }
   | { name: "profile" }
-  | { name: "settings" }
+  | { name: "settings"; highlightPrep?: boolean }
   | { name: "subjects" }
   | { name: "kim2027" }
   | { name: "legal"; doc: "offer" | "privacy" }
