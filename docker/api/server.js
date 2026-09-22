@@ -40,7 +40,7 @@ import {
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { initiatePayment, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
 import { createActionToken, consumeActionToken } from "./authTokens.js";
-import { sendVerifyEmail, sendPasswordResetEmail } from "./mailer.js";
+import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./mailer.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -283,6 +283,16 @@ app.post("/auth/verify-email", authLimiter, async (req, res) => {
     const user = rows[0];
     const tv = await pool.query("select coalesce(token_version, 0) as token_version from public.profiles where id = $1", [userId]);
     res.json({ data: { user }, error: null, access_token: signToken(user, tv.rows[0]?.token_version ?? 0) });
+    // Приветственное письмо с советами — после ответа клиенту и best-effort, тем же паттерном, что
+    // письмо подтверждения при регистрации выше (см. POST /auth/signup): не должно задерживать сам
+    // переход на онбординг и не должно ронять его, если SMTP временно недоступен. Уходит один раз —
+    // ровно в момент реального подтверждения (сюда не попадёшь повторно на уже подтверждённый
+    // аккаунт: consumeActionToken выше одноразовый и сгорает после первого успешного использования).
+    (async () => {
+      const p = await pool.query("select full_name from public.profiles where id = $1", [userId]);
+      const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+      await sendWelcomeEmail(user.email, { fullName: p.rows[0]?.full_name, siteUrl });
+    })().catch((e) => console.warn("не удалось отправить приветственное письмо:", e?.message ?? e));
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
   }
@@ -762,6 +772,29 @@ app.get("/payments/:id/status", authMiddleware, async (req, res) => {
     // сумма и тариф — только для проведённого платежа: фронтенд шлёт их в цель Метрики «purchase»
     const summary = status === "succeeded" ? await getPaymentSummary(req.params.id) : null;
     res.json({ status, ...(summary ?? {}) });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ─────────────────────── админка: почта ───────────────────────
+// Тема/SMTP-настройки — чистый PostgREST (public.app_settings, RLS admin-only, см. миграцию
+// 0008_app_settings.sql), сервер сюда не нужен. Единственное, для чего он нужен, — реально
+// ОТПРАВИТЬ письмо (нужен SMTP-транспорт из mailer.js), поэтому у "отправить тестовое" есть
+// отдельный эндпоинт, а сохранение текста идёт напрямую через supabase-клиент (см.
+// src/lib/welcomeEmailSettings.ts).
+
+app.post("/admin/welcome-email/test", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const email = await getUserEmail(req.user.sub);
+    const subject = String(req.body?.subject ?? "").trim();
+    const bodyText = String(req.body?.bodyText ?? "").trim();
+    if (!subject || !bodyText) return res.status(400).json({ error: "Заполни тему и текст письма" });
+    const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+    // fullName не передаём — в JWT (см. signToken выше) его нет, только sub/email; тестовое письмо
+    // уходит с обезличенным приветствием, это ожидаемо для проверки текста/вёрстки, не переписки.
+    await sendWelcomeEmail(email, { siteUrl, subject, bodyText });
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
