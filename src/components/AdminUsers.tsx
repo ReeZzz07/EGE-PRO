@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { SUBJECTS } from "../data/tasks";
 import { loadAllTariffs, type Tariff } from "../lib/tariffs";
+import { GRADE_OPTS, GOAL_OPTS, TIME_OPTS } from "./OnboardingFlow";
 import {
   searchAdminUsers,
   loadAdminUserDetail,
@@ -20,6 +21,13 @@ import {
 import { Icon, useToast } from "./ui";
 
 const PAGE_SIZE = 20;
+
+/** Код → подпись для полей анкеты онбординга (см. OnboardingFlow.tsx) — та же анкета, что видит
+ *  ученик, но здесь только для чтения: значения приходят из профиля, который правит сам ученик на
+ *  странице настроек, админ их тут не редактирует. */
+const GRADE_LABELS: Record<string, string> = Object.fromEntries(GRADE_OPTS.map((o) => [o.v, o.l]));
+const GOAL_LABELS: Record<string, string> = Object.fromEntries(GOAL_OPTS.map((o) => [o.v, o.l]));
+const TIME_LABELS: Record<number, string> = Object.fromEntries(TIME_OPTS.map((o) => [o.v, o.l]));
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -141,7 +149,7 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
   const selectedTariff = tariffs.find((t) => t.id === tariffId);
 
   return (
-    <div className="border-t-2 border-ink/15 bg-hl/40 p-4 sm:p-5">
+    <div className="border-t-2 border-ink/15 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -169,6 +177,22 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
           Данные анонимизированы {fmtDate(detail.anonymized_at)} — вход в аккаунт заблокирован, email/имя стёрты. Экспорт и повторная анонимизация недоступны.
         </p>
       )}
+
+      <div className="mt-4">
+        <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Результат онбординга</p>
+        {detail.onboarded_at ? (
+          <div className="mt-2 grid gap-x-5 gap-y-1.5 text-[12.5px] sm:grid-cols-3">
+            <p><span className="text-ink2">Класс:</span> <strong>{(detail.grade && GRADE_LABELS[detail.grade]) || "—"}</strong></p>
+            <p><span className="text-ink2">Сдаёт ЕГЭ:</span> <strong>{detail.exam_year ?? "—"}</strong></p>
+            <p><span className="text-ink2">Основной предмет:</span> <strong>{detail.primary_subject ? (SUBJECTS[detail.primary_subject as keyof typeof SUBJECTS]?.name ?? detail.primary_subject) : "—"}</strong></p>
+            <p><span className="text-ink2">Цель:</span> <strong>{(detail.goal && GOAL_LABELS[detail.goal]) || "—"}</strong></p>
+            <p><span className="text-ink2">Время в день:</span> <strong>{detail.daily_minutes != null ? (TIME_LABELS[detail.daily_minutes] ?? `${detail.daily_minutes} мин`) : "—"}</strong></p>
+            <p><span className="text-ink2">Пройден:</span> <strong>{fmtDate(detail.onboarded_at)}</strong></p>
+          </div>
+        ) : (
+          <p className="mt-1.5 text-[12.5px] text-ink2">Онбординг ещё не пройден.</p>
+        )}
+      </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="space-y-3">
@@ -270,12 +294,12 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
 
           <div className="mt-3 flex flex-wrap gap-2">
             {!anonymized && !confirmingAnonymize && (
-              <button onClick={() => setConfirmingAnonymize(true)} className="btn btn-ghost px-3.5 py-2 text-[12.5px] text-red">
+              <button onClick={() => setConfirmingAnonymize(true)} className="btn btn-red px-3.5 py-2 text-[12.5px]">
                 <Icon name="eyeOff" size={13} /> Анонимизировать
               </button>
             )}
             {!confirmingDelete && (
-              <button onClick={() => setConfirmingDelete(true)} className="btn btn-ghost px-3.5 py-2 text-[12.5px] text-red">
+              <button onClick={() => setConfirmingDelete(true)} className="btn btn-red px-3.5 py-2 text-[12.5px]">
                 <Icon name="trash" size={13} /> Удалить аккаунт
               </button>
             )}

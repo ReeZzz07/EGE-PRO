@@ -32,7 +32,9 @@ export interface AdminUserDetail {
   grade: string | null;
   exam_year: number | null;
   goal: string | null;
+  daily_minutes: number | null;
   primary_subject: string | null;
+  onboarded_at: string | null;
   avatar_url: string | null;
   is_admin: boolean;
   tariff_id: string;
