@@ -168,7 +168,13 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-52">
+                // pt-1, а не mt-1 — margin-зазор между кнопкой и меню не входит в хитбокс этого
+                // div для onMouseEnter/onMouseLeave родителя выше: курсор, идущий по прямой от
+                // кнопки к меню, на долю секунды оказывается НАД зазором ни на одном из двух
+                // элементов, ловит mouseleave и меню закрывается раньше, чем до него доводят
+                // курсор. Padding — часть border box элемента, а margin — нет, поэтому тот же
+                // визуальный отступ через padding остаётся частью хитбокса и разрыва не создаёт.
+                <div className="absolute right-0 top-full z-50 w-52 pt-1">
                   <div role="menu" className="sheet overflow-hidden rounded-sm py-1.5">
                     {ACCOUNT_MENU.map((n) => (
                       <button
