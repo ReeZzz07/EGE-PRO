@@ -50,7 +50,7 @@ build` на хосте, затем `docker compose restart web`**, а не `npm 
 
 ```bash
 curl -X POST http://localhost:3100/auth/signup -H "content-type: application/json" \
-  -d '{"email":"you@example.com","password":"ваш-пароль","full_name":"Имя"}'
+  -d '{"email":"you@example.com","password":"ваш-пароль","full_name":"Имя","age":30,"gender":"m"}'
 
 docker exec -i ege-pro-postgres-1 psql -U postgres -d postgres -c \
   "update public.profiles set is_admin = true where id = (select id from auth.users where email='you@example.com');"
@@ -206,3 +206,10 @@ api/web, перезаписывает текущие данные, подним�
   `supabase/migrations/*.sql` работают без изменений.
 - Хранилище файлов — обычный диск (volume `storage_data`), не S3-совместимое API;
   `docker/api/server.js` отдаёт файлы по `GET /storage/:bucket/*path`.
+- **Миграция, меняющая схему (новая колонка/таблица), на уже поднятом стеке требует
+  `docker compose restart postgrest` после применения** — PostgREST кэширует схему БД при
+  старте и не узнаёт о новых колонках сам по себе (не слушает изменения автоматически); без
+  рестарта любой `.from().update()/insert()`, задевающий новую колонку, падает с 400 Bad Request,
+  причём падает целиком — включая старые поля в том же запросе. Применимо и к проду: после
+  `git pull` + миграции на боевой базе не забудь `docker compose -f docker-compose.prod.yml
+  restart postgrest`, иначе `up -d --build` (пересобирающий только `api`) эту проблему не решит.

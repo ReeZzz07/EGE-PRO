@@ -39,7 +39,7 @@ export default function AdminWelcomeEmailSettings() {
   };
 
   const sendTest = async () => {
-    if (!settings.subject.trim() || !settings.bodyText.trim()) return push("Заполни тему и текст письма", "err");
+    if (!settings.subject.trim() || !settings.bodyText.trim() || !settings.onboardingReminderText.trim()) return push("Заполни тему и оба текста письма", "err");
     setTesting(true);
     const res = await sendTestWelcomeEmail(settings);
     setTesting(false);
@@ -55,8 +55,9 @@ export default function AdminWelcomeEmailSettings() {
     <div className="sheet p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">Приветственное письмо</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
-        Уходит один раз, автоматически — сразу после того как ученик подтвердит email. Оформление (шапка, рамки, кнопка) в стиле платформы уже зашито и
-        везде одинаковое, здесь редактируется только текст.
+        Уходит один раз, автоматически — сразу после того как ученик подтвердит email. Оформление (шапка, рамки, нумерованные пункты, кнопка) в стиле
+        платформы уже зашито и везде одинаковое, здесь редактируется только текст. Блок-напоминание об онбординге появляется только у тех, кто ещё не
+        заполнил анкету подготовки на момент отправки письма.
       </p>
 
       {!isSupabaseConfigured && (
@@ -76,12 +77,27 @@ export default function AdminWelcomeEmailSettings() {
         </label>
         <label className="block">
           <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">
-            Текст письма <span className="font-normal normal-case">(пустая строка — разделитель между абзацами, форматирование — обычным текстом)</span>
+            Текст письма{" "}
+            <span className="font-normal normal-case">
+              (пустая строка — разделитель между абзацами; первый и последний абзац идут обычным текстом, всё, что между ними, — пронумерованные пункты)
+            </span>
           </span>
           <textarea
             value={settings.bodyText}
             onChange={(e) => setSettings((s) => ({ ...s, bodyText: e.target.value }))}
-            rows={14}
+            rows={16}
+            className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2.5 font-mono text-[12.5px] leading-relaxed"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">
+            Напоминание об онбординге{" "}
+            <span className="font-normal normal-case">(отдельный блок — показывается, только если ученик ещё не заполнил анкету подготовки)</span>
+          </span>
+          <textarea
+            value={settings.onboardingReminderText}
+            onChange={(e) => setSettings((s) => ({ ...s, onboardingReminderText: e.target.value }))}
+            rows={3}
             className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2.5 font-mono text-[12.5px] leading-relaxed"
           />
         </label>

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
+import { RUSSIAN_REGIONS, CITIES_BY_REGION } from "../data/geo";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
 import { useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal } from "./ui";
 import AuthScreen from "./AuthScreen";
 import type { View } from "./Header";
 
-type Step = "subject" | "quiz" | "auth" | "explainer";
+type Step = "location" | "subject" | "quiz" | "auth" | "explainer";
+const STEPS: Step[] = ["location", "subject", "quiz", "auth", "explainer"];
 
 /** Черновик анкеты (шаги "subject"/"quiz") — сохраняется в localStorage, а не только в памяти
  *  компонента: между шагом "auth" (создать профиль) и реальным входом теперь есть разрыв —
@@ -21,6 +23,9 @@ interface OnboardingDraft {
   year?: "this" | "next" | null;
   goal?: Goal | null;
   minutes?: number | null;
+  region?: string | null;
+  city?: string | null;
+  school?: string | null;
 }
 function loadOnboardingDraft(): OnboardingDraft | null {
   try {
@@ -107,12 +112,18 @@ export default function OnboardingFlow({
   // приоритетнее черновика; grade/year/goal/minutes от предмета не зависят, восстанавливаем их
   // независимо от того, совпал ли предмет.
   const [draft] = useState(() => loadOnboardingDraft());
+  const [region, setRegion] = useState<string | null>(draft?.region ?? null);
+  const [city, setCity] = useState<string | null>(draft?.city ?? null);
+  const [school, setSchool] = useState<string | null>(draft?.school ?? null);
   const [subject, setSubject] = useState<Subject | undefined>(initialSubject ?? draft?.subject);
   const [grade, setGrade] = useState<Grade | null>(draft?.grade ?? null);
   const [year, setYear] = useState<"this" | "next" | null>(draft?.year ?? null);
   const [goal, setGoal] = useState<Goal | null>(draft?.goal ?? null);
   const [minutes, setMinutes] = useState<number | null>(draft?.minutes ?? null);
   const [step, setStep] = useState<Step>(() => {
+    // регион/город — первый шаг всегда, даже если пришли с готовым initialSubject (ссылка "Пройди
+    // тест по физике" и т.п. выбирает ПРЕДМЕТ, а не пропускает анкету целиком)
+    if (!(draft?.region && draft?.city)) return "location";
     const effectiveSubject = initialSubject ?? draft?.subject;
     if (!effectiveSubject) return "subject";
     if (!(draft?.grade && draft?.year && draft?.goal && draft?.minutes)) return "quiz";
@@ -124,9 +135,9 @@ export default function OnboardingFlow({
   // синхронизируем черновик на каждое изменение анкеты — включая момент прямо перед уходом на
   // шаг "auth" (создать профиль), после которого может случиться разрыв на подтверждение email.
   useEffect(() => {
-    if (!subject) return;
-    saveOnboardingDraft({ subject, grade, year, goal, minutes });
-  }, [subject, grade, year, goal, minutes]);
+    if (!subject && !region) return;
+    saveOnboardingDraft({ subject, grade, year, goal, minutes, region, city, school });
+  }, [subject, grade, year, goal, minutes, region, city, school]);
 
   // profile из useAuth() подгружается асинхронно даже после того, как сессия уже реально вошла
   // (см. supabase.ts setSession → onAuthStateChange → loadProfile) — сразу после подтверждения
@@ -140,7 +151,17 @@ export default function OnboardingFlow({
 
   const finalizeAndGo = (dest: "diagnostic" | "bank") => {
     const examYear = new Date().getFullYear() + (year === "next" ? 1 : 0);
-    updateProfile({ grade: grade!, examYear, goal: goal!, dailyMinutes: minutes!, primarySubject: subject!, onboardedAt: Date.now() });
+    updateProfile({
+      grade: grade!,
+      examYear,
+      goal: goal!,
+      dailyMinutes: minutes!,
+      primarySubject: subject!,
+      region: region!,
+      city: city!,
+      school: school ?? undefined,
+      onboardedAt: Date.now(),
+    });
     clearOnboardingDraft();
     if (dest === "diagnostic") onFinishToDiagnostic(subject!);
     else onFinishToBank();
@@ -150,14 +171,67 @@ export default function OnboardingFlow({
     <div className="mx-auto max-w-2xl px-4 py-12">
       {/* прогресс шагов */}
       <div className="mb-8 flex items-center gap-1.5">
-        {(["subject", "quiz", "auth", "explainer"] as Step[]).map((s, i) => (
-          <span key={s} className={`h-1.5 flex-1 rounded-full ${(["subject", "quiz", "auth", "explainer"] as Step[]).indexOf(step) >= i ? "bg-blue" : "bg-ink/10"}`} />
+        {STEPS.map((s, i) => (
+          <span key={s} className={`h-1.5 flex-1 rounded-full ${STEPS.indexOf(step) >= i ? "bg-blue" : "bg-ink/10"}`} />
         ))}
       </div>
 
+      {step === "location" && (
+        <Reveal>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1 из 5</p>
+          <h1 className="font-display mt-1 text-2xl font-black">Откуда ты?</h1>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">Эти данные видны только тебе и не показываются другим ученикам.</p>
+          <div className="sheet mt-6 space-y-5 p-5 sm:p-6">
+            <label className="block">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Регион</span>
+              <select
+                value={region ?? ""}
+                onChange={(e) => { setRegion(e.target.value || null); setCity(null); }}
+                className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
+              >
+                <option value="">Выбери регион</option>
+                {RUSSIAN_REGIONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Город</span>
+              <input
+                list="onboarding-city-options"
+                value={city ?? ""}
+                onChange={(e) => setCity(e.target.value || null)}
+                disabled={!region}
+                className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm disabled:opacity-50"
+                placeholder={region ? "Выбери из списка или впиши свой" : "Сначала выбери регион"}
+              />
+              <datalist id="onboarding-city-options">
+                {(region ? (CITIES_BY_REGION[region] ?? []) : []).map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">
+                Школа <span className="font-normal normal-case text-ink2">(необязательно)</span>
+              </span>
+              <input
+                value={school ?? ""}
+                onChange={(e) => setSchool(e.target.value || null)}
+                className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
+                placeholder="Номер и/или название школы"
+              />
+            </label>
+          </div>
+          <button disabled={!region || !city} onClick={() => setStep("subject")} className="btn btn-blue mt-6 px-6 py-3 text-sm">
+            Далее <Icon name="arrowR" size={16} />
+          </button>
+        </Reveal>
+      )}
+
       {step === "subject" && (
         <Reveal>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1 из 4</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 2 из 5</p>
           <h1 className="font-display mt-1 text-2xl font-black">Какая математика тебе нужна?</h1>
           <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
             Русский язык и математику — обязательные для всех экзамены — мы уже подключили. Осталось выбрать уровень
@@ -187,7 +261,7 @@ export default function OnboardingFlow({
 
       {step === "quiz" && subject && (
         <Reveal>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 2 из 4</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 3 из 5</p>
           <h1 className="font-display mt-1 text-2xl font-black">Расскажи о своей цели</h1>
           <p className="mt-1.5 text-[13px] text-ink2">Предмет: <strong className={SUBJECTS[subject].color}>{SUBJECTS[subject].name}</strong></p>
           <div className="sheet mt-6 space-y-5 p-5 sm:p-6">
@@ -208,14 +282,14 @@ export default function OnboardingFlow({
 
       {step === "auth" && (
         <Reveal>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 3 из 4</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 4 из 5</p>
           <AuthScreen compact onSuccess={() => setStep("explainer")} onNav={onNav} />
         </Reveal>
       )}
 
       {step === "explainer" && subject && (
         <Reveal>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 4 из 4</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 5 из 5</p>
           <h1 className="font-display mt-1 text-2xl font-black">Как это работает</h1>
           <div className="relative mt-8 grid gap-6 sm:grid-cols-3">
             {[

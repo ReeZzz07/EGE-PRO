@@ -26,7 +26,7 @@ async function signup() {
   const resp = await fetch(`${BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password: PASSWORD, full_name: "Тест Настройки" }),
+    body: JSON.stringify({ email, password: PASSWORD, full_name: "Тест Настройки", age: 17, gender: "m" }),
   });
   const json = await resp.json();
   const id = json.data.user.id;

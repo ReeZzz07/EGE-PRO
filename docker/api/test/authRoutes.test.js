@@ -18,8 +18,17 @@ function testEmail() {
   return `t-${randomUUID()}@${TEST_EMAIL_DOMAIN}`;
 }
 
+// age/gender стали обязательными в POST /auth/signup (см. server.js) — большинство тестов здесь
+// проверяют другое поведение (email/пароль, повторная регистрация и т.п.), поэтому подставляем
+// валидные дефолты, если тест их явно не передал, а не дублируем в каждом вызове ниже. Тесты,
+// которым важно именно отсутствие/некорректность age/gender, передают их явно (в т.ч. undefined),
+// это переопределяет дефолт через spread.
 async function signup(body) {
-  const resp = await fetch(`${BASE_URL}/auth/signup`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const resp = await fetch(`${BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ age: 17, gender: "m", ...body }),
+  });
   return { status: resp.status, json: await resp.json() };
 }
 

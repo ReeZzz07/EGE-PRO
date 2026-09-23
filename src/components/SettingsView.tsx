@@ -2,15 +2,28 @@
 // раз на онбординге и больше нигде не редактировались) и опасная зона (удаление аккаунта). Личные
 // данные — в "Профиль" (ProfileView.tsx), предметы и тариф — в "Мои предметы" (SubjectsView.tsx).
 import { useEffect, useRef, useState } from "react";
-import { useAuth, type Goal, type Grade } from "../lib/auth";
+import { useAuth, type Gender, type Goal, type Grade } from "../lib/auth";
 import { ChoiceRow, GOAL_OPTS, GRADE_OPTS, TIME_OPTS } from "./OnboardingFlow";
+import { RUSSIAN_REGIONS, CITIES_BY_REGION } from "../data/geo";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const EXAM_YEAR_OPTS = [CURRENT_YEAR, CURRENT_YEAR + 1, CURRENT_YEAR + 2].map((y) => ({ v: y, l: String(y) }));
+const GENDER_OPTS: { v: Gender; l: string }[] = [
+  { v: "m", l: "Мужской" },
+  { v: "f", l: "Женский" },
+];
 
-export default function SettingsView({ onNav, highlightPrep }: { onNav: (v: View) => void; highlightPrep?: boolean }) {
+export default function SettingsView({
+  onNav,
+  highlightPrep,
+  highlightProfile,
+}: {
+  onNav: (v: View) => void;
+  highlightPrep?: boolean;
+  highlightProfile?: boolean;
+}) {
   const { profile, updateProfile, changePassword, deleteAccount, isGuestMode } = useAuth();
   const { push } = useToast();
 
@@ -29,6 +42,22 @@ export default function SettingsView({ onNav, highlightPrep }: { onNav: (v: View
   useEffect(() => {
     if (highlightPrep) prepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [highlightPrep]);
+
+  const [region, setRegion] = useState<string | null>(profile?.region ?? null);
+  const [city, setCity] = useState<string | null>(profile?.city ?? null);
+  const [school, setSchool] = useState<string | null>(profile?.school ?? null);
+  const [age, setAge] = useState(profile?.age != null ? String(profile.age) : "");
+  const [gender, setGender] = useState<Gender | null>(profile?.gender ?? null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Подсветка блока "О себе" — пришли сюда по кнопке "Заполнить" из напоминалки для уже
+  // зарегистрированных пользователей (см. Dashboard.tsx → ProfileCompletionNudge,
+  // highlightProfile в навигации к этому виду) — тот же приём, что у highlightPrep выше.
+  const [showProfileHighlight, setShowProfileHighlight] = useState(!!highlightProfile);
+  const profileRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (highlightProfile) profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [highlightProfile]);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -68,6 +97,28 @@ export default function SettingsView({ onNav, highlightPrep }: { onNav: (v: View
     });
     setSaving(false);
     setShowHighlight(false);
+    push("Изменения сохранены", "ok");
+  };
+
+  const ageNum = age.trim() ? Number(age) : null;
+  const dirtyProfile =
+    region !== (profile.region ?? null) ||
+    city !== (profile.city ?? null) ||
+    school !== (profile.school ?? null) ||
+    ageNum !== (profile.age ?? null) ||
+    gender !== (profile.gender ?? null);
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    await updateProfile({
+      region: region ?? undefined,
+      city: city ?? undefined,
+      school: school ?? undefined,
+      age: ageNum ?? undefined,
+      gender: gender ?? undefined,
+    });
+    setSavingProfile(false);
+    setShowProfileHighlight(false);
     push("Изменения сохранены", "ok");
   };
 
@@ -122,6 +173,89 @@ export default function SettingsView({ onNav, highlightPrep }: { onNav: (v: View
         <ChoiceRow label="время в день" options={TIME_OPTS} value={dailyMinutes} onChange={setDailyMinutes} />
         <button onClick={save} disabled={!dirty || saving} className="btn btn-blue px-5 py-2.5 text-sm">
           {saving ? "Сохраняем…" : "Сохранить изменения"}
+        </button>
+      </section>
+
+      <section
+        ref={profileRef}
+        className={`sheet mt-4 space-y-4 p-5 sm:p-6 transition-shadow ${showProfileHighlight ? "ring-2 ring-amber ring-offset-2 ring-offset-paper" : ""}`}
+      >
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">о себе</p>
+        {showProfileHighlight && (
+          <p className="anim-rise flex items-center gap-2 border-l-4 border-amber bg-amber/10 px-3 py-2 text-[12.5px] font-bold text-ink">
+            <Icon name="target" size={14} className="shrink-0 text-amber" /> Заполни это и сохрани — эти данные помогают нам понимать нашу аудиторию.
+          </p>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Регион</span>
+            <select
+              value={region ?? ""}
+              onChange={(e) => { setRegion(e.target.value || null); setCity(null); }}
+              className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
+            >
+              <option value="">Не указан</option>
+              {RUSSIAN_REGIONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Город</span>
+            <input
+              list="settings-city-options"
+              value={city ?? ""}
+              onChange={(e) => setCity(e.target.value || null)}
+              disabled={!region}
+              className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm disabled:opacity-50"
+              placeholder={region ? "Выбери из списка или впиши свой" : "Сначала выбери регион"}
+            />
+            <datalist id="settings-city-options">
+              {(region ? (CITIES_BY_REGION[region] ?? []) : []).map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+          <label className="block">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">
+              Школа <span className="font-normal normal-case text-ink2">(необязательно)</span>
+            </span>
+            <input
+              value={school ?? ""}
+              onChange={(e) => setSchool(e.target.value || null)}
+              className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
+              placeholder="Номер и/или название школы"
+            />
+          </label>
+          <label className="block">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Возраст</span>
+            <input
+              value={age}
+              onChange={(e) => setAge(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
+              placeholder="17"
+            />
+          </label>
+        </div>
+        <div>
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Пол</span>
+          <div className="mt-1.5 flex gap-2">
+            {GENDER_OPTS.map((o) => (
+              <button
+                key={o.v}
+                onClick={() => setGender(o.v)}
+                className={`flex-1 rounded-sm border-2 px-3.5 py-2.5 text-[13px] font-bold transition sm:flex-none sm:px-6 ${
+                  gender === o.v ? "border-blue bg-blue text-white" : "border-ink/20 text-ink2 hover:border-ink/50 hover:text-ink"
+                }`}
+              >
+                {o.l}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button onClick={saveProfile} disabled={!dirtyProfile || savingProfile} className="btn btn-blue px-5 py-2.5 text-sm">
+          {savingProfile ? "Сохраняем…" : "Сохранить изменения"}
         </button>
       </section>
 

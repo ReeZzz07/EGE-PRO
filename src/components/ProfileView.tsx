@@ -127,6 +127,8 @@ export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
   const tariff = tariffs.find((t) => t.id === profile.tariffId);
   const gradeLabel = GRADE_OPTS.find((o) => o.v === profile.grade)?.l ?? "не указан";
   const goalLabel = GOAL_OPTS.find((o) => o.v === profile.goal)?.l ?? "не указана";
+  const locationLabel = profile.city ? (profile.region && profile.region !== profile.city ? `${profile.city}, ${profile.region}` : profile.city) : "не указан";
+  const aboutLabel = [profile.age ? `${profile.age} лет` : null, profile.gender === "m" ? "М" : profile.gender === "f" ? "Ж" : null].filter(Boolean).join(" · ") || "не указано";
   const initial = (profile.name || profile.email || "?").trim().charAt(0).toUpperCase();
   const mistakeCount = derived.mistakeIds.size;
   const preset = presetFromAvatarUrl(profile.avatarUrl);
@@ -229,6 +231,8 @@ export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
         />
         <FactTile icon="target" label="класс" value={gradeLabel} onClick={() => onNav({ name: "settings" })} />
         <FactTile icon="flame" label="цель" value={goalLabel} onClick={() => onNav({ name: "settings" })} />
+        <FactTile icon="home" label="город" value={locationLabel} onClick={() => onNav({ name: "settings" })} />
+        <FactTile icon="user" label="о себе" value={aboutLabel} onClick={() => onNav({ name: "settings" })} />
         <FactTile
           icon="star"
           label="баллы"

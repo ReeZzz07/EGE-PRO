@@ -35,6 +35,11 @@ export interface AdminUserDetail {
   daily_minutes: number | null;
   primary_subject: string | null;
   onboarded_at: string | null;
+  region: string | null;
+  city: string | null;
+  school: string | null;
+  age: number | null;
+  gender: string | null;
   avatar_url: string | null;
   is_admin: boolean;
   tariff_id: string;

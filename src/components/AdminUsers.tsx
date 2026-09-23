@@ -28,6 +28,7 @@ const PAGE_SIZE = 20;
 const GRADE_LABELS: Record<string, string> = Object.fromEntries(GRADE_OPTS.map((o) => [o.v, o.l]));
 const GOAL_LABELS: Record<string, string> = Object.fromEntries(GOAL_OPTS.map((o) => [o.v, o.l]));
 const TIME_LABELS: Record<number, string> = Object.fromEntries(TIME_OPTS.map((o) => [o.v, o.l]));
+const GENDER_LABELS: Record<string, string> = { m: "Мужской", f: "Женский" };
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -192,6 +193,17 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
         ) : (
           <p className="mt-1.5 text-[12.5px] text-ink2">Онбординг ещё не пройден.</p>
         )}
+      </div>
+
+      <div className="mt-4">
+        <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">О себе</p>
+        <div className="mt-2 grid gap-x-5 gap-y-1.5 text-[12.5px] sm:grid-cols-3">
+          <p><span className="text-ink2">Регион:</span> <strong>{detail.region || "—"}</strong></p>
+          <p><span className="text-ink2">Город:</span> <strong>{detail.city || "—"}</strong></p>
+          <p><span className="text-ink2">Школа:</span> <strong>{detail.school || "—"}</strong></p>
+          <p><span className="text-ink2">Возраст:</span> <strong>{detail.age ?? "—"}</strong></p>
+          <p><span className="text-ink2">Пол:</span> <strong>{(detail.gender && GENDER_LABELS[detail.gender]) || "—"}</strong></p>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">

@@ -6,6 +6,7 @@ import { reachGoal } from "./metrika";
 
 export type Grade = "10" | "11" | "grad";
 export type Goal = "threshold" | "70plus" | "80plus" | "olympiad";
+export type Gender = "m" | "f";
 
 export interface Profile {
   id: string;
@@ -15,6 +16,16 @@ export interface Profile {
   examYear?: number;
   goal?: Goal;
   dailyMinutes?: number;
+  /** Регион/город — первый шаг онбординга (см. OnboardingFlow.tsx), сверяются на фронтенде со
+   *  справочником (src/data/geo.ts), но хранятся как обычный текст — город можно вписать вручную,
+   *  если его нет в справочнике. Школа — вообще без справочника, свободный текст, необязательна. */
+  region?: string;
+  city?: string;
+  school?: string;
+  /** Возраст и пол задаются один раз при регистрации (см. AuthScreen.tsx → POST /auth/signup),
+   *  но остаются редактируемыми позже, как и всё остальное здесь (см. SettingsView.tsx). */
+  age?: number;
+  gender?: Gender;
   /** предмет, выбранный на онбординге — остаётся "предметом по умолчанию" везде, где явно не
    *  выбран другой (см. subjects ниже) */
   primarySubject?: Subject;
@@ -66,7 +77,7 @@ interface AuthCtx {
   loading: boolean;
   /** true, если Supabase не подключён — работаем в локальном гостевом режиме (см. SETUP.md) */
   isGuestMode: boolean;
-  signUp: (email: string, password: string, name: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string, name: string, age: number, gender: Gender) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   /** необратимо: в режиме с бэкендом требует пароль (см. server.js DELETE /auth/account) и
@@ -104,6 +115,12 @@ interface AuthCtx {
 }
 
 const GUEST_KEY = "ege-pro.guest-profile.v1";
+/** Ставится в localStorage сразу после успешного подтверждения email (см. verifyEmail ниже) —
+ *  Dashboard.tsx при первом же рендере после этого читает флаг и один раз показывает попап с
+ *  текстом приветственного письма (см. WelcomeContentModal.tsx), затем сам стирает флаг. Через
+ *  localStorage, а не параметр навигации — подтверждение и первый визит на дашборд разнесены во
+ *  времени и не обязательно идут одним прямым переходом (между ними может быть весь онбординг). */
+export const WELCOME_POPUP_FLAG_KEY = "ege-pro.show-welcome-popup.v1";
 const AuthCtx = createContext<AuthCtx | null>(null);
 
 function loadGuestProfile(): Profile | null {
@@ -136,6 +153,11 @@ function profileFromRow(data: Record<string, unknown>, fallbackEmail: string, fa
     goal: (data.goal as Goal) ?? undefined,
     dailyMinutes: (data.daily_minutes as number) ?? undefined,
     primarySubject: (data.primary_subject as Subject) ?? undefined,
+    region: (data.region as string) ?? undefined,
+    city: (data.city as string) ?? undefined,
+    school: (data.school as string) ?? undefined,
+    age: (data.age as number) ?? undefined,
+    gender: (data.gender as Gender) ?? undefined,
     subjects,
     onboardedAt: data.onboarded_at ? new Date(data.onboarded_at as string).getTime() : undefined,
     isAdmin: (data.is_admin as boolean) ?? false,
@@ -194,16 +216,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, name: string): Promise<AuthResult> => {
+  const signUp = async (email: string, password: string, name: string, age: number, gender: Gender): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) {
       // гостевой режим: нет настоящего бэкенда/почты — подтверждение email не имеет смысла,
       // логиним сразу же, как и раньше.
-      const p: Profile = { id: "guest-" + Date.now(), name, email, subjects: [] };
+      const p: Profile = { id: "guest-" + Date.now(), name, email, age, gender, subjects: [] };
       saveGuestProfile(p);
       setProfile(p);
       return {};
     }
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+    const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, age, gender } } });
     if (error) return { error: error.message };
     // profile не устанавливаем — сессии нет, аккаунт рабочий только после подтверждения email
     // (см. authShim.signUp). AuthScreen по needsVerification уводит на экран "проверь почту".
@@ -264,7 +286,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyEmail = async (token: string): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме подтверждать нечего — аккаунт уже рабочий." };
     const { error } = await supabase.auth.verifyEmail(token);
-    return error ? { error: error.message } : {};
+    if (error) return { error: error.message };
+    try {
+      localStorage.setItem(WELCOME_POPUP_FLAG_KEY, "1");
+    } catch {
+      /* ignore — не критично, просто не покажем попап в этой сессии */
+    }
+    return {};
   };
 
   const resendVerification = async (email: string): Promise<AuthResult> => {
@@ -345,6 +373,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           primary_subject: primarySubjectToWrite,
           onboarded_at: patch.onboardedAt ? new Date(patch.onboardedAt).toISOString() : undefined,
           tariff_id: patch.tariffId,
+          region: patch.region,
+          city: patch.city,
+          school: patch.school,
+          age: patch.age,
+          gender: patch.gender,
         })
         .eq("id", profile.id);
     }

@@ -1,14 +1,16 @@
 import { SUBJECTS, TASKS, taskById, type Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
-import { effectivePrimarySubject, useAuth } from "../lib/auth";
+import { effectivePrimarySubject, useAuth, WELCOME_POPUP_FLAG_KEY } from "../lib/auth";
 import { loadDiagnosticResult, loadStudyPlan } from "../lib/planStorage";
 import { pickTaskOfDay, type TaskOfDayReason } from "../lib/taskOfDay";
 import { addProfileSubject } from "../lib/profileSubjects";
 import { useEffect, useMemo, useState } from "react";
 import { formatClock, plural, useCountdown, useScramble } from "../lib/utils";
 import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
+import { loadWelcomeEmailContentForViewer, type WelcomeEmailSettings } from "../lib/welcomeEmailSettings";
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, useToast } from "./ui";
+import WelcomeContentModal from "./WelcomeContentModal";
 
 /** «Мои предметы» — тарифы обещают "N предметов на выбор" (public.tariffs.subjectsCount), эта
  *  секция и есть то самое место, где предмет реально добавляется (см. lib/profileSubjects.ts).
@@ -157,6 +159,35 @@ function OnboardingNudge({ onNav }: { onNav: (v: View) => void }) {
   );
 }
 
+/** Баннер-напоминалка для тех, кто онбординг УЖЕ прошёл (иначе выше показывается OnboardingNudge,
+ *  оба одновременно не показываются — см. условие в рендере ниже), но регион/город/возраст/пол
+ *  всё ещё не заполнены — реальный случай для всех, кто зарегистрировался до появления этих полей
+ *  в анкете (см. миграцию 0027_profile_location_demographics.sql). Школа НЕ входит в условие —
+ *  она необязательна даже в самом онбординге (не у всех есть актуальная школа, например у
+ *  выпускников прошлых лет, grade === "grad"). */
+function ProfileCompletionNudge({ onNav }: { onNav: (v: View) => void }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="anim-rise mt-6 flex flex-wrap items-center justify-between gap-3 border-l-4 border-amber bg-amber/10 px-4 py-3.5 sm:px-5">
+      <div className="flex items-start gap-3">
+        <Icon name="user" size={18} className="mt-0.5 shrink-0 text-amber" />
+        <p className="text-[13px] leading-relaxed text-ink2">
+          <strong className="text-ink">Дозаполни профиль</strong> — регион, город, возраст и пол. Эти поля появились недавно, у тебя их ещё нет.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button onClick={() => onNav({ name: "settings", highlightProfile: true })} className="btn btn-ink px-3.5 py-2 text-[12.5px]">
+          Заполнить
+        </button>
+        <button onClick={() => setDismissed(true)} aria-label="Скрыть до следующего входа" className="btn btn-ghost px-2.5 py-2 text-[12.5px]">
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
   useTasksVersion();
@@ -215,9 +246,47 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derived.mistakeIds]);
 
+  // Попап с текстом приветственного письма — см. lib/auth.tsx (WELCOME_POPUP_FLAG_KEY ставится
+  // там же, в verifyEmail()) и WelcomeContentModal.tsx. Флаг, а не прямой переход сюда из
+  // VerifyEmailView.tsx — между подтверждением email и первым реальным визитом на дашборд обычно
+  // проходит весь онбординг (см. App.tsx: verify-email → "onboarding"), так что попап всё равно
+  // ждёт своего момента; проверяем и стираем флаг один раз при монтировании.
+  const [welcomeContent, setWelcomeContent] = useState<WelcomeEmailSettings | null>(null);
+  useEffect(() => {
+    if (!profile || isGuestMode) return;
+    let flagged = false;
+    try {
+      flagged = localStorage.getItem(WELCOME_POPUP_FLAG_KEY) === "1";
+    } catch {
+      /* ignore */
+    }
+    if (!flagged) return;
+    try {
+      localStorage.removeItem(WELCOME_POPUP_FLAG_KEY);
+    } catch {
+      /* ignore */
+    }
+    loadWelcomeEmailContentForViewer().then(setWelcomeContent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!profile, isGuestMode]);
+
+  // регион/город/возраст/пол — новые поля анкеты (см. миграцию 0027_...), у аккаунтов,
+  // зарегистрированных до неё, их ещё нет, даже если онбординг давно пройден.
+  const profileDataMissing = !!profile && (!profile.region || !profile.city || profile.age == null || !profile.gender);
+
   return (
     <div className="mx-auto max-w-[1600px] px-4">
-      {profile && !profile.onboardedAt && !isGuestMode && <OnboardingNudge onNav={onNav} />}
+      {welcomeContent && profile && (
+        <WelcomeContentModal
+          content={welcomeContent}
+          name={profile.name}
+          onboarded={!!profile.onboardedAt}
+          onClose={() => setWelcomeContent(null)}
+          onOpenSettings={() => onNav({ name: "settings", highlightPrep: !profile.onboardedAt, highlightProfile: profileDataMissing })}
+        />
+      )}
+
+      {profile && !isGuestMode && (!profile.onboardedAt ? <OnboardingNudge onNav={onNav} /> : profileDataMissing && <ProfileCompletionNudge onNav={onNav} />)}
 
       {/* ─── БЛАНК № 1 ─── */}
       <section className="sheet sheet-holes gridpaper relative mt-6 overflow-hidden">

@@ -72,11 +72,25 @@ const authShim = {
     listeners.add(cb);
     return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } };
   },
-  async signUp({ email, password, options }: { email: string; password: string; options?: { data?: { full_name?: string } } }) {
+  async signUp({
+    email,
+    password,
+    options,
+  }: {
+    email: string;
+    password: string;
+    options?: { data?: { full_name?: string; age?: number; gender?: string } };
+  }) {
     const resp = await apiFetch("/auth/signup", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password, full_name: options?.data?.full_name ?? "" }),
+      body: JSON.stringify({
+        email,
+        password,
+        full_name: options?.data?.full_name ?? "",
+        age: options?.data?.age,
+        gender: options?.data?.gender,
+      }),
     });
     const json = await resp.json();
     if (!resp.ok) return { data: { user: null, needsVerification: false }, error: json.error ?? { message: resp.statusText } };

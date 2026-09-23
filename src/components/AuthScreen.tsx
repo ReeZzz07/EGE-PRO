@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { useAuth } from "../lib/auth";
+import { useAuth, type Gender } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { Icon } from "./ui";
 import type { View } from "./Header";
+
+const GENDER_OPTS: { v: Gender; l: string }[] = [
+  { v: "m", l: "Мужской" },
+  { v: "f", l: "Женский" },
+];
 
 export default function AuthScreen({
   compact = false,
@@ -21,6 +26,8 @@ export default function AuthScreen({
   const [mode, setMode] = useState<"signup" | "login" | "forgot">(initialMode);
   const [forgotSent, setForgotSent] = useState(false);
   const [name, setName] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<Gender | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,10 +63,13 @@ export default function AuthScreen({
       return;
     }
     if (mode === "signup" && !name.trim()) return setError("Укажи имя — так к тебе будет обращаться репетитор.");
+    const ageNum = Number(age);
+    if (mode === "signup" && (!age.trim() || !Number.isInteger(ageNum) || ageNum < 5 || ageNum > 100)) return setError("Укажи возраст (от 5 до 100 лет).");
+    if (mode === "signup" && !gender) return setError("Укажи пол.");
     if (!email.trim() || !password.trim()) return setError("Заполни email и пароль.");
     if (mode === "signup" && password !== confirmPassword) return setError("Пароли не совпадают.");
     setBusy(true);
-    const result = mode === "signup" ? await signUp(email.trim(), password, name.trim()) : await signIn(email.trim(), password);
+    const result = mode === "signup" ? await signUp(email.trim(), password, name.trim(), ageNum, gender!) : await signIn(email.trim(), password);
     setBusy(false);
     if (result.error) {
       setError(result.error);
@@ -113,6 +123,37 @@ export default function AuthScreen({
                 <div>
                   <label className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Имя</label>
                   <input value={name} onChange={(e) => setName(e.target.value)} className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm" placeholder="Как к тебе обращаться" />
+                </div>
+              )}
+              {mode === "signup" && (
+                <div className="flex gap-3">
+                  <div className="w-24 shrink-0">
+                    <label className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Возраст</label>
+                    <input
+                      value={age}
+                      onChange={(e) => setAge(e.target.value.replace(/\D/g, ""))}
+                      inputMode="numeric"
+                      className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-sm"
+                      placeholder="17"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Пол</label>
+                    <div className="mt-1.5 flex gap-1.5">
+                      {GENDER_OPTS.map((o) => (
+                        <button
+                          key={o.v}
+                          type="button"
+                          onClick={() => setGender(o.v)}
+                          className={`flex-1 rounded-sm border-2 px-2 py-2.5 text-[13px] font-bold transition ${
+                            gender === o.v ? "border-blue bg-blue text-white" : "border-ink/20 text-ink2 hover:border-ink/50 hover:text-ink"
+                          }`}
+                        >
+                          {o.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
               <div>

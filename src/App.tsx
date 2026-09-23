@@ -325,7 +325,7 @@ function AppShell() {
         {view.name === "session-summary" && <SessionSummary onNav={setView} />}
         {view.name === "tariffs" && <Tariffs onNav={setView} />}
         {view.name === "profile" && <ProfileView onNav={setView} />}
-        {view.name === "settings" && <SettingsView onNav={setView} highlightPrep={view.highlightPrep} />}
+        {view.name === "settings" && <SettingsView onNav={setView} highlightPrep={view.highlightPrep} highlightProfile={view.highlightProfile} />}
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}

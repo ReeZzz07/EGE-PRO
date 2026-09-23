@@ -40,7 +40,7 @@ import {
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { initiatePayment, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
 import { createActionToken, consumeActionToken } from "./authTokens.js";
-import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./mailer.js";
+import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, resolveWelcomeEmailSettings } from "./mailer.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -138,8 +138,15 @@ async function requireAdmin(req, res, next) {
 // ─────────────────────── auth ───────────────────────
 
 app.post("/auth/signup", authLimiter, async (req, res) => {
-  const { email, password, full_name } = req.body ?? {};
+  const { email, password, full_name, age, gender } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: { message: "email и password обязательны" } });
+  // Возраст/пол — обязательны в форме регистрации (см. AuthScreen.tsx), но проверяем и здесь: это
+  // единственный момент, когда их вообще можно задать (handle_new_user в 0027_..._demographics.sql
+  // забирает их из raw_user_meta_data только при INSERT, а не позже) — некорректные значения молча
+  // осели бы как NULL и без этой проверки прошли бы незамеченными.
+  const ageNum = Number(age);
+  if (!Number.isInteger(ageNum) || ageNum < 5 || ageNum > 100) return res.status(400).json({ error: { message: "Возраст обязателен и должен быть от 5 до 100 лет" } });
+  if (gender !== "m" && gender !== "f") return res.status(400).json({ error: { message: "Пол обязателен" } });
   try {
     const existing = await pool.query("select id from auth.users where email = $1", [email]);
     if (existing.rows.length) return res.status(400).json({ error: { message: "Пользователь с таким email уже существует" } });
@@ -151,7 +158,7 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
     const { rows } = await pool.query(
       `insert into auth.users (email, encrypted_password, raw_user_meta_data)
        values ($1, $2, $3) returning id, email`,
-      [email, hash, JSON.stringify({ full_name: full_name ?? "" })]
+      [email, hash, JSON.stringify({ full_name: full_name ?? "", age: ageNum, gender })]
     );
     const user = rows[0];
     res.json({ data: { user }, error: null, needsVerification: true });
@@ -289,9 +296,15 @@ app.post("/auth/verify-email", authLimiter, async (req, res) => {
     // ровно в момент реального подтверждения (сюда не попадёшь повторно на уже подтверждённый
     // аккаунт: consumeActionToken выше одноразовый и сгорает после первого успешного использования).
     (async () => {
-      const p = await pool.query("select full_name from public.profiles where id = $1", [userId]);
+      const p = await pool.query("select full_name, onboarded_at from public.profiles where id = $1", [userId]);
       const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
-      await sendWelcomeEmail(user.email, { fullName: p.rows[0]?.full_name, siteUrl });
+      // onboarded_at на этот момент почти всегда ещё пуст даже у тех, кто идёт по нормальному
+      // сценарию онбординга (см. OnboardingFlow.tsx — он ставится позже, на шаге "explainer", уже
+      // после подтверждения email) — письмо в таком случае просто напомнит то, что ученик и так
+      // сделает через минуту, не страшно. Реальная цель — те, кто вышел из мастера регистрации на
+      // середине и вернулся позже уже по ссылке из письма (см. Dashboard.tsx → OnboardingNudge,
+      // тот же случай).
+      await sendWelcomeEmail(user.email, { fullName: p.rows[0]?.full_name, siteUrl, onboarded: !!p.rows[0]?.onboarded_at });
     })().catch((e) => console.warn("не удалось отправить приветственное письмо:", e?.message ?? e));
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });
@@ -764,6 +777,18 @@ app.post("/payments/yookassa/webhook", webhookLimiter, async (req, res) => {
   res.status(200).end();
 });
 
+// Текст приветственного письма для попапа на главной сразу после подтверждения email (см.
+// Dashboard.tsx → WelcomeContentModal.tsx, auth.tsx → WELCOME_POPUP_FLAG_KEY). Любой авторизованный
+// пользователь, не только админ (в отличие от POST /admin/welcome-email/test ниже) — сам текст не
+// секретный, это то же, что реально ушло/уйдёт ему на почту.
+app.get("/welcome-email/content", authMiddleware, async (req, res) => {
+  try {
+    res.json(await resolveWelcomeEmailSettings());
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 app.get("/payments/:id/status", authMiddleware, async (req, res) => {
   try {
     const gate = await resolveUserTariffGate(req.user.sub);
@@ -789,11 +814,14 @@ app.post("/admin/welcome-email/test", authMiddleware, requireAdmin, async (req, 
     const email = await getUserEmail(req.user.sub);
     const subject = String(req.body?.subject ?? "").trim();
     const bodyText = String(req.body?.bodyText ?? "").trim();
-    if (!subject || !bodyText) return res.status(400).json({ error: "Заполни тему и текст письма" });
+    const onboardingReminderText = String(req.body?.onboardingReminderText ?? "").trim();
+    if (!subject || !bodyText || !onboardingReminderText) return res.status(400).json({ error: "Заполни тему и оба текста письма" });
     const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
     // fullName не передаём — в JWT (см. signToken выше) его нет, только sub/email; тестовое письмо
     // уходит с обезличенным приветствием, это ожидаемо для проверки текста/вёрстки, не переписки.
-    await sendWelcomeEmail(email, { siteUrl, subject, bodyText });
+    // onboarded:false — показываем админу САМУЮ полную версию письма (с блоком-напоминанием), а
+    // не гадаем, прошёл ли лично он онбординг когда-то давно.
+    await sendWelcomeEmail(email, { siteUrl, subject, bodyText, onboardingReminderText, onboarded: false });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
