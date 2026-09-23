@@ -15,6 +15,7 @@ import AdminSeoSettings from "./AdminSeoSettings";
 import AdminScoreScales from "./AdminScoreScales";
 import AdminMailSettings from "./AdminMailSettings";
 import AdminWelcomeEmailSettings from "./AdminWelcomeEmailSettings";
+import AdminLifecycleEmails from "./AdminLifecycleEmails";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -249,6 +250,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         <div className="mt-6 space-y-6">
           <AdminMailSettings />
           <AdminWelcomeEmailSettings />
+          <AdminLifecycleEmails />
         </div>
       )}
 

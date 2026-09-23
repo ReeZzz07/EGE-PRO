@@ -41,10 +41,11 @@ import {
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { getWelcomeOffer } from "./offers.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
+import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
 import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
 import { createActionToken, consumeActionToken, inspectActionToken } from "./authTokens.js";
-import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, resolveWelcomeEmailSettings } from "./mailer.js";
+import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, sendMail, resolveWelcomeEmailSettings } from "./mailer.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -891,6 +892,77 @@ app.post("/admin/welcome-email/test", authMiddleware, requireAdmin, async (req, 
     // onboarded:false — показываем админу САМУЮ полную версию письма (с блоком-напоминанием), а
     // не гадаем, прошёл ли лично он онбординг когда-то давно.
     await sendWelcomeEmail(email, { siteUrl, subject, bodyText, onboardingReminderText, onboarded: false });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ─────────────────────── админка: письма-напоминания ───────────────────────
+// Тема и текст четырёх писем жизненного цикла (см. lifecycleEmails.js, lifecycle.js) — сохраняются
+// в public.app_settings, ключ 'lifecycle_emails' ({ [kind]: { subject, bodyText } }); чего нет в
+// настройках — берётся дефолт из кода. Дефолты отдаёт сервер (единственный источник правды).
+
+app.get("/admin/lifecycle-email", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    const current = await resolveLifecycleTemplates();
+    res.json({
+      templates: LIFECYCLE_KINDS.map((kind) => ({
+        kind,
+        title: LIFECYCLE_TEMPLATES[kind].title,
+        when: LIFECYCLE_TEMPLATES[kind].when,
+        placeholders: LIFECYCLE_TEMPLATES[kind].placeholders,
+        defaults: { subject: LIFECYCLE_TEMPLATES[kind].subject, bodyText: LIFECYCLE_TEMPLATES[kind].bodyText },
+        current: current[kind],
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.put("/admin/lifecycle-email/:kind", authMiddleware, requireAdmin, async (req, res) => {
+  const kind = req.params.kind;
+  if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
+  const subject = String(req.body?.subject ?? "").trim();
+  const bodyText = String(req.body?.bodyText ?? "").trim();
+  if (!subject || !bodyText) return res.status(400).json({ error: "Заполни тему и текст письма" });
+  if (subject.length > 200) return res.status(400).json({ error: "Тема слишком длинная (до 200 символов)" });
+  if (bodyText.length > 10000) return res.status(400).json({ error: "Текст слишком длинный (до 10 000 символов)" });
+  try {
+    const { rows } = await pool.query("select value from public.app_settings where key = 'lifecycle_emails'");
+    const value = { ...(rows[0]?.value ?? {}), [kind]: { subject, bodyText } };
+    await pool.query(
+      `insert into public.app_settings (key, value, updated_by) values ('lifecycle_emails', $1, $2)
+       on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by`,
+      [JSON.stringify(value), req.user.sub]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Предпросмотр — готовый HTML письма с образцовыми данными и ТЕКУЩИМ (даже несохранённым) текстом формы
+app.post("/admin/lifecycle-email/:kind/preview", authMiddleware, requireAdmin, async (req, res) => {
+  const kind = req.params.kind;
+  if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
+  try {
+    const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText });
+    res.json({ subject: m.subject, html: m.html });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Тестовая отправка на почту самого админа (образцовые данные, скидка показана)
+app.post("/admin/lifecycle-email/:kind/test", authMiddleware, requireAdmin, async (req, res) => {
+  const kind = req.params.kind;
+  if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
+  try {
+    const email = await getUserEmail(req.user.sub);
+    const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText });
+    await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}` });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });

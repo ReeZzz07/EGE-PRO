@@ -10,7 +10,7 @@
 // продублирует письмо; цена этого — при сбое SMTP письмо не повторяется (лучше потерять напоминание,
 // чем засыпать человека копиями). Отключить целиком — переменная окружения LIFECYCLE_EMAILS=off.
 import { pool } from "./db.js";
-import { sendActivationEmail, sendPaymentAbandonedEmail, sendSubscriptionExpiryEmail } from "./mailer.js";
+import { sendActivationEmail, sendPaymentAbandonedEmail, sendSubscriptionExpiryEmail } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
 import { getWelcomeOffer } from "./offers.js";
 
