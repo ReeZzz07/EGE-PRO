@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
+import { reachGoalOnce } from "../lib/metrika";
 import { RUSSIAN_REGIONS, CITIES_BY_REGION } from "../data/geo";
 import { useAuth, type Goal, type Grade } from "../lib/auth";
 import { useTasksVersion } from "../lib/dbTasks";
@@ -163,6 +164,7 @@ export default function OnboardingFlow({
       onboardedAt: Date.now(),
     });
     clearOnboardingDraft();
+    reachGoalOnce("onboarding_done", "onboarding_done");
     if (dest === "diagnostic") onFinishToDiagnostic(subject!);
     else onFinishToBank();
   };
@@ -304,12 +306,13 @@ export default function OnboardingFlow({
               </div>
             ))}
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <button onClick={() => finalizeAndGo("diagnostic")} className="btn btn-blue px-6 py-3 text-sm">
-              Начать диагностику <Icon name="arrowR" size={16} />
+          <div className="mt-8 flex flex-col items-start gap-3">
+            <button onClick={() => finalizeAndGo("diagnostic")} className="btn btn-blue px-8 py-4 text-base">
+              Узнать свой уровень — 7–10 минут <Icon name="arrowR" size={18} />
             </button>
-            <button onClick={() => finalizeAndGo("bank")} className="btn btn-ghost px-6 py-3 text-sm">
-              Сразу к заданиям
+            <p className="text-[12.5px] text-ink2">Бесплатно. По результату сразу получишь личный план подготовки: что повторить сегодня и на этой неделе.</p>
+            <button onClick={() => finalizeAndGo("bank")} className="link-slide text-[12.5px] font-bold text-ink2 hover:text-ink">
+              Пропустить — сразу к банку заданий
             </button>
           </div>
         </Reveal>

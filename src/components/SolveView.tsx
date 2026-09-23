@@ -55,6 +55,19 @@ export default function SolveView({ taskId, onNav }: { taskId: string; onNav: (v
   // TaskBank показывает предметы всей платформы независимо от тарифа (это витрина, см. каталог) —
   // но РЕШАТЬ задание по предмету, который ученик не подключил (и не админ), ссылка на банк не
   // должна пропускать: тариф ограничивает именно доступ к заданиям, а не только их листинг.
+  if (profile && !profile.isAdmin && profile.frozenSubjects?.includes(task.subject)) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+        <p className="font-display text-xl font-bold">Доступ к предмету «{SUBJECTS[task.subject].name}» приостановлен</p>
+        <p className="mt-3 text-sm text-ink2">Тариф закончился. Твои данные и прогресс по этому предмету сохранены — доступ вернётся сразу после продления, выбирать ничего заново не нужно.</p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button onClick={() => onNav({ name: "renew" })} className="btn btn-blue px-5 py-2.5 text-sm">Продлить тариф</button>
+          <button onClick={() => onNav({ name: "bank" })} className="btn btn-ghost px-5 py-2.5 text-sm">В банк заданий</button>
+        </div>
+      </div>
+    );
+  }
+
   if (profile && !profile.isAdmin && !profile.subjects.includes(task.subject)) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-24 text-center">

@@ -11,6 +11,9 @@ import { loadWelcomeEmailContentForViewer, type WelcomeEmailSettings } from "../
 import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, useToast } from "./ui";
 import WelcomeContentModal from "./WelcomeContentModal";
+import WelcomeOfferBanner from "./WelcomeOfferBanner";
+import SubscriptionBanner from "./SubscriptionBanner";
+import { useWelcomeOffer } from "../lib/offers";
 
 /** «Мои предметы» — тарифы обещают "N предметов на выбор" (public.tariffs.subjectsCount), эта
  *  секция и есть то самое место, где предмет реально добавляется (см. lib/profileSubjects.ts).
@@ -71,6 +74,18 @@ export function MySubjectsSection({ onNav }: { onNav: (v: View) => void }) {
             </div>
           );
         })}
+
+        {/* предметы, доступ к которым приостановлен окончанием тарифа — данные целы, вернутся после продления */}
+        {(profile?.frozenSubjects ?? []).map((s) => (
+          <div key={s} className="sheet flex h-full flex-col border-dashed border-ink/30 bg-ink/[0.03] p-5">
+            <span className="font-mono inline-block w-fit border-2 border-ink/30 px-2 py-0.5 text-[11px] font-black text-ink2">{SUBJECTS[s].short}</span>
+            <h3 className="font-display mt-3 text-lg font-bold leading-tight text-ink2">{SUBJECTS[s].name}</h3>
+            <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-ink2">Доступ приостановлен — тариф закончился. Прогресс сохранён и вернётся после продления.</p>
+            <div className="mt-4">
+              <button onClick={() => onNav({ name: "renew" })} className="btn btn-ink px-3.5 py-2 text-[12.5px]">Продлить тариф</button>
+            </div>
+          </div>
+        ))}
 
         {/* добавить ещё предмет — до лимита тарифа, дальше честно предлагаем тариф побольше */}
         <div className="sheet flex h-full flex-col border-dashed border-ink/30 p-5">
@@ -188,10 +203,38 @@ function ProfileCompletionNudge({ onNav }: { onNav: (v: View) => void }) {
   );
 }
 
+/** Баннер для тех, кто онбординг прошёл, но диагностику по основному предмету ещё нет: именно
+ *  результат диагностики (уровень, слабые темы, план) — первый момент, когда платформа реально
+ *  что-то даёт, и от него дальше идёт всё остальное (план, пробники, повод перейти на платный
+ *  тариф). Поэтому показывается ПЕРЕД баннером дозаполнения профиля (см. условие в рендере ниже). */
+function DiagnosticNudge({ subject, onNav }: { subject: Subject; onNav: (v: View) => void }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="anim-rise mt-6 flex flex-wrap items-center justify-between gap-3 border-l-4 border-blue bg-blue/8 px-4 py-3.5 sm:px-5">
+      <div className="flex items-start gap-3">
+        <Icon name="target" size={18} className="mt-0.5 shrink-0 text-blue" />
+        <p className="text-[13px] leading-relaxed text-ink2">
+          <strong className="text-ink">Узнай свой уровень за 7–10 минут</strong> — 8–12 заданий по предмету «{SUBJECTS[subject].name}». По результату сразу соберём личный план: что повторить сегодня, а что можно не трогать.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button onClick={() => onNav({ name: "diagnostic", subject })} className="btn btn-blue px-3.5 py-2 text-[12.5px]">
+          Пройти диагностику <Icon name="arrowR" size={14} />
+        </button>
+        <button onClick={() => setDismissed(true)} aria-label="Скрыть до следующего входа" className="btn btn-ghost px-2.5 py-2 text-[12.5px]">
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const { derived } = useProgress();
   useTasksVersion();
   const { profile, isGuestMode } = useAuth();
+  const offer = useWelcomeOffer();
   // раньше здесь показывались ВСЕ предметы платформы, а не только подключённые ученику — теперь
   // рус + математика (базовая или профильная) подключаются автоматически при регистрации (см.
   // supabase/migrations/0015), остальные — через "Мои предметы" на странице тарифов
@@ -286,7 +329,17 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
         />
       )}
 
-      {profile && !isGuestMode && (!profile.onboardedAt ? <OnboardingNudge onNav={onNav} /> : profileDataMissing && <ProfileCompletionNudge onNav={onNav} />)}
+      {profile && !isGuestMode && profile.subscription && <SubscriptionBanner sub={profile.subscription} onNav={onNav} />}
+
+      {offer && profile?.tariffId === "free" && <WelcomeOfferBanner offer={offer} onNav={onNav} />}
+
+      {profile && !isGuestMode && (!profile.onboardedAt ? (
+        <OnboardingNudge onNav={onNav} />
+      ) : primarySubject && !loadDiagnosticResult(primarySubject, profile.id) ? (
+        <DiagnosticNudge subject={primarySubject} onNav={onNav} />
+      ) : (
+        profileDataMissing && <ProfileCompletionNudge onNav={onNav} />
+      ))}
 
       {/* ─── БЛАНК № 1 ─── */}
       <section className="sheet sheet-holes gridpaper relative mt-6 overflow-hidden">

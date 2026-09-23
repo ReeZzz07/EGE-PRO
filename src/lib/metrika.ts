@@ -97,7 +97,12 @@ export type GoalName =
   | "task_opened"
   | "ai_limit_reached"
   | "exam_mode_start"
-  | "essay_check_used";
+  | "essay_check_used"
+  | "onboarding_done"
+  | "diagnostic_done"
+  | "first_task_solved"
+  | "paywall_seen"
+  | "offer_seen";
 
 /** Достигнута цель. Если счётчик не подключён (не настроен в админке / ещё грузится) — цель ждёт в
  *  очереди и уходит после init; ничего не отправляется, пока счётчика нет вовсе.

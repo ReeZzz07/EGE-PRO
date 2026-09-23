@@ -4,7 +4,7 @@
 // её можно проверить напрямую, без реального HTTP к ЮKassa. Запуск: `npm test` из docker/api.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { applySucceededPayment, getPaymentSummary, priceWithDiscount } from "../payments.js";
+import { applySucceededPayment, effectiveDiscountPercent, getPaymentSummary, priceWithDiscount } from "../payments.js";
 import { createTestUser, deleteTestUser, createTestPayment, pool } from "./helpers.js";
 
 after(() => pool.end());
@@ -17,6 +17,15 @@ test("priceWithDiscount: без скидки — цена не меняется"
 test("priceWithDiscount: округляет до копеек, не плавает на нечётных процентах", () => {
   assert.equal(priceWithDiscount(1990, 33), 1333.3);
   assert.equal(priceWithDiscount(100, 10), 90);
+});
+
+test("effectiveDiscountPercent: оффер и персональная скидка не суммируются — берётся большая; нет ни одной — null", () => {
+  assert.equal(effectiveDiscountPercent(null, { active: false }), null);
+  assert.equal(effectiveDiscountPercent(0, undefined), null);
+  assert.equal(effectiveDiscountPercent(null, { active: true, percent: 30 }), 30);
+  assert.equal(effectiveDiscountPercent(50, { active: true, percent: 30 }), 50);
+  assert.equal(effectiveDiscountPercent(10, { active: true, percent: 30 }), 30);
+  assert.equal(effectiveDiscountPercent(15, { active: false, percent: 30 }), 15);
 });
 
 async function getProfileTariff(userId) {
@@ -121,7 +130,7 @@ test("getPaymentSummary: возвращает сумму числом и тар�
   const userId = await createTestUser();
   try {
     const paymentId = await createTestPayment(userId, { tariffId: "attestat", amountRub: 1990 });
-    assert.deepEqual(await getPaymentSummary(paymentId), { amountRub: 1990, tariffId: "attestat" });
+    assert.deepEqual(await getPaymentSummary(paymentId), { amountRub: 1990, tariffId: "attestat", kind: "tariff", extraSubjects: 0 });
   } finally {
     await deleteTestUser(userId);
   }

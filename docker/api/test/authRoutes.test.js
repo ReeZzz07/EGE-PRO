@@ -217,3 +217,69 @@ test("/auth/login: пароль хранится хэшированным — п
     await deleteTestUser(su.json.data.user.id);
   }
 });
+
+test("/auth/verify-email: повторный клик по уже сработавшей ссылке — 400 с кодом ALREADY_CONFIRMED (а не общая ошибка)", async () => {
+  const email = testEmail();
+  const su = await signup({ email, password: "testpass123" });
+  try {
+    const token = await createActionToken(su.json.data.user.id, "verify_email");
+    const first = await verifyEmail({ token });
+    const second = await verifyEmail({ token });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 400);
+    assert.equal(second.json.error.code, "ALREADY_CONFIRMED");
+  } finally {
+    await deleteTestUser(su.json.data.user.id);
+  }
+});
+
+test("/auth/verify-email: токен вытеснен более новым письмом (аккаунт ещё не подтверждён) — TOKEN_INVALID", async () => {
+  const email = testEmail();
+  const su = await signup({ email, password: "testpass123" });
+  try {
+    const oldToken = await createActionToken(su.json.data.user.id, "verify_email");
+    await createActionToken(su.json.data.user.id, "verify_email");
+    const r = await verifyEmail({ token: oldToken });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.error.code, "TOKEN_INVALID");
+  } finally {
+    await deleteTestUser(su.json.data.user.id);
+  }
+});
+
+test("/auth/signup: email нормализуется (пробелы, регистр), вход и повторная регистрация нечувствительны к регистру", async () => {
+  const base = testEmail();
+  const r = await signup({ email: `  ${base.toUpperCase()} `, password: "testpass123" });
+  try {
+    assert.equal(r.status, 200);
+    assert.equal(r.json.data.user.email, base);
+    await confirmEmail(r.json.data.user.id);
+    const l = await login({ email: base.toUpperCase(), password: "testpass123" });
+    assert.equal(l.status, 200);
+    const dup = await signup({ email: base, password: "testpass123" });
+    assert.equal(dup.status, 400);
+  } finally {
+    await deleteTestUser(r.json.data.user.id);
+  }
+});
+
+test("/auth/signup: явно некорректный email отклоняется понятной ошибкой", async () => {
+  for (const bad of ["   ", "no-at-sign", "a@b", "a b@c.ru"]) {
+    const r = await signup({ email: bad, password: "testpass123" });
+    assert.equal(r.status, 400, `"${bad}" должен быть отклонён`);
+  }
+});
+
+test("/auth/signup: новому ученику автоматически подключаются русский и математика (база) — регресс 0027", async () => {
+  const email = testEmail();
+  const r = await signup({ email, password: "testpass123", age: 16, gender: "f" });
+  try {
+    const { rows } = await pool.query("select subject from public.profile_subjects where user_id = $1 order by subject", [r.json.data.user.id]);
+    assert.deepEqual(rows.map((x) => x.subject), ["math_base", "rus"]);
+    const p = await pool.query("select age, gender from public.profiles where id = $1", [r.json.data.user.id]);
+    assert.equal(p.rows[0].age, 16);
+    assert.equal(p.rows[0].gender, "f");
+  } finally {
+    await deleteTestUser(r.json.data.user.id);
+  }
+});

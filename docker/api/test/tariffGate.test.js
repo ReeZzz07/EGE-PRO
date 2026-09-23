@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import {
   checkDailyAiLimit,
   countTodayTutorMessages,
+  essayTrialLeft,
   isEssayCheckAllowed,
   releaseDailyAiSlot,
   releaseEssayCheckSlot,
@@ -338,3 +339,25 @@ async function countModeMessages(userId, mode) {
   );
   return rows[0].n;
 }
+
+test("essayTrialLeft: free — одна бесплатная проверка сочинения, после её использования 0; платный/админ — 0 (у них полный доступ)", async () => {
+  const userId = await createTestUser();
+  const paidId = await createTestUser({ tariffId: "attestat" });
+  const adminId = await createTestUser({ isAdmin: true });
+  try {
+    const gate = await resolveUserTariffGate(userId);
+    assert.equal(await essayTrialLeft(gate, userId), 1);
+    const r = await reserveEssayCheckSlot(gate, userId, { taskId: null, content: "текст" });
+    assert.equal(await essayTrialLeft(gate, userId), 0);
+    // неудачный вызов модели откатывает резервацию — пробная проверка возвращается
+    await releaseEssayCheckSlot(r.reservationId);
+    assert.equal(await essayTrialLeft(gate, userId), 1);
+
+    assert.equal(await essayTrialLeft(await resolveUserTariffGate(paidId), paidId), 0);
+    assert.equal(await essayTrialLeft(await resolveUserTariffGate(adminId), adminId), 0);
+  } finally {
+    await deleteTestUser(userId);
+    await deleteTestUser(paidId);
+    await deleteTestUser(adminId);
+  }
+});

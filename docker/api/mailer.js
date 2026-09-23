@@ -167,19 +167,27 @@ export async function sendPasswordResetEmail(to, resetUrl) {
   });
 }
 
-export async function sendPaymentReceiptEmail(to, { tariffName, amountRub, periodDays, expiresAt }) {
+export async function sendPaymentReceiptEmail(to, { tariffName, amountRub, periodDays, expiresAt, kind = "tariff", extraSubjects = 0 }) {
   const expiresText = new Date(expiresAt).toLocaleDateString("ru-RU");
+  const isAddon = kind === "addon";
+  const subject = isAddon ? `Оплата прошла — докупка предметов (${extraSubjects})` : kind === "renewal" ? `Оплата прошла — тариф «${tariffName}» продлён` : `Оплата прошла — тариф «${tariffName}»`;
+  const lead = isAddon ? `Докуплено предметов: ${extraSubjects}. Они уже доступны — подключи их в разделе «Мои предметы».` : kind === "renewal" ? "Тариф продлён, доступ ко всем твоим предметам восстановлен." : "Тариф активирован.";
+  const rows = [
+    ["Тариф", tariffName],
+    ...(extraSubjects > 0 && !isAddon ? [["Докупленных предметов", String(extraSubjects)]] : []),
+    ...(isAddon ? [["Докуплено предметов", String(extraSubjects)]] : []),
+    ["Сумма", `${amountRub} ₽`],
+    ["Действует до", expiresText],
+  ];
   await sendMail({
     to,
-    subject: `Оплата прошла — тариф «${tariffName}»`,
-    text: `Спасибо за оплату!\n\nТариф: ${tariffName}\nСумма: ${amountRub} ₽\nДействует: ${periodDays} дней, до ${expiresText}\n\nЕГЭ·ПРО`,
+    subject,
+    text: ["Спасибо за оплату!", lead, rows.map(([k, v]) => `${k}: ${v}`).join("\n"), "ЕГЭ·ПРО"].join("\n\n"),
     html: wrapHtml(`
 <h2 style="font-size:18px;">Оплата прошла успешно</h2>
-<p>Тариф активирован.</p>
+<p>${escapeHtml(lead)}</p>
 <table style="margin:16px 0;font-size:14px;">
-<tr><td style="padding:4px 12px 4px 0;color:#8a8d9a;">Тариф</td><td><strong>${escapeHtml(tariffName)}</strong></td></tr>
-<tr><td style="padding:4px 12px 4px 0;color:#8a8d9a;">Сумма</td><td>${escapeHtml(String(amountRub))} ₽</td></tr>
-<tr><td style="padding:4px 12px 4px 0;color:#8a8d9a;">Действует до</td><td>${escapeHtml(expiresText)}</td></tr>
+${rows.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#8a8d9a;">${escapeHtml(k)}</td><td><strong>${escapeHtml(v)}</strong></td></tr>`).join("")}
 </table>
 `),
   });
@@ -260,7 +268,7 @@ function renderReminderCallout(text) {
  *  зашито в код"). Таблицы, а не div/flex для структурных блоков — надёжнее в Outlook и почтовых
  *  клиентах, которые не умеют современный CSS; простые div с margin — только внутри ячеек, это
  *  Outlook уже переваривает нормально. */
-function wrapBrandedHtml(innerHtml, siteUrl) {
+function wrapBrandedHtml(innerHtml, siteUrl, footerNote = "Это разовое письмо, не рассылка — больше таких писем от нас не придёт.") {
   return `<!doctype html><html lang="ru"><body style="margin:0;padding:28px 12px;background:#f2f3ee;font-family:'Segoe UI',Arial,sans-serif;color:#15172e;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#fbfbf8;border:2px solid #15172e;">
   <tr><td style="height:6px;line-height:6px;font-size:0;background:#ffe45e;">&nbsp;</td></tr>
@@ -281,7 +289,7 @@ function wrapBrandedHtml(innerHtml, siteUrl) {
   </tr>
   <tr>
     <td style="padding:18px 24px 24px;border-top:2px solid #e5e6df;">
-      <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#15172e;">Это разовое письмо, не рассылка — больше таких писем от нас не придёт.</p>
+      <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#15172e;">${escapeHtml(footerNote)}</p>
       <p style="margin:0;font-size:12px;color:#8a8d9a;">ЕГЭ·ПРО — тренажёр подготовки к ЕГЭ с ИИ-репетитором</p>
     </td>
   </tr>
@@ -327,6 +335,103 @@ ${onboarded ? "" : renderReminderCallout(onboardingReminderText)}
 <p style="margin:26px 0 4px;"><a href="${escapeHtml(url)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">Открыть тренажёр →</a></p>
 `,
       url
+    ),
+  });
+}
+
+
+// ─────────────── «жизненные» письма (см. lifecycle.js) ───────────────
+
+const LIFECYCLE_FOOTER = "Это разовое напоминание о твоём аккаунте — повторять его мы не будем.";
+
+function ctaButton(url, label) {
+  return `<p style="margin:26px 0 4px;"><a href="${escapeHtml(url)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">${escapeHtml(label)}</a></p>`;
+}
+
+/** offer — результат getWelcomeOffer(): если скидка ещё действует, письмо честно о ней говорит (с
+ *  датой окончания), если нет — вообще не упоминает. */
+function offerLine(offer) {
+  if (!offer?.active) return { text: "", html: "" };
+  const until = new Date(offer.expiresAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const text = `На первую оплату тарифа действует скидка −${offer.percent}% — до ${until} (МСК). Применится сама при оплате.`;
+  return {
+    text: `\n\n${text}`,
+    html: `<p style="margin:16px 0 0;padding:10px 14px;background:#ffe45e;border:2px solid #15172e;font-size:14px;font-weight:700;">${escapeHtml(text)}</p>`,
+  };
+}
+
+export const ACTIVATION_EMAIL_SUBJECT = "Твой уровень по ЕГЭ — за 7 минут";
+export const ACTIVATION_EMAIL_BODY = [
+  "Ты зарегистрировался(лась) в ЕГЭ·ПРО, но ещё не пробовал(а) платформу в деле. Самый быстрый старт — диагностика: 8–12 заданий из открытого банка ФИПИ, около 7 минут. По результату сразу увидишь свой уровень, сильные и слабые темы и получишь личный план: что повторить сегодня, а что подождёт.",
+  "Это бесплатно и без обязательств — если пойдёт, ИИ-репетитор поможет разобрать слабые темы по шагам, не выдавая готовых ответов.",
+];
+
+/** Через сутки после подтверждения почты тому, кто так и не начал заниматься. */
+export async function sendActivationEmail(to, { fullName, siteUrl, offer } = {}) {
+  const url = siteUrl || "https://ege-tutor.ru";
+  const name = fullName?.trim();
+  const greeting = name ? `${name}, привет!` : "Привет!";
+  const o = offerLine(offer);
+  await sendMail({
+    to,
+    subject: ACTIVATION_EMAIL_SUBJECT,
+    text: `${greeting}\n\n${ACTIVATION_EMAIL_BODY.join("\n\n")}${o.text}\n\nПройти диагностику: ${url}`,
+    html: wrapBrandedHtml(
+      `<h2 style="margin:0 0 16px;font-size:21px;">${escapeHtml(greeting)}</h2>${ACTIVATION_EMAIL_BODY.map((p) => paragraphHtml(p, "margin-bottom:12px;")).join("")}${o.html}${ctaButton(url, "Пройти диагностику →")}`,
+      url,
+      LIFECYCLE_FOOTER
+    ),
+  });
+}
+
+/** Тому, кто начал оплату тарифа, но не довёл её до конца. */
+export async function sendPaymentAbandonedEmail(to, { fullName, siteUrl, tariffName, offer } = {}) {
+  const base = siteUrl || "https://ege-tutor.ru";
+  const url = `${base}/tariffs`;
+  const name = fullName?.trim();
+  const greeting = name ? `${name}, привет!` : "Привет!";
+  const o = offerLine(offer);
+  const body = `Ты начал(а) оплату тарифа «${tariffName}» на ЕГЭ·ПРО, но платёж не дошёл до конца — с тебя ничего не списано. Если ты просто отвлёкся(лась), вернись на страницу тарифов и оплати в пару кликов: тариф включается сразу после платежа, чек придёт на почту. Оплата разовая на 30 дней, без автосписаний.`;
+  await sendMail({
+    to,
+    subject: "Оплата тарифа не завершена",
+    text: `${greeting}\n\n${body}${o.text}\n\nВернуться к тарифам: ${url}`,
+    html: wrapBrandedHtml(
+      `<h2 style="margin:0 0 16px;font-size:21px;">${escapeHtml(greeting)}</h2>${paragraphHtml(body)}${o.html}${ctaButton(url, "Вернуться к тарифам →")}`,
+      base,
+      LIFECYCLE_FOOTER
+    ),
+  });
+}
+
+/** Напоминание о сроке платного тарифа: expired=false — скоро закончится, true — уже закончился.
+ *  Ссылка ведёт на /renew — продление тарифа с теми же настройками (тариф + докупленные предметы),
+ *  без повторного выбора тарифа и предметов. */
+export async function sendSubscriptionExpiryEmail(to, { fullName, siteUrl, tariffName, expiresAt, expired, daysLeft, extraSubjects = 0, amountRub, frozenCount = 0 } = {}) {
+  const base = siteUrl || "https://ege-tutor.ru";
+  const url = `${base}/renew`;
+  const name = fullName?.trim();
+  const greeting = name ? `${name}, привет!` : "Привет!";
+  const dateText = new Date(expiresAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  const composition = `тариф «${tariffName}»${extraSubjects > 0 ? ` + докупленных предметов: ${extraSubjects}` : ""}`;
+  const subject = expired ? `Тариф «${tariffName}» закончился — продли в один клик` : `Тариф «${tariffName}» заканчивается ${dateText}`;
+  const paragraphs = expired
+    ? [
+        `Срок твоего тарифа «${tariffName}» закончился ${dateText}. Все данные на месте: прогресс, тетрадь ошибок, план и подключённые предметы никуда не делись.${frozenCount > 0 ? ` Доступ к части предметов (${frozenCount}) сейчас приостановлен — он вернётся сразу после продления.` : ""}`,
+        `Продлить можно с теми же настройками: ${composition} — ${amountRub} ₽ на 30 дней. Выбирать тариф и предметы заново не нужно — по кнопке ниже сразу откроется оплата. Оплата разовая, без автосписаний.`,
+      ]
+    : [
+        `Срок твоего тарифа «${tariffName}» заканчивается ${dateText}${daysLeft != null ? ` (осталось дней: ${daysLeft})` : ""}. После этого ИИ-репетитор вернётся к лимиту бесплатного тарифа, а часть предметов будет приостановлена (данные и прогресс сохранятся).`,
+        `Продли заранее с теми же настройками: ${composition} — ${amountRub} ₽. Новые 30 дней прибавятся к оставшимся, ничего не потеряется. Выбирать тариф и предметы заново не нужно. Оплата разовая, без автосписаний.`,
+      ];
+  await sendMail({
+    to,
+    subject,
+    text: `${greeting}\n\n${paragraphs.join("\n\n")}\n\nПродлить: ${url}`,
+    html: wrapBrandedHtml(
+      `<h2 style="margin:0 0 16px;font-size:21px;">${escapeHtml(greeting)}</h2>${paragraphs.map((p) => paragraphHtml(p, "margin-bottom:12px;")).join("")}${ctaButton(url, "Продлить с теми же настройками →")}`,
+      base,
+      LIFECYCLE_FOOTER
     ),
   });
 }

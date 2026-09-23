@@ -4,7 +4,7 @@
 // одному лишь факту возврата на этот адрес.
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { getPaymentStatus, type PaymentStatus } from "../lib/payments";
+import { getPaymentStatus, type PaymentKind, type PaymentStatus } from "../lib/payments";
 import { trackPurchase } from "../lib/metrika";
 import { Icon } from "./ui";
 import type { View } from "./Header";
@@ -16,6 +16,7 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
   const { refreshProfile } = useAuth();
   const [status, setStatus] = useState<PaymentStatus | "timeout" | "error">("pending");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [kind, setKind] = useState<PaymentKind>("tariff");
   const pollsRef = useRef(0);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
       }
       if (res.status === "succeeded") {
         trackPurchase({ paymentId, amountRub: res.amountRub, tariffId: res.tariffId });
+        if (res.kind) setKind(res.kind);
         setStatus("succeeded");
         await refreshProfile();
         return;
@@ -72,9 +74,15 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
             <Icon name="check" size={22} />
           </span>
           <h1 className="font-display mt-4 text-xl font-black">Оплата прошла успешно</h1>
-          <p className="mt-2 text-[13.5px] text-ink2">Тариф активирован — можно продолжать подготовку.</p>
-          <button onClick={() => onNav({ name: "home" })} className="btn btn-blue mt-6 px-5 py-2.5 text-[13px]">
-            Перейти в кабинет
+          <p className="mt-2 text-[13.5px] text-ink2">
+            {kind === "addon"
+              ? "Предметы докуплены — подключи их в разделе «Мои предметы»."
+              : kind === "renewal"
+                ? "Тариф продлён, доступ ко всем твоим предметам восстановлен — можно продолжать подготовку."
+                : "Тариф активирован — можно продолжать подготовку."}
+          </p>
+          <button onClick={() => onNav(kind === "addon" ? { name: "subjects" } : { name: "home" })} className="btn btn-blue mt-6 px-5 py-2.5 text-[13px]">
+            {kind === "addon" ? "Выбрать предметы" : "Перейти в кабинет"}
           </button>
         </>
       )}

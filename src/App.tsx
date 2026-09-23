@@ -24,6 +24,7 @@ import SubjectsView from "./components/SubjectsView";
 import Kim2027Changes from "./components/Kim2027Changes";
 import LegalDoc from "./components/LegalDoc";
 import PaymentReturnView from "./components/PaymentReturnView";
+import RenewView from "./components/RenewView";
 import ResetPasswordView from "./components/ResetPasswordView";
 import CheckEmailView from "./components/CheckEmailView";
 import VerifyEmailView from "./components/VerifyEmailView";
@@ -152,6 +153,27 @@ function persistView(v: View) {
   }
 }
 
+const AFTER_LOGIN_KEY = "ege-pro.after-login.v1";
+
+/** Куда вернуть после входа, если человека сюда привела ссылка из письма (сейчас — только /renew). */
+function takeAfterLoginView(): View | null {
+  try {
+    const v = sessionStorage.getItem(AFTER_LOGIN_KEY);
+    sessionStorage.removeItem(AFTER_LOGIN_KEY);
+    return v === "renew" ? { name: "renew" } : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasAfterLoginView(): boolean {
+  try {
+    return sessionStorage.getItem(AFTER_LOGIN_KEY) != null;
+  } catch {
+    return false;
+  }
+}
+
 function AppShell() {
   // Прямой заход по ссылке на публичный роут (/tariffs, /oferta, /privacy) должен показать именно
   // его сразу, а не landing с последующим морганием — поэтому читаем URL уже в инициализаторе.
@@ -163,6 +185,14 @@ function AppShell() {
   // не по кнопке пользователя, а просто потому что view нигде не сохранялся. Сохраняем и
   // восстанавливаем при следующей загрузке (для авторизованных — см. эффект ниже).
   const setView = (v: View) => {
+    // цель «после входа» живёт только пока человек остаётся на пути вход → продление
+    if (v.name !== "auth" && v.name !== "renew") {
+      try {
+        sessionStorage.removeItem(AFTER_LOGIN_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
     persistView(v);
     setViewRaw(v);
     const path = viewToPath(v);
@@ -215,8 +245,28 @@ function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile]);
 
+  // вошли, пока на экране была форма входа, и нас сюда привела ссылка на продление — возвращаем на неё
+  useEffect(() => {
+    if (profile && view.name === "auth") {
+      const next = takeAfterLoginView();
+      if (next) setView(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, view.name]);
+
   // неавторизованных не пускаем на разделы, требующие аккаунта (см. PROTECTED_VIEWS)
   useEffect(() => {
+    // ссылка на продление из письма (/renew) без активной сессии: не теряем цель — просим войти и
+    // после входа возвращаем именно на продление, а не на главную (см. AuthScreen onSuccess ниже)
+    if (!loading && !profile && view.name === "renew") {
+      try {
+        sessionStorage.setItem(AFTER_LOGIN_KEY, "renew");
+      } catch {
+        /* ignore */
+      }
+      setView({ name: "auth", mode: "login" });
+      return;
+    }
     if (!loading && !profile && PROTECTED_VIEWS.includes(view.name)) setView({ name: "landing" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile, view.name]);
@@ -252,7 +302,14 @@ function AppShell() {
         {view.name === "auth" && (
           // onSuccess срабатывает только для входа — успешная регистрация сама уводит на
           // check-email (аккаунт нерабочий до подтверждения, см. AuthScreen.tsx), а не сюда.
-          <AuthScreen onSuccess={() => setView({ name: "home" })} initialMode={view.mode} onNav={setView} />
+          <AuthScreen
+            // профиль после входа подгружается асинхронно — на /renew возвращает эффект выше, когда он появился
+            onSuccess={() => {
+              if (!hasAfterLoginView()) setView({ name: "home" });
+            }}
+            initialMode={view.mode}
+            onNav={setView}
+          />
         )}
 
         {view.name === "check-email" && <CheckEmailView email={view.email} onNav={setView} />}
@@ -290,7 +347,7 @@ function AppShell() {
         {view.name === "plan" && (() => {
           const subject = view.subject ?? effectivePrimarySubject(profile);
           return subject ? (
-            <PlanView subject={subject} onStartTraining={(taskId) => setView({ name: "task", id: taskId })} onSkipToBank={() => setView({ name: "bank" })} />
+            <PlanView subject={subject} onStartTraining={(taskId) => setView({ name: "task", id: taskId })} onSkipToBank={() => setView({ name: "bank" })} onNav={setView} />
           ) : (
             <div className="mx-auto max-w-xl px-4 py-16 text-center">
               <p className="font-display text-xl font-bold">План пока не построен</p>
@@ -329,6 +386,7 @@ function AppShell() {
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
+        {view.name === "renew" && profile && <RenewView onNav={setView} />}
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}

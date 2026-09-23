@@ -127,7 +127,7 @@ describe("AuthProvider — гостевой режим (isSupabaseConfigured=fal
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.signUp("a@b.com", "pw", "Аня");
+      await result.current.signUp("a@b.com", "pw", "Аня", 17, "f");
     });
 
     expect(result.current.profile).toMatchObject({ name: "Аня", email: "a@b.com", subjects: [] });
@@ -166,7 +166,7 @@ describe("AuthProvider — гостевой режим (isSupabaseConfigured=fal
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.loading).toBe(false));
     await act(async () => {
-      await result.current.signUp("a@b.com", "pw", "Аня");
+      await result.current.signUp("a@b.com", "pw", "Аня", 17, "f");
     });
     expect(result.current.profile).not.toBeNull();
 
@@ -182,7 +182,7 @@ describe("AuthProvider — гостевой режим (isSupabaseConfigured=fal
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.loading).toBe(false));
     await act(async () => {
-      await result.current.signUp("a@b.com", "pw", "Аня");
+      await result.current.signUp("a@b.com", "pw", "Аня", 17, "f");
     });
 
     await act(async () => {
@@ -276,7 +276,7 @@ describe("AuthProvider — режим с бэкендом (isSupabaseConfigured=
 
     let res: { error?: string } = {};
     await act(async () => {
-      res = await result.current.signUp("a@b.com", "pw", "Аня");
+      res = await result.current.signUp("a@b.com", "pw", "Аня", 17, "f");
     });
     expect(res.error).toBe("уже зарегистрирован");
     expect(result.current.profile).toBeNull();
@@ -290,7 +290,7 @@ describe("AuthProvider — режим с бэкендом (isSupabaseConfigured=
 
     let res: { needsVerification?: boolean } = {};
     await act(async () => {
-      res = await result.current.signUp("a@b.com", "pw", "Аня");
+      res = await result.current.signUp("a@b.com", "pw", "Аня", 17, "f");
     });
     expect(res.needsVerification).toBe(true);
     expect(result.current.profile).toBeNull();

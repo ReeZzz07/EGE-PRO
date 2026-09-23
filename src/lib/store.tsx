@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import { TASKS, taskById, type Subject } from "../data/tasks";
 import { dateKey } from "./utils";
+import { reachGoalOnce } from "./metrika";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
 import { ALL_SUBJECTS, getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
@@ -216,6 +217,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const addAttempt = (attempt: Attempt) => {
     dispatch({ type: "ADD", attempt });
+    reachGoalOnce("first_task_solved", "first_task_solved");
     // интервальное повторение (раздел 3.4 ТЗ) — ошибка планирует повтор темы через растущие
     // интервалы, верный ответ (когда срок подошёл) двигает его дальше; см. lib/spacedReview.ts.
     // Работает и в гостевом режиме — там profile.id тоже стабилен между перезагрузками.

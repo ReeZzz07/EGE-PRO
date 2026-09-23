@@ -5,7 +5,8 @@ import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { formatClock } from "../lib/utils";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
-import { useEssayCheckAllowed } from "../lib/tariffs";
+import { useEssayCheckAllowed, useEssayTrialLeft } from "../lib/tariffs";
+import PaywallCard from "./PaywallCard";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
 import { useVoiceRecorder } from "../lib/useVoiceRecorder";
 import { Icon, MediaItem, StatementLine, usedImageMarkerIndices } from "./ui";
@@ -59,7 +60,13 @@ async function persistSubmission(userId: string, task: EgeTask, draftNumber: num
 export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; onNav: (v: View) => void; nextTaskId: string }) {
   const { derived, addAttempt } = useProgress();
   const { profile, isGuestMode } = useAuth();
-  const essayAllowed = useEssayCheckAllowed(profile);
+  const paidAllowed = useEssayCheckAllowed(profile);
+  const trialLeft = useEssayTrialLeft(profile, paidAllowed);
+  // free-тариф получает одну пробную проверку (см. FREE_ESSAY_TRIALS в tariffGate.js) — пока она
+  // есть, экран работает как у платного, вместо заглушки «только на платных тарифах»
+  const onTrial = paidAllowed === false && (trialLeft ?? 0) > 0;
+  const essayAllowed: boolean | null = paidAllowed === false ? (trialLeft === null ? null : onTrial ? true : false) : paidAllowed;
+  const [trialJustUsed, setTrialJustUsed] = useState(false);
   const [phase, setPhase] = useState<Phase>("write");
   const [text, setText] = useState("");
   const [statusIdx, setStatusIdx] = useState(0);
@@ -102,6 +109,7 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
       { mode: "check_essay", taskId: task.id, essayText: text },
       { mistakeTasks, solvedCount: derived.solvedIds.size }
     );
+    if (res.freeTrialUsed) setTrialJustUsed(true);
     const assessment: EssayAssessment = res.assessment ?? {
       criteria: [],
       total: 0,
@@ -164,23 +172,28 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
           </div>
         )}
 
-        {essayAllowed === false && (
+        {(essayAllowed === false || (trialJustUsed && phase === "write")) && (
           <div className="mt-6 border-t-2 border-dashed border-ink/25 pt-5">
-            <div className="border-2 border-blue/40 bg-blue/5 p-4">
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-blue">Только на платных тарифах</p>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-ink/85">
-                Проверка развёрнутых ответов и сочинений по критериям ИИ-репетитором доступна на платных тарифах. На бесплатном — банк заданий с кратким
-                ответом, диагностика и план по-прежнему без ограничений.
-              </p>
-              <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-4 px-5 py-2.5 text-sm">
-                Смотреть тарифы <Icon name="arrowR" size={16} />
-              </button>
-            </div>
+            <PaywallCard
+              eyebrow="Только на платных тарифах"
+              title={trialJustUsed ? "Бесплатная проверка использована — дальше по критериям на тарифе" : "Проверка по критериям ФИПИ — на платных тарифах"}
+              text={
+                trialJustUsed
+                  ? "Ты увидел(а), как выглядит разбор по критериям: баллы за каждый критерий и конкретные шаги, что исправить. Перепиши ответ и проверь снова — без ограничений — на любом платном тарифе."
+                  : "Проверка развёрнутых ответов и сочинений по критериям ИИ-репетитором доступна на платных тарифах. На бесплатном — банк заданий с кратким ответом, диагностика и план по-прежнему без ограничений."
+              }
+              onNav={onNav}
+            />
           </div>
         )}
 
-        {essayAllowed && phase === "write" && (
+        {essayAllowed && phase === "write" && !trialJustUsed && (
           <div className="mt-6 border-t-2 border-dashed border-ink/25 pt-5">
+            {onTrial && (
+              <p className="mb-4 border-l-4 border-teal bg-teal/10 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink/85">
+                <strong className="text-ink">Бесплатная проверка — попробуй разбор по критериям.</strong> Одна на аккаунт: оценим ответ по каждому критерию и подскажем, что исправить. Дальше — на платных тарифах.
+              </p>
+            )}
             {spoken && (
               <div className="mb-5 border-2 border-ink/15 bg-sheet px-4 py-3.5">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">Устный ответ</p>
@@ -334,6 +347,16 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
                 Завершить сессию
               </button>
             </div>
+
+            {trialJustUsed && (
+              <PaywallCard
+                className="mt-6"
+                eyebrow="Это была бесплатная проверка"
+                title="Хочешь так проверять каждое сочинение?"
+                text="На платных тарифах проверка по критериям — без ограничений: пиши черновик, получай баллы по каждому критерию и правь до нужного результата. Плюс безлимитный ИИ-репетитор и все предметы."
+                onNav={onNav}
+              />
+            )}
           </div>
         )}
       </div>

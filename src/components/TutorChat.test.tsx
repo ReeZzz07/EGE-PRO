@@ -37,4 +37,19 @@ describe("TutorChat — бейдж квоты", () => {
     fireEvent.click(badge);
     expect(onNavigate).toHaveBeenCalledWith("tariffs");
   });
+  it("free, лимит исчерпан — в ленте появляется блок «без лимита» с кнопкой на тарифы; при остатке блока нет", async () => {
+    vi.mocked(loadAiQuota).mockResolvedValue({ limited: true, limit: 3, used: 3, remaining: 0 });
+    const onNavigate = vi.fn();
+    render(<TutorChat onNavigate={onNavigate} />);
+    expect(await screen.findByText("Бесплатные обращения на сегодня закончились")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Открыть без лимита" }));
+    expect(onNavigate).toHaveBeenCalledWith("tariffs");
+  });
+
+  it("free, остаток есть — блока про исчерпанный лимит нет", async () => {
+    vi.mocked(loadAiQuota).mockResolvedValue({ limited: true, limit: 3, used: 1, remaining: 2 });
+    render(<TutorChat />);
+    await screen.findByRole("button", { name: /осталось 2 из 3 на сегодня/ });
+    expect(screen.queryByText("Бесплатные обращения на сегодня закончились")).not.toBeInTheDocument();
+  });
 });

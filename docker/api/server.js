@@ -34,12 +34,16 @@ import {
   reserveDailyAiSlot,
   releaseDailyAiSlot,
   isEssayCheckAllowed,
+  essayTrialLeft,
   reserveEssayCheckSlot,
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
 import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
-import { initiatePayment, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
-import { createActionToken, consumeActionToken } from "./authTokens.js";
+import { getWelcomeOffer } from "./offers.js";
+import { startLifecycleScheduler } from "./lifecycle.js";
+import { getSubscription } from "./subscription.js";
+import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
+import { createActionToken, consumeActionToken, inspectActionToken } from "./authTokens.js";
 import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, resolveWelcomeEmailSettings } from "./mailer.js";
 
 const PORT = process.env.PORT || 8787;
@@ -137,9 +141,18 @@ async function requireAdmin(req, res, next) {
 
 // ─────────────────────── auth ───────────────────────
 
+// Регистр и пробелы по краям — частая причина «потерянных» аккаунтов: "Ivan@Mail.ru " ≠ "ivan@mail.ru"
+// при входе, а пробельный email вообще давал "No recipients defined" при отправке письма. Все
+// сравнения ниже идут по lower(email), так что старые аккаунты с заглавными буквами продолжают
+// работать.
+const normalizeEmail = (raw) => String(raw ?? "").trim().toLowerCase();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 app.post("/auth/signup", authLimiter, async (req, res) => {
-  const { email, password, full_name, age, gender } = req.body ?? {};
+  const { password, full_name, age, gender } = req.body ?? {};
+  const email = normalizeEmail(req.body?.email);
   if (!email || !password) return res.status(400).json({ error: { message: "email и password обязательны" } });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: { message: "Проверь email — похоже, в адресе опечатка" } });
   // Возраст/пол — обязательны в форме регистрации (см. AuthScreen.tsx), но проверяем и здесь: это
   // единственный момент, когда их вообще можно задать (handle_new_user в 0027_..._demographics.sql
   // забирает их из raw_user_meta_data только при INSERT, а не позже) — некорректные значения молча
@@ -148,7 +161,7 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
   if (!Number.isInteger(ageNum) || ageNum < 5 || ageNum > 100) return res.status(400).json({ error: { message: "Возраст обязателен и должен быть от 5 до 100 лет" } });
   if (gender !== "m" && gender !== "f") return res.status(400).json({ error: { message: "Пол обязателен" } });
   try {
-    const existing = await pool.query("select id from auth.users where email = $1", [email]);
+    const existing = await pool.query("select id from auth.users where lower(email) = $1", [email]);
     if (existing.rows.length) return res.status(400).json({ error: { message: "Пользователь с таким email уже существует" } });
     const hash = await bcrypt.hash(password, 10);
     // email_confirmed_at остаётся null до перехода по ссылке из письма (см. POST /auth/verify-email
@@ -177,11 +190,12 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
 });
 
 app.post("/auth/login", authLimiter, async (req, res) => {
-  const { email, password } = req.body ?? {};
+  const { password } = req.body ?? {};
+  const email = normalizeEmail(req.body?.email);
   try {
     const { rows } = await pool.query(
       `select u.id, u.email, u.encrypted_password, u.email_confirmed_at, coalesce(p.token_version, 0) as token_version
-       from auth.users u left join public.profiles p on p.id = u.id where u.email = $1`,
+       from auth.users u left join public.profiles p on p.id = u.id where lower(u.email) = $1`,
       [email]
     );
     const row = rows[0];
@@ -252,8 +266,10 @@ app.post("/auth/change-password", authMiddleware, async (req, res) => {
 // смена email — тоже требует пароль. Возвращаем свежий токен (в нём зашит email, см. signToken),
 // иначе клиент до следующего входа продолжал бы слать токен со старым email в payload.
 app.post("/auth/change-email", authMiddleware, async (req, res) => {
-  const { password, newEmail } = req.body ?? {};
+  const { password } = req.body ?? {};
+  const newEmail = normalizeEmail(req.body?.newEmail);
   if (!newEmail) return res.status(400).json({ error: { message: "Введи новый email" } });
+  if (!EMAIL_RE.test(newEmail)) return res.status(400).json({ error: { message: "Проверь email — похоже, в адресе опечатка" } });
   try {
     const { rows } = await pool.query("select email, encrypted_password from auth.users where id = $1", [req.user.sub]);
     const row = rows[0];
@@ -263,8 +279,8 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
     // tv переносим как есть (req.user.tv уже прошёл проверку в authMiddleware) — иначе новый
     // токен подписался бы с tv:0 по умолчанию и сам себя тут же считал бы отозванным, если
     // token_version в БД уже был поднят раньше (см. change-password выше).
-    if (newEmail === row.email) return res.json({ data: { user: { id: req.user.sub, email: row.email } }, error: null, access_token: signToken({ id: req.user.sub, email: row.email }, req.user.tv) });
-    const existing = await pool.query("select id from auth.users where email = $1", [newEmail]);
+    if (newEmail === row.email.toLowerCase()) return res.json({ data: { user: { id: req.user.sub, email: row.email } }, error: null, access_token: signToken({ id: req.user.sub, email: row.email }, req.user.tv) });
+    const existing = await pool.query("select id from auth.users where lower(email) = $1 and id <> $2", [newEmail, req.user.sub]);
     if (existing.rows.length) return res.status(400).json({ error: { message: "Этот email уже занят другим аккаунтом" } });
     await pool.query("update auth.users set email = $2 where id = $1", [req.user.sub, newEmail]);
     const user = { id: req.user.sub, email: newEmail };
@@ -285,7 +301,12 @@ app.post("/auth/verify-email", authLimiter, async (req, res) => {
   if (!token) return res.status(400).json({ error: { message: "Токен обязателен" } });
   try {
     const userId = await consumeActionToken(token, "verify_email");
-    if (!userId) return res.status(400).json({ error: { message: "Ссылка недействительна или устарела — запроси новое письмо" } });
+    if (!userId) {
+      // частый случай — двойной клик/повторное открытие письма: токен уже сработал, аккаунт рабочий
+      const info = await inspectActionToken(token, "verify_email");
+      if (info?.confirmed) return res.status(400).json({ error: { message: "Почта уже подтверждена — просто войди с email и паролем.", code: "ALREADY_CONFIRMED" } });
+      return res.status(400).json({ error: { message: "Ссылка недействительна или устарела — запроси новое письмо при входе", code: "TOKEN_INVALID" } });
+    }
     const { rows } = await pool.query("update auth.users set email_confirmed_at = now() where id = $1 returning id, email", [userId]);
     const user = rows[0];
     const tv = await pool.query("select coalesce(token_version, 0) as token_version from public.profiles where id = $1", [userId]);
@@ -315,12 +336,12 @@ app.post("/auth/verify-email", authLimiter, async (req, res) => {
 // от того, существует ли email и подтверждён ли он, письмо реально уходит только если аккаунт
 // нашёлся и ещё не подтверждён.
 app.post("/auth/resend-verification", authLimiter, async (req, res) => {
-  const email = String(req.body?.email ?? "").trim();
+  const email = normalizeEmail(req.body?.email);
   const genericResponse = { data: { message: "Если такой email зарегистрирован и ещё не подтверждён, на него отправлено новое письмо." }, error: null };
   if (!email) return res.status(400).json({ error: { message: "Введи email" } });
   try {
     const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
-    const { rows } = await pool.query("select id, email from auth.users where email = $1 and email_confirmed_at is null", [email]);
+    const { rows } = await pool.query("select id, email from auth.users where lower(email) = $1 and email_confirmed_at is null", [email]);
     if (rows[0] && siteUrl) {
       const token = await createActionToken(rows[0].id, "verify_email");
       sendVerifyEmail(rows[0].email, `${siteUrl}/verify-email?token=${encodeURIComponent(token)}`).catch((e) =>
@@ -337,12 +358,12 @@ app.post("/auth/resend-verification", authLimiter, async (req, res) => {
 // проверить, зарегистрирован ли конкретный человек на платформе (перечисление пользователей).
 // Ответ одинаковый в обоих случаях, письмо реально уходит только если аккаунт нашёлся.
 app.post("/auth/forgot-password", authLimiter, async (req, res) => {
-  const email = String(req.body?.email ?? "").trim();
+  const email = normalizeEmail(req.body?.email);
   const genericResponse = { data: { message: "Если такой email зарегистрирован, на него отправлено письмо со ссылкой для сброса пароля." }, error: null };
   if (!email) return res.status(400).json({ error: { message: "Введи email" } });
   try {
     const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
-    const { rows } = await pool.query("select id, email from auth.users where email = $1", [email]);
+    const { rows } = await pool.query("select id, email from auth.users where lower(email) = $1", [email]);
     if (rows[0] && siteUrl) {
       const token = await createActionToken(rows[0].id, "reset_password");
       sendPasswordResetEmail(rows[0].email, `${siteUrl}/reset-password?token=${encodeURIComponent(token)}`).catch((e) =>
@@ -747,6 +768,16 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 // Разовая оплата тарифа на срок — без сохранённых карт и автопродления (см. миграцию
 // 0024_payments.sql). Бизнес-логика — в payments.js/yookassa.js, здесь только HTTP-обвязка.
 
+// Состояние приветственного оффера для текущего пользователя (см. offers.js) — фронтенд по нему
+// рисует зачёркнутую цену и таймер; сама скидка при оплате считается на сервере (payments.js).
+app.get("/offers/welcome", authMiddleware, async (req, res) => {
+  try {
+    res.json(await getWelcomeOffer(req.user.sub));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 app.post("/payments/create", authMiddleware, paymentsLimiter, async (req, res) => {
   const tariffId = String(req.body?.tariffId ?? "");
   if (!tariffId) return res.status(400).json({ error: "Не указан тариф" });
@@ -754,6 +785,44 @@ app.post("/payments/create", authMiddleware, paymentsLimiter, async (req, res) =
   if (!siteUrl) return res.status(500).json({ error: "Не настроен домен сайта (CORS_ORIGIN)" });
   try {
     const result = await initiatePayment(req.user.sub, tariffId, siteUrl);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Состояние подписки: действует ли тариф, доступные/замороженные предметы, предложение продлить
+// «как было» и докупить предметы (см. subscription.js) — интерфейс рисуется целиком по этому ответу.
+app.get("/subscription", authMiddleware, async (req, res) => {
+  try {
+    const sub = await getSubscription(req.user.sub);
+    if (!sub) return res.status(404).json({ error: "profile not found" });
+    res.json(sub);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Продление «как было» — тариф и докупленные предметы берутся из профиля на сервере, тело пустое.
+app.post("/payments/renew", authMiddleware, paymentsLimiter, async (req, res) => {
+  const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  if (!siteUrl) return res.status(500).json({ error: "Не настроен домен сайта (CORS_ORIGIN)" });
+  try {
+    const result = await initiateRenewal(req.user.sub, siteUrl);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Докупка предметов к действующему тарифу: { count }.
+app.post("/payments/addon", authMiddleware, paymentsLimiter, async (req, res) => {
+  const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  if (!siteUrl) return res.status(500).json({ error: "Не настроен домен сайта (CORS_ORIGIN)" });
+  try {
+    const result = await initiateAddon(req.user.sub, req.body?.count, siteUrl);
     if (result.error) return res.status(400).json({ error: result.error });
     res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
   } catch (e) {
@@ -1065,12 +1134,13 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
 
     if (body.mode === "check_essay") {
       if (!task) return res.status(404).json({ error: "task not found" });
-      if (!isEssayCheckAllowed(gate)) {
+      const onFreeTrial = !isEssayCheckAllowed(gate) && (await essayTrialLeft(gate, userId)) > 0;
+      if (!isEssayCheckAllowed(gate) && !onFreeTrial) {
         // как и лимит ниже — 200 с готовым текстом, а не ошибка, чтобы клиент не ушёл в офлайн-
         // фолбэк молча и не выдал вместо этого шаблонную заглушку "оценки". assessment не шлём —
         // EssayView.tsx/MockExam.tsx это уже умеют трактовать как "оценки нет".
         return res.json({
-          text: "Проверка сочинений и развёрнутых ответов по критериям доступна на платных тарифах — открой любой из них на странице «Тарифы».",
+          text: "Бесплатная проверка уже использована. Проверка сочинений и развёрнутых ответов по критериям доступна на платных тарифах — открой любой из них на странице «Тарифы».",
           tierBlocked: true,
         });
       }
@@ -1097,7 +1167,7 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
       pool
         .query(`insert into public.ai_messages (user_id, task_id, mode, role, content) values ($1,$2,'check_essay','assistant',$3)`, [userId, body.taskId, JSON.stringify(assessment)])
         .catch((e) => console.warn("audit log failed", e));
-      return res.json({ assessment });
+      return res.json({ assessment, freeTrialUsed: onFreeTrial });
     }
 
     // Резервирует строку user-сообщения СРАЗУ (до обращения к модели) атомарно с самой проверкой —
@@ -1202,7 +1272,7 @@ app.get("/ai-tutor/quota", authMiddleware, async (req, res) => {
     const gate = await resolveUserTariffGate(req.user.sub);
     if (gate.isAdmin || gate.dailyAiLimit == null) return res.json({ limited: false });
     const used = await countTodayTutorMessages(req.user.sub);
-    res.json({ limited: true, limit: gate.dailyAiLimit, used, remaining: Math.max(0, gate.dailyAiLimit - used) });
+    res.json({ limited: true, limit: gate.dailyAiLimit, used, remaining: Math.max(0, gate.dailyAiLimit - used), essayTrialLeft: await essayTrialLeft(gate, req.user.sub) });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
@@ -1211,6 +1281,7 @@ app.get("/ai-tutor/quota", authMiddleware, async (req, res) => {
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const server = app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
+startLifecycleScheduler();
 
 // раньше необработанное исключение/rejection (например, в неawait'нутом .catch() пула — см.
 // множество pool.query(...).catch(console.warn) выше, но не все асинхронные пути покрыты) просто

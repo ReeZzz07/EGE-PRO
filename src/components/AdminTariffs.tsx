@@ -7,6 +7,8 @@ import { isSupabaseConfigured } from "../lib/supabase";
 import { loadAllTariffs, createTariff, updateTariff, deleteTariff, type Tariff, type TariffInput } from "../lib/tariffs";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, saveTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import AdminPaymentSettings from "./AdminPaymentSettings";
+import AdminWelcomeOffer from "./AdminWelcomeOffer";
+import AdminSubjectAddon from "./AdminSubjectAddon";
 import { Icon, useToast } from "./ui";
 
 function TariffsPageTextCard() {
@@ -286,6 +288,8 @@ export default function AdminTariffs() {
   return (
     <>
     <AdminPaymentSettings />
+    <AdminWelcomeOffer />
+    <AdminSubjectAddon />
     <div className="mt-6">
       <TariffsPageTextCard />
     </div>

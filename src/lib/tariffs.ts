@@ -3,6 +3,7 @@
 // Оплаты нет: selectTariff() — просто запись tariff_id в профиль (см. комментарий в миграции).
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { loadAiQuota } from "./aiTutor";
 
 export interface Tariff {
   id: string;
@@ -121,10 +122,11 @@ export async function deleteTariff(id: string): Promise<{ error?: string }> {
  *  тариф с публикации, у пользователей, которые на нём УЖЕ сидят, этот тариф переставал находиться
  *  в списке активных, и UI показывал сочинение недоступным, хотя сервер его бы принял и оценил —
  *  loadAllTariffs() здесь специально совпадает с сервером по кругу тарифов, которые учитываются. */
-export function useEssayCheckAllowed(profile: { isAdmin?: boolean; tariffId?: string } | null): boolean | null {
+export function useEssayCheckAllowed(profile: { isAdmin?: boolean; tariffId?: string; tariffExpiresAt?: number } | null): boolean | null {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const isAdmin = profile?.isAdmin ?? false;
-  const tariffId = profile?.tariffId;
+  // срок платного тарифа закончился — по условиям это уже free (как и на сервере, см. tariffGate.js)
+  const tariffId = profile?.tariffExpiresAt && profile.tariffExpiresAt <= Date.now() ? "free" : profile?.tariffId;
 
   useEffect(() => {
     if (!profile) {
@@ -148,4 +150,26 @@ export function useEssayCheckAllowed(profile: { isAdmin?: boolean; tariffId?: st
   }, [!!profile, isAdmin, tariffId]);
 
   return allowed;
+}
+
+/** Сколько бесплатных проверок сочинения осталось у free-пользователя (см. essayTrialLeft в
+ *  docker/api/tariffGate.js). null — ещё грузится; 0 — нет или не применимо (платный тариф/админ:
+ *  у них essayAllowed уже true и пробная ветка не нужна). */
+export function useEssayTrialLeft(profile: { id?: string } | null, essayAllowed: boolean | null): number | null {
+  const [left, setLeft] = useState<number | null>(null);
+  const userId = profile?.id;
+  useEffect(() => {
+    if (essayAllowed !== false || !userId) {
+      setLeft(essayAllowed === null ? null : 0);
+      return;
+    }
+    let cancelled = false;
+    loadAiQuota().then((q) => {
+      if (!cancelled) setLeft(q.essayTrialLeft ?? 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, essayAllowed]);
+  return left;
 }
