@@ -11,6 +11,7 @@ import {
   sendTestLifecycleEmail,
   type LifecycleKind,
   type LifecycleTemplate,
+  type LifecycleTexts,
 } from "../lib/lifecycleEmails";
 import { Icon, useToast } from "./ui";
 
@@ -18,7 +19,7 @@ export default function AdminLifecycleEmails() {
   const { profile } = useAuth();
   const { push } = useToast();
   const [templates, setTemplates] = useState<LifecycleTemplate[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, { subject: string; bodyText: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, LifecycleTexts>>({});
   const [active, setActive] = useState<LifecycleKind>("activation");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,9 +41,9 @@ export default function AdminLifecycleEmails() {
   const draft = drafts[active];
 
   const refreshPreview = useCallback(
-    async (kind: LifecycleKind, d: { subject: string; bodyText: string }) => {
+    async (kind: LifecycleKind, d: LifecycleTexts) => {
       setPreviewing(true);
-      const res = await previewLifecycleTemplate(kind, d.subject, d.bodyText);
+      const res = await previewLifecycleTemplate(kind, d);
       setPreviewing(false);
       if (res.error) return push(res.error, "err");
       setPreviewHtml(res.html ?? null);
@@ -70,9 +71,9 @@ export default function AdminLifecycleEmails() {
     return <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
   }
 
-  const setDraft = (patch: Partial<{ subject: string; bodyText: string }>) => setDrafts((d) => ({ ...d, [active]: { ...d[active], ...patch } }));
-  const dirty = draft.subject !== tpl.current.subject || draft.bodyText !== tpl.current.bodyText;
-  const isDefault = draft.subject === tpl.defaults.subject && draft.bodyText === tpl.defaults.bodyText;
+  const setDraft = (patch: Partial<LifecycleTexts>) => setDrafts((d) => ({ ...d, [active]: { ...d[active], ...patch } }));
+  const dirty = draft.subject !== tpl.current.subject || draft.bodyText !== tpl.current.bodyText || draft.footer !== tpl.current.footer;
+  const isDefault = draft.subject === tpl.defaults.subject && draft.bodyText === tpl.defaults.bodyText && draft.footer === tpl.defaults.footer;
 
   const insert = (name: string) => {
     const el = bodyRef.current;
@@ -90,7 +91,7 @@ export default function AdminLifecycleEmails() {
   const save = async () => {
     if (!draft.subject.trim() || !draft.bodyText.trim()) return push("Заполни тему и текст письма", "err");
     setSaving(true);
-    const res = await saveLifecycleTemplate(active, draft.subject, draft.bodyText);
+    const res = await saveLifecycleTemplate(active, draft);
     setSaving(false);
     if (res.error) return push(res.error, "err");
     setTemplates((ts) => ts.map((t) => (t.kind === active ? { ...t, current: { ...draft } } : t)));
@@ -99,7 +100,7 @@ export default function AdminLifecycleEmails() {
 
   const sendTest = async () => {
     setTesting(true);
-    const res = await sendTestLifecycleEmail(active, draft.subject, draft.bodyText);
+    const res = await sendTestLifecycleEmail(active, draft);
     setTesting(false);
     if (res.error) push(res.error, "err");
     else push(`Тестовое письмо ушло на ${profile?.email}`, "ok");
@@ -109,8 +110,9 @@ export default function AdminLifecycleEmails() {
     <div className="sheet mt-6 p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">Письма-напоминания</h2>
       <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">
-        Уходят автоматически, по одному разу на человека, с 9:00 до 21:00 по Москве. Оформление (шапка, рамки, нумерованные пункты, кнопка) — как у приветственного письма,
-        редактируется только тема и текст. Пустая строка в тексте — новый абзац. Подстановки в фигурных скобках заменяются данными ученика; абзац, где для подстановки нет
+        Уходят автоматически, с 9:00 до 21:00 по Москве. Письма о сроке тарифа повторяются каждый оплаченный период, остальные — один раз на человека (у каждого письма это
+        указано в «Когда уходит»). Оформление (шапка, рамки, нумерованные пункты, кнопка) — как у приветственного письма, редактируется тема, текст и пометка в подвале.
+        Пустая строка в тексте — новый абзац. Подстановки в фигурных скобках заменяются данными ученика; абзац, где для подстановки нет
         значения, в письмо не попадёт.
       </p>
 
@@ -151,6 +153,18 @@ export default function AdminLifecycleEmails() {
               onChange={(e) => setDraft({ bodyText: e.target.value })}
               rows={13}
               className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2.5 font-mono text-[12.5px] leading-relaxed"
+            />
+          </label>
+          <label className="block">
+            <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">
+              Подвал письма{" "}
+              <span className="font-normal normal-case">(пометка внизу — например, разовое ли это письмо; можно оставить пустым)</span>
+            </span>
+            <textarea
+              value={draft.footer}
+              onChange={(e) => setDraft({ footer: e.target.value })}
+              rows={2}
+              className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2.5 text-[13px] leading-relaxed"
             />
           </label>
           {tpl.placeholders.length > 0 && (

@@ -71,3 +71,26 @@ test("переопределение из админки: сохранённые
   // остальные письма не затронуты
   assert.equal((await resolveLifecycleTemplates()).activation.subject, TEMPLATES.activation.subject);
 });
+
+test("подвал: у писем о сроке тарифа дефолт не говорит «разовое» (они повторяются), у остальных — разовое; подвал редактируется и может быть пустым", async () => {
+  await pool.query("delete from public.app_settings where key = 'lifecycle_emails'");
+  for (const kind of ["expiring", "expired"]) {
+    assert.ok(!/разов/i.test(TEMPLATES[kind].footer), `${kind}: дефолтный подвал не должен обещать разовость`);
+    assert.ok(/каждого оплаченного периода/.test(TEMPLATES[kind].footer));
+  }
+  for (const kind of ["activation", "abandoned"]) assert.ok(/разовое/.test(TEMPLATES[kind].footer));
+
+  const def = await buildSampleEmail("expired");
+  assert.ok(def.html.includes("каждого оплаченного периода") && def.text.includes("каждого оплаченного периода"));
+
+  // сохранённый подвал заменяет дефолт; форма без сохранения приоритетнее
+  await pool.query("insert into public.app_settings (key, value) values ('lifecycle_emails', $1)", [JSON.stringify({ expired: { subject: "T", bodyText: "B", footer: "Свой подвал" } })]);
+  assert.ok((await buildSampleEmail("expired")).html.includes("Свой подвал"));
+  assert.ok((await buildSampleEmail("expired", { footer: "Из формы" })).html.includes("Из формы"));
+
+  // пустой подвал: пометки нет ни в HTML, ни в тексте (а не откат на дефолт)
+  const empty = await buildSampleEmail("expired", { footer: "" });
+  assert.ok(!empty.html.includes("каждого оплаченного периода") && !empty.text.includes("Свой подвал") && !empty.text.includes("каждого оплаченного периода"));
+  await pool.query("update public.app_settings set value = $1 where key = 'lifecycle_emails'", [JSON.stringify({ expired: { subject: "T", bodyText: "B", footer: "" } })]);
+  assert.ok(!(await buildSampleEmail("expired")).html.includes("каждого оплаченного периода"));
+});

@@ -289,7 +289,7 @@ export function wrapBrandedHtml(innerHtml, siteUrl, footerNote = "Это раз�
   </tr>
   <tr>
     <td style="padding:18px 24px 24px;border-top:2px solid #e5e6df;">
-      <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#15172e;">${escapeHtml(footerNote)}</p>
+      ${footerNote ? `<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#15172e;">${escapeHtml(footerNote)}</p>` : ""}
       <p style="margin:0;font-size:12px;color:#8a8d9a;">ЕГЭ·ПРО — тренажёр подготовки к ЕГЭ с ИИ-репетитором</p>
     </td>
   </tr>

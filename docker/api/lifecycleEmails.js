@@ -10,7 +10,9 @@
 import { pool } from "./db.js";
 import { escapeHtml, paragraphHtml, renderBodyRich, sendMail, wrapBrandedHtml } from "./mailer.js";
 
-const FOOTER = "Это разовое напоминание о твоём аккаунте — повторять его мы не будем.";
+const FOOTER_ONCE = "Это разовое напоминание о твоём аккаунте — повторять его мы не будем.";
+// письма о сроке тарифа уходят каждый оплаченный период — пометка «разовое» была бы неправдой
+const FOOTER_PERIODIC = "Это служебное напоминание о сроке твоего тарифа — мы присылаем его перед окончанием и после окончания каждого оплаченного периода.";
 
 export const TEMPLATES = {
   activation: {
@@ -21,6 +23,7 @@ export const TEMPLATES = {
     ctaPath: "",
     rich: true,
     placeholders: ["имя"],
+    footer: FOOTER_ONCE,
     subject: "Твой уровень по ЕГЭ — за 7 минут",
     bodyText: `Ты зарегистрировался(лась) в ЕГЭ·ПРО, но ещё не пробовал(а) платформу в деле. Самый быстрый старт — диагностика: около 7 минут, и сразу станет видно, с чего начинать.
 
@@ -41,6 +44,7 @@ export const TEMPLATES = {
     ctaPath: "/tariffs",
     rich: false,
     placeholders: ["имя", "тариф"],
+    footer: FOOTER_ONCE,
     subject: "Оплата тарифа не завершена",
     bodyText: `Ты начал(а) оплату тарифа «{тариф}» на ЕГЭ·ПРО, но платёж не дошёл до конца — с тебя ничего не списано.
 
@@ -55,6 +59,7 @@ export const TEMPLATES = {
     ctaPath: "/renew",
     rich: false,
     placeholders: ["имя", "тариф", "дата", "дней", "состав", "сумма"],
+    footer: FOOTER_PERIODIC,
     subject: "Тариф «{тариф}» заканчивается {дата}",
     bodyText: `Срок твоего тарифа «{тариф}» заканчивается {дата} (осталось дней: {дней}). После этого ИИ-репетитор вернётся к лимиту бесплатного тарифа, а часть предметов будет приостановлена — данные и прогресс сохранятся.
 
@@ -69,6 +74,7 @@ export const TEMPLATES = {
     ctaPath: "/renew",
     rich: false,
     placeholders: ["имя", "тариф", "дата", "состав", "сумма", "приостановлено"],
+    footer: FOOTER_PERIODIC,
     subject: "Тариф «{тариф}» закончился — продли в один клик",
     bodyText: `Срок твоего тарифа «{тариф}» закончился {дата}. Все данные на месте: прогресс, тетрадь ошибок, план и подключённые предметы никуда не делись.
 
@@ -110,6 +116,9 @@ export async function resolveLifecycleTemplates() {
     out[kind] = {
       subject: typeof s.subject === "string" && s.subject.trim() ? s.subject : t.subject,
       bodyText: typeof s.bodyText === "string" && s.bodyText.trim() ? s.bodyText : t.bodyText,
+      // подвал можно сделать пустым (тогда остаётся только подпись платформы), поэтому важно
+      // «строка сохранена», а не «строка непустая»
+      footer: typeof s.footer === "string" ? s.footer : t.footer,
     };
   }
   return out;
@@ -176,7 +185,7 @@ function summaryBlock(summary) {
 
 /**
  * Собирает письмо: { subject, text, html }.
- * override — { subject, bodyText } из формы админки (даже несохранённые), иначе берётся сохранённое/дефолт.
+ * override — { subject, bodyText, footer } из формы админки (даже несохранённые), иначе берётся сохранённое/дефолт.
  * ctx — { siteUrl, offer, summary: { tariffName, extraSubjects, amountRub } }.
  */
 export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null) {
@@ -185,6 +194,7 @@ export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null)
   const saved = (await resolveLifecycleTemplates())[kind];
   const subjectSrc = override?.subject?.trim() ? override.subject : saved.subject;
   const bodySrc = override?.bodyText?.trim() ? override.bodyText : saved.bodyText;
+  const footer = (typeof override?.footer === "string" ? override.footer : saved.footer).trim();
 
   const base = ctx.siteUrl || "https://ege-tutor.ru";
   const url = `${base}${t.ctaPath}`;
@@ -197,7 +207,7 @@ export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null)
 
   return {
     subject: fillLine(subjectSrc, vars),
-    text: `${greeting}\n\n${paragraphs.join("\n\n")}${summary.text}${offer.text}\n\n${t.cta.replace(/\s*→$/, "")}: ${url}`,
+    text: `${greeting}\n\n${paragraphs.join("\n\n")}${summary.text}${offer.text}\n\n${t.cta.replace(/\s*→$/, "")}: ${url}${footer ? `\n\n${footer}` : ""}`,
     html: wrapBrandedHtml(
       `
 <p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">${escapeHtml(t.eyebrow)}</p>
@@ -208,7 +218,7 @@ ${offer.html}
 <p style="margin:26px 0 4px;"><a href="${escapeHtml(url)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">${escapeHtml(t.cta)}</a></p>
 `,
       base,
-      FOOTER
+      footer
     ),
   };
 }

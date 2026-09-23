@@ -912,7 +912,7 @@ app.get("/admin/lifecycle-email", authMiddleware, requireAdmin, async (_req, res
         title: LIFECYCLE_TEMPLATES[kind].title,
         when: LIFECYCLE_TEMPLATES[kind].when,
         placeholders: LIFECYCLE_TEMPLATES[kind].placeholders,
-        defaults: { subject: LIFECYCLE_TEMPLATES[kind].subject, bodyText: LIFECYCLE_TEMPLATES[kind].bodyText },
+        defaults: { subject: LIFECYCLE_TEMPLATES[kind].subject, bodyText: LIFECYCLE_TEMPLATES[kind].bodyText, footer: LIFECYCLE_TEMPLATES[kind].footer },
         current: current[kind],
       })),
     });
@@ -926,12 +926,14 @@ app.put("/admin/lifecycle-email/:kind", authMiddleware, requireAdmin, async (req
   if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
   const subject = String(req.body?.subject ?? "").trim();
   const bodyText = String(req.body?.bodyText ?? "").trim();
+  const footer = String(req.body?.footer ?? "").trim();
   if (!subject || !bodyText) return res.status(400).json({ error: "Заполни тему и текст письма" });
+  if (footer.length > 400) return res.status(400).json({ error: "Подвал слишком длинный (до 400 символов)" });
   if (subject.length > 200) return res.status(400).json({ error: "Тема слишком длинная (до 200 символов)" });
   if (bodyText.length > 10000) return res.status(400).json({ error: "Текст слишком длинный (до 10 000 символов)" });
   try {
     const { rows } = await pool.query("select value from public.app_settings where key = 'lifecycle_emails'");
-    const value = { ...(rows[0]?.value ?? {}), [kind]: { subject, bodyText } };
+    const value = { ...(rows[0]?.value ?? {}), [kind]: { subject, bodyText, footer } };
     await pool.query(
       `insert into public.app_settings (key, value, updated_by) values ('lifecycle_emails', $1, $2)
        on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by`,
@@ -948,7 +950,7 @@ app.post("/admin/lifecycle-email/:kind/preview", authMiddleware, requireAdmin, a
   const kind = req.params.kind;
   if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
   try {
-    const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText });
+    const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText, footer: req.body?.footer });
     res.json({ subject: m.subject, html: m.html });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
@@ -961,7 +963,7 @@ app.post("/admin/lifecycle-email/:kind/test", authMiddleware, requireAdmin, asyn
   if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
   try {
     const email = await getUserEmail(req.user.sub);
-    const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText });
+    const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText, footer: req.body?.footer });
     await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}` });
     res.json({ ok: true });
   } catch (e) {

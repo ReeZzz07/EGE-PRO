@@ -5,6 +5,13 @@ import { apiFetch } from "./supabase";
 
 export type LifecycleKind = "activation" | "abandoned" | "expiring" | "expired";
 
+export interface LifecycleTexts {
+  subject: string;
+  bodyText: string;
+  /** пометка внизу письма (может быть пустой) */
+  footer: string;
+}
+
 export interface LifecycleTemplate {
   kind: LifecycleKind;
   title: string;
@@ -12,8 +19,8 @@ export interface LifecycleTemplate {
   when: string;
   /** какие {подстановки} доступны в теме и тексте */
   placeholders: string[];
-  defaults: { subject: string; bodyText: string };
-  current: { subject: string; bodyText: string };
+  defaults: LifecycleTexts;
+  current: LifecycleTexts;
 }
 
 async function errorOf(resp: Response): Promise<string> {
@@ -30,19 +37,19 @@ export async function loadLifecycleTemplates(): Promise<{ templates?: LifecycleT
 const post = (path: string, method: string, body: unknown) =>
   apiFetch(path, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-export async function saveLifecycleTemplate(kind: LifecycleKind, subject: string, bodyText: string): Promise<{ error?: string }> {
-  const resp = await post(`/admin/lifecycle-email/${kind}`, "PUT", { subject, bodyText });
+export async function saveLifecycleTemplate(kind: LifecycleKind, t: LifecycleTexts): Promise<{ error?: string }> {
+  const resp = await post(`/admin/lifecycle-email/${kind}`, "PUT", t);
   return resp.ok ? {} : { error: await errorOf(resp) };
 }
 
 /** Готовый HTML письма с образцовыми данными и текстом ИЗ ФОРМЫ (даже несохранённым). */
-export async function previewLifecycleTemplate(kind: LifecycleKind, subject: string, bodyText: string): Promise<{ subject?: string; html?: string; error?: string }> {
-  const resp = await post(`/admin/lifecycle-email/${kind}/preview`, "POST", { subject, bodyText });
+export async function previewLifecycleTemplate(kind: LifecycleKind, t: LifecycleTexts): Promise<{ subject?: string; html?: string; error?: string }> {
+  const resp = await post(`/admin/lifecycle-email/${kind}/preview`, "POST", t);
   if (!resp.ok) return { error: await errorOf(resp) };
   return (await resp.json()) as { subject: string; html: string };
 }
 
-export async function sendTestLifecycleEmail(kind: LifecycleKind, subject: string, bodyText: string): Promise<{ error?: string }> {
-  const resp = await post(`/admin/lifecycle-email/${kind}/test`, "POST", { subject, bodyText });
+export async function sendTestLifecycleEmail(kind: LifecycleKind, t: LifecycleTexts): Promise<{ error?: string }> {
+  const resp = await post(`/admin/lifecycle-email/${kind}/test`, "POST", t);
   return resp.ok ? {} : { error: await errorOf(resp) };
 }
