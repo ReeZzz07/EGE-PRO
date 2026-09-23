@@ -112,6 +112,23 @@ export function isEssayCheckAllowed(gate) {
   return gate.isAdmin || gate.priceRub > 0;
 }
 
+/** Сколько раз бесплатный тариф может попробовать проверку сочинения (за всё время, не в день):
+ * одна проверка показывает главную платную ценность вживую, а стоит одного вызова модели. Числом
+ * не злоупотребить: считаем реально выполненные проверки (неудачные вызовы модели откатываются —
+ * см. releaseEssayCheckSlot и в счёт не идут). */
+export const FREE_ESSAY_TRIALS = 1;
+
+/** Осталось бесплатных проверок; для платных тарифов и админов не применимо (их пускает
+ * isEssayCheckAllowed) — возвращаем 0, чтобы вызывающий код не путал «пробную» и «платную» ветку. */
+export async function essayTrialLeft(gate, userId) {
+  if (isEssayCheckAllowed(gate)) return 0;
+  const { rows } = await pool.query(
+    "select count(*)::int as n from public.ai_messages where user_id = $1 and role = 'user' and mode = 'check_essay'",
+    [userId]
+  );
+  return Math.max(0, FREE_ESSAY_TRIALS - rows[0].n);
+}
+
 /** Не тарифный лимит (в отличие от dailyAiLimit — тот вообще не действует на check_essay, см.
  * countTodayTutorMessages), а защита от накрутки: isEssayCheckAllowed выше — это бинарный доступ
  * "платный тариф = без числового лимита", но "без лимита" не должно означать "без потолка вообще" —

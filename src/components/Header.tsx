@@ -25,6 +25,7 @@ export type View =
   | { name: "kim2027" }
   | { name: "legal"; doc: "offer" | "privacy" }
   | { name: "payment-return"; paymentId: string }
+  | { name: "renew" }
   | { name: "reset-password"; token: string }
   | { name: "check-email"; email: string }
   | { name: "verify-email"; token: string }
@@ -33,7 +34,7 @@ export type View =
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
 export const PROTECTED_VIEWS: View["name"][] = [
   "bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary",
-  "profile", "settings", "subjects", "kim2027", "payment-return", "admin",
+  "profile", "settings", "subjects", "kim2027", "payment-return", "renew", "admin",
 ];
 
 /** Виды, доступные только администраторам (см. AppShell). */

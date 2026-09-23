@@ -3,7 +3,9 @@ import type { EgeTask } from "../data/tasks";
 import { taskById, SUBJECTS } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { callAiTutor, loadAiQuota, type AiMode, type AiQuota } from "../lib/aiTutor";
+import { loadWelcomeOffer, type WelcomeOffer } from "../lib/offers";
 import { TutorText } from "./ui";
+import { OfferClock } from "./WelcomeOfferBanner";
 
 const HINT_RE = /(подсказ|намек|намеёк|помоги решить|направь)/i;
 const EXPLAIN_RE = /(объясн|решени|разбор|разбери|как решить|полное реш|ответ задания)/i;
@@ -58,6 +60,19 @@ export default function TutorChat({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [quota, setQuota] = useState<AiQuota>({ limited: false });
+  const [offer, setOffer] = useState<WelcomeOffer | null>(null);
+  const quotaExhausted = quota.limited && quota.remaining === 0;
+  // оффер грузим только тогда, когда он реально нужен — в момент, когда бесплатные обращения кончились
+  useEffect(() => {
+    if (!quotaExhausted) return;
+    let cancelled = false;
+    loadWelcomeOffer().then((o) => {
+      if (!cancelled) setOffer(o);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [quotaExhausted]);
   const refreshQuota = () => loadAiQuota().then(setQuota);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -273,6 +288,20 @@ export default function TutorChat({
                 {a}
               </button>
             ))}
+          </div>
+        )}
+        {quotaExhausted && !examMode && (
+          <div className="rounded-md border border-hl/40 bg-hl/10 p-3.5 text-[13px] leading-relaxed text-paper">
+            <p className="font-bold text-hl">Бесплатные обращения на сегодня закончились</p>
+            <p className="mt-1 text-paper/80">Завтра лимит обновится. Чтобы продолжить разбор прямо сейчас — открой безлимитного ИИ-репетитора: подсказки по уровням, разбор ошибок по шагам, без дневного лимита.</p>
+            {offer && (
+              <p className="mt-2 text-[12.5px]">
+                <strong className="text-hl">−{offer.percent}% на первую оплату</strong> · осталось <OfferClock expiresAt={offer.expiresAt} />
+              </p>
+            )}
+            <button onClick={() => onNavigate?.("tariffs")} className="mt-2.5 rounded-sm bg-hl px-3.5 py-2 text-[12.5px] font-bold text-night transition hover:brightness-110">
+              Открыть без лимита
+            </button>
           </div>
         )}
         <div ref={bottomRef} />

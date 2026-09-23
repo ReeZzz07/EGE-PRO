@@ -45,6 +45,7 @@ export interface AdminUserDetail {
   tariff_id: string;
   tariff_activated_at: string | null;
   tariff_expires_at: string | null;
+  extra_subjects: number;
   discount_percent: number | null;
   anonymized_at: string | null;
   tariff_name: string | null;

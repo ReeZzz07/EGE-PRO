@@ -257,6 +257,11 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
               {detail.tariff_activated_at && <p className="mt-1 text-[11px] text-ink2">Тариф выдан {fmtDate(detail.tariff_activated_at)}</p>}
             </label>
           )}
+          {detail.tariff_id !== "free" && detail.extra_subjects > 0 && (
+            <p className="text-[12px] text-ink2">
+              Докуплено предметов: <strong className="text-ink">{detail.extra_subjects}</strong> — входят в продление «как было», действуют вместе с тарифом.
+            </p>
+          )}
 
           <label className="block">
             <span className="text-[11.5px] font-bold text-ink2">Персональная скидка, % (пусто — без скидки)</span>

@@ -16,7 +16,7 @@ export async function addProfileSubject(userId: string, subject: Subject): Promi
   if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
   const { error } = await supabase.from("profile_subjects").insert({ user_id: userId, subject });
   if (error) {
-    if (/лимит предметов/i.test(error.message)) return { error: "На текущем тарифе больше предметов не добавить — открой тариф с бо́льшим числом предметов." };
+    if (/лимит предметов/i.test(error.message)) return { error: "На текущем тарифе больше предметов не добавить — докупи предмет в разделе «Мои предметы» или открой тариф с бо́льшим числом предметов." };
     if (/duplicate key|unique/i.test(error.message)) return { error: "Этот предмет уже добавлен." };
     return { error: error.message };
   }

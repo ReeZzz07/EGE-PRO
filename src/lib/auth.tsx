@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { addProfileSubject, loadProfileSubjects, removeProfileSubject } from "./profileSubjects";
 import type { Subject } from "../data/tasks";
+import { loadSubscription, splitSubjects, type Subscription } from "./subscription";
 import { reachGoal } from "./metrika";
 
 export type Grade = "10" | "11" | "grad";
@@ -32,6 +33,14 @@ export interface Profile {
   /** все активные предметы ученика (public.profile_subjects), включая primarySubject — сколько их
    *  может быть, ограничивает тариф (subjectsCount). Пусто, пока не загрузилось. */
   subjects: Subject[];
+  /** Подключённые предметы, доступ к которым приостановлен: срок платного тарифа закончился, и
+   *  предметов больше, чем даёт бесплатный. Данные по ним сохранены, доступ вернётся после
+   *  продления (см. lib/subscription.ts). В subjects их НЕТ — весь остальной интерфейс работает
+   *  только с доступными предметами. */
+  frozenSubjects?: Subject[];
+  /** Состояние подписки с сервера (срок, докупка, предложение продлить) — null/undefined в
+   *  гостевом режиме или пока сервер не ответил. */
+  subscription?: Subscription | null;
   /** timestamp завершения онбординга (квиз + «как это работает») */
   onboardedAt?: number;
   /** доступ к админке управления контентом лендинга (раздел 2.4 ТЗ, узкий срез) */
@@ -143,7 +152,22 @@ function saveGuestProfile(p: Profile | null) {
 
 /** Общий маппинг строки public.profiles → Profile — используется и при первой загрузке сессии, и
  *  в refreshProfile() ниже (перечитать после оплаты, см. PaymentReturnView.tsx). */
-function profileFromRow(data: Record<string, unknown>, fallbackEmail: string, fallbackName: string, subjects: Subject[]): Profile {
+/** Делит все подключённые предметы на доступные и замороженные по подписке (см. lib/subscription.ts);
+ *  без ответа сервера (гостевой режим, сеть) — все доступны, как и до появления заморозки. */
+function withSubscription(all: Subject[], subscription: Subscription | null): Pick<Profile, "subjects"> & Partial<Pick<Profile, "frozenSubjects" | "subscription">> {
+  if (!subscription) return { subjects: all };
+  // Список замороженных определяет сервер (у предметов, подключённых в один момент, порядок надёжно
+  // задан только там — order by added_at, subject); клиентский split — запасной вариант, если сервер
+  // отдал подписку без списков.
+  if (Array.isArray(subscription.frozenSubjects)) {
+    const frozen = all.filter((s) => subscription.frozenSubjects.includes(s));
+    return { subjects: all.filter((s) => !frozen.includes(s)), frozenSubjects: frozen, subscription };
+  }
+  const { active, frozen } = splitSubjects(all, subscription.isAdmin ? null : subscription.subjectsCap);
+  return { subjects: active, frozenSubjects: frozen, subscription };
+}
+
+function profileFromRow(data: Record<string, unknown>, fallbackEmail: string, fallbackName: string, subjects: Subject[], subscription: Subscription | null = null): Profile {
   return {
     id: data.id as string,
     name: (data.full_name as string) ?? fallbackName,
@@ -158,7 +182,7 @@ function profileFromRow(data: Record<string, unknown>, fallbackEmail: string, fa
     school: (data.school as string) ?? undefined,
     age: (data.age as number) ?? undefined,
     gender: (data.gender as Gender) ?? undefined,
-    subjects,
+    ...withSubscription(subjects, subscription),
     onboardedAt: data.onboarded_at ? new Date(data.onboarded_at as string).getTime() : undefined,
     isAdmin: (data.is_admin as boolean) ?? false,
     tariffId: (data.tariff_id as string) ?? "free",
@@ -185,15 +209,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function loadProfile(userId: string, fallbackEmail: string, fallbackName: string) {
-      const [{ data }, subjects] = await Promise.all([
+      const [{ data }, subjects, subscription] = await Promise.all([
         supabase!.from("profiles").select("*").eq("id", userId).maybeSingle(),
         loadProfileSubjects(userId),
+        loadSubscription(),
       ]);
       if (cancelled) return;
       if (data) {
-        setProfile(profileFromRow(data, fallbackEmail, fallbackName, subjects));
+        setProfile(profileFromRow(data, fallbackEmail, fallbackName, subjects, subscription));
       } else {
-        setProfile({ id: userId, name: fallbackName, email: fallbackEmail, subjects });
+        setProfile({ id: userId, name: fallbackName, email: fallbackEmail, ...withSubscription(subjects, subscription) });
       }
       setLoading(false);
     }
@@ -286,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyEmail = async (token: string): Promise<AuthResult> => {
     if (!isSupabaseConfigured || !supabase) return { error: "В гостевом режиме подтверждать нечего — аккаунт уже рабочий." };
     const { error } = await supabase.auth.verifyEmail(token);
-    if (error) return { error: error.message };
+    if (error) return { error: error.message, code: (error as { code?: string }).code };
     try {
       localStorage.setItem(WELCOME_POPUP_FLAG_KEY, "1");
     } catch {
@@ -385,17 +410,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSubjects = async () => {
     if (!isSupabaseConfigured || !supabase || !profile) return;
-    const subjects = await loadProfileSubjects(profile.id);
-    setProfile((prev) => (prev ? { ...prev, subjects } : prev));
+    const [subjects, subscription] = await Promise.all([loadProfileSubjects(profile.id), loadSubscription()]);
+    setProfile((prev) => (prev ? { ...prev, ...withSubscription(subjects, subscription ?? prev.subscription ?? null) } : prev));
   };
 
   const refreshProfile = async () => {
     if (!isSupabaseConfigured || !supabase || !profile) return;
-    const [{ data }, subjects] = await Promise.all([
+    const [{ data }, subjects, subscription] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", profile.id).maybeSingle(),
       loadProfileSubjects(profile.id),
+      loadSubscription(),
     ]);
-    if (data) setProfile(profileFromRow(data, profile.email, profile.name, subjects));
+    if (data) setProfile(profileFromRow(data, profile.email, profile.name, subjects, subscription));
   };
 
   return (

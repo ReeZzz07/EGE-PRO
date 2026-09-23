@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { checkAnswer } from "../lib/utils";
 import { pickDiagnosticTasks, scoreDiagnostic, LEVEL_LABEL, type DiagnosticAnswer, type DiagnosticResult } from "../lib/diagnostic";
+import { reachGoalOnce } from "../lib/metrika";
 import { saveDiagnosticResult, mirrorDiagnosticToSupabase } from "../lib/planStorage";
 import { useAuth } from "../lib/auth";
 import { hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
@@ -43,6 +44,7 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
     if (idx + 1 >= tasks.length) {
       const scored = scoreDiagnostic(subject, next);
       if (profile) saveDiagnosticResult(scored, profile.id);
+      reachGoalOnce("diagnostic_done", "diagnostic_done");
       if (!isGuestMode && profile) mirrorDiagnosticToSupabase(profile.id, scored);
       setPhase("result");
     } else {

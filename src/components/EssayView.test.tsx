@@ -5,7 +5,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import EssayView from "./EssayView";
-import { useEssayCheckAllowed } from "../lib/tariffs";
+import { useEssayCheckAllowed, useEssayTrialLeft } from "../lib/tariffs";
 import type { EgeTask } from "../data/tasks";
 
 vi.mock("../lib/store", () => ({
@@ -14,7 +14,7 @@ vi.mock("../lib/store", () => ({
 vi.mock("../lib/auth", () => ({
   useAuth: () => ({ profile: { id: "u1", name: "Т", email: "t@t.local", isAdmin: false, tariffId: "free", subjects: [] }, isGuestMode: false }),
 }));
-vi.mock("../lib/tariffs", () => ({ useEssayCheckAllowed: vi.fn() }));
+vi.mock("../lib/tariffs", () => ({ useEssayCheckAllowed: vi.fn(), useEssayTrialLeft: vi.fn(() => 0) }));
 vi.mock("../lib/aiTutor", () => ({ callAiTutor: vi.fn() }));
 
 const task: EgeTask = {
@@ -43,6 +43,17 @@ describe("EssayView — гейт бесплатного тарифа", () => {
     expect(screen.getByText("Только на платных тарифах")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /смотреть тарифы/i })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Пиши здесь свой ответ…")).not.toBeInTheDocument();
+  });
+
+  it("free, но есть бесплатная проверка (trialLeft=1) — форма ответа с пометкой про пробную проверку, без пейволла", () => {
+    vi.mocked(useEssayCheckAllowed).mockReturnValue(false);
+    vi.mocked(useEssayTrialLeft).mockReturnValue(1);
+    render(<EssayView task={task} onNav={vi.fn()} nextTaskId="t2" />);
+
+    expect(screen.getByPlaceholderText("Пиши здесь свой ответ…")).toBeInTheDocument();
+    expect(screen.getByText(/Бесплатная проверка — попробуй разбор по критериям/)).toBeInTheDocument();
+    expect(screen.queryByText("Только на платных тарифах")).not.toBeInTheDocument();
+    vi.mocked(useEssayTrialLeft).mockReturnValue(0);
   });
 
   it("essayAllowed=true — показывает форму ответа, без пейволла", () => {

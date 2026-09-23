@@ -54,7 +54,7 @@ export async function getUserDetail(id) {
     `select u.id, u.email, u.created_at as registered_at, u.email_confirmed_at,
             p.full_name, p.grade, p.exam_year, p.goal, p.daily_minutes, p.primary_subject, p.onboarded_at, p.avatar_url,
             p.region, p.city, p.school, p.age, p.gender,
-            p.is_admin, p.tariff_id, p.tariff_activated_at, p.tariff_expires_at, p.discount_percent,
+            p.is_admin, p.tariff_id, p.tariff_activated_at, p.tariff_expires_at, p.extra_subjects, p.discount_percent,
             p.anonymized_at, t.name as tariff_name, t.price_rub as tariff_price_rub,
             (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active
      from auth.users u

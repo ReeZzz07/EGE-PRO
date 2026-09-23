@@ -4,44 +4,28 @@
 import { pool } from "./db.js";
 import { createYookassaPayment, fetchYookassaPayment, resolveYookassaSettings } from "./yookassa.js";
 import { sendPaymentReceiptEmail } from "./mailer.js";
+import { getWelcomeOffer } from "./offers.js";
+import { effectiveDiscountPercent, priceWithDiscount } from "./pricing.js";
+import { getSubscription, addonAmount, resolveAddonConfig } from "./subscription.js";
 
 const PERIOD_DAYS = 30;
 
-/** Округление до копеек математически честно — toFixed(2) на "сыром" float иногда даёт
- *  0.1+0.2-style артефакты на нечётных процентах скидки (напр. 33%). Экспортируется отдельно
- *  ради юнит-теста (см. test/payments.test.js) — сама по себе чистая функция, без БД. */
-export function priceWithDiscount(priceRub, discountPercent) {
-  if (!discountPercent) return priceRub;
-  return Math.round(priceRub * (1 - discountPercent / 100) * 100) / 100;
-}
+export { priceWithDiscount, effectiveDiscountPercent } from "./pricing.js";
 
 /** Создаёт запись платежа и сам платёж в ЮKassa, возвращает ссылку для редиректа на подтверждение
- *  (3-D Secure/банк). siteUrl — реальный https-домен (CORS_ORIGIN), нужен для return_url: куда
- *  ЮKassa вернёт браузер пользователя после оплаты. */
-export async function initiatePayment(userId, tariffId, siteUrl) {
+ *  (3-D Secure/банк). Общая часть для всех видов оплаты (tariff / renewal / addon) — сумму, вид и
+ *  описание считает вызывающий код. siteUrl — реальный https-домен (CORS_ORIGIN), нужен для
+ *  return_url: куда ЮKassa вернёт браузер пользователя после оплаты. */
+async function startPayment({ userId, tariffId, amountRub, discountPercent, periodDays, kind, extraSubjects = 0, description, siteUrl }) {
   const settings = await resolveYookassaSettings();
   if (!settings) return { error: "Приём оплаты пока не настроен — обратись к администратору." };
 
-  const { rows } = await pool.query(
-    `select t.price_rub, t.sale_price_rub, t.name, p.discount_percent, u.email
-     from public.tariffs t, public.profiles p, auth.users u
-     where t.id = $1 and p.id = $2 and u.id = $2 and t.is_active`,
-    [tariffId, userId]
-  );
-  const row = rows[0];
-  if (!row) return { error: "Тариф не найден" };
-  if (row.price_rub <= 0) return { error: "У этого тарифа нет платной версии" };
-
-  // Персональная скидка считается от уже сниженной (sale_price_rub) цены, если она задана — иначе
-  // сумма к оплате разошлась бы с тем, что видит пользователь на странице тарифов (там
-  // sale_price_rub показывается как основная цена, см. Tariffs.tsx).
-  const basePrice = row.sale_price_rub ?? row.price_rub;
-  const amountRub = priceWithDiscount(basePrice, row.discount_percent);
+  const email = (await pool.query("select email from auth.users where id = $1", [userId])).rows[0]?.email;
 
   const inserted = await pool.query(
-    `insert into public.payments (user_id, tariff_id, amount_rub, discount_percent, period_days, status)
-     values ($1, $2, $3, $4, $5, 'pending') returning id`,
-    [userId, tariffId, amountRub, row.discount_percent ?? null, PERIOD_DAYS]
+    `insert into public.payments (user_id, tariff_id, amount_rub, discount_percent, period_days, status, kind, extra_subjects)
+     values ($1, $2, $3, $4, $5, 'pending', $6, $7) returning id`,
+    [userId, tariffId, amountRub, discountPercent ?? null, periodDays, kind, extraSubjects]
   );
   const paymentId = inserted.rows[0].id;
 
@@ -49,10 +33,10 @@ export async function initiatePayment(userId, tariffId, siteUrl) {
   try {
     ykPayment = await createYookassaPayment(settings, {
       amountRub,
-      description: `ЕГЭ·ПРО — тариф «${row.name}» на ${PERIOD_DAYS} дней`,
+      description,
       returnUrl: `${siteUrl}/payment/return?paymentId=${paymentId}`,
       metadata: { paymentId },
-      customerEmail: row.email,
+      customerEmail: email,
       // Свой же id строки — готовый уникальный ключ, отдельный randomUUID() не нужен: повторный
       // POST /payments/create с тем же paymentId (ретрай на сетевой сбой) не создаст в ЮKassa
       // второй платёж на ту же попытку и не спишет деньги дважды.
@@ -65,6 +49,81 @@ export async function initiatePayment(userId, tariffId, siteUrl) {
 
   await pool.query("update public.payments set provider_payment_id = $2 where id = $1", [paymentId, ykPayment.id]);
   return { paymentId, confirmationUrl: ykPayment.confirmationUrl };
+}
+
+/** Обычная покупка тарифа со страницы тарифов. */
+export async function initiatePayment(userId, tariffId, siteUrl) {
+  const { rows } = await pool.query(
+    `select t.price_rub, t.sale_price_rub, t.name, p.discount_percent
+     from public.tariffs t, public.profiles p
+     where t.id = $1 and p.id = $2 and t.is_active`,
+    [tariffId, userId]
+  );
+  const row = rows[0];
+  if (!row) return { error: "Тариф не найден" };
+  if (row.price_rub <= 0) return { error: "У этого тарифа нет платной версии" };
+
+  // Персональная скидка считается от уже сниженной (sale_price_rub) цены, если она задана — иначе
+  // сумма к оплате разошлась бы с тем, что видит пользователь на странице тарифов (там
+  // sale_price_rub показывается как основная цена, см. Tariffs.tsx).
+  const basePrice = row.sale_price_rub ?? row.price_rub;
+  // Приветственный оффер (см. offers.js) и персональная скидка админа не суммируются — берётся
+  // большая: иначе скидки перемножались бы и цена уезжала ниже того, что обещано на странице.
+  const offer = await getWelcomeOffer(userId);
+  const discountPercent = effectiveDiscountPercent(row.discount_percent, offer);
+  return startPayment({
+    userId,
+    tariffId,
+    amountRub: priceWithDiscount(basePrice, discountPercent),
+    discountPercent,
+    periodDays: PERIOD_DAYS,
+    kind: "tariff",
+    description: `ЕГЭ·ПРО — тариф «${row.name}» на ${PERIOD_DAYS} дней`,
+    siteUrl,
+  });
+}
+
+/** Продление «как было»: тот же тариф и те же докупленные предметы, что были у пользователя (см.
+ *  subscription.js → renewal). Тариф и состав берутся из профиля на сервере, а не из запроса, —
+ *  клиент не может подсунуть чужой тариф или цену. Работает и для действующего тарифа (продление
+ *  заранее прибавляет 30 дней к остатку), и для истёкшего. */
+export async function initiateRenewal(userId, siteUrl) {
+  const sub = await getSubscription(userId);
+  if (!sub?.renewal) return { error: "Нечего продлять — у тебя нет платного тарифа или он больше не продаётся. Выбери тариф на странице «Тарифы»." };
+  const r = sub.renewal;
+  const extras = r.extraSubjects > 0 ? ` + докупленных предметов: ${r.extraSubjects}` : "";
+  return startPayment({
+    userId,
+    tariffId: r.tariffId,
+    amountRub: r.amountRub,
+    discountPercent: r.discountPercent,
+    periodDays: r.periodDays,
+    kind: "renewal",
+    extraSubjects: r.extraSubjects,
+    description: `ЕГЭ·ПРО — продление тарифа «${r.tariffName}»${extras} на ${r.periodDays} дней`,
+    siteUrl,
+  });
+}
+
+/** Докупка предметов к ДЕЙСТВУЮЩЕМУ тарифу на оставшийся срок (срок тарифа не меняется). */
+export async function initiateAddon(userId, count, siteUrl) {
+  const n = Number(count);
+  if (!Number.isInteger(n) || n < 1) return { error: "Укажи, сколько предметов докупить" };
+  const sub = await getSubscription(userId);
+  if (!sub?.addon) return { error: "Докупить предметы можно только к действующему платному тарифу." };
+  if (n > sub.addon.maxCount) return { error: `Сейчас можно докупить не больше ${sub.addon.maxCount} предм.` };
+  const amountRub = sub.addon.quotes[n - 1];
+  return startPayment({
+    userId,
+    tariffId: sub.tariffId,
+    amountRub,
+    discountPercent: sub.addon.discountPercent,
+    periodDays: sub.addon.remainingDays,
+    kind: "addon",
+    extraSubjects: n,
+    description: `ЕГЭ·ПРО — докупка предметов (${n}) к тарифу «${sub.tariffName}» на ${sub.addon.remainingDays} дн.`,
+    siteUrl,
+  });
 }
 
 /** Применяет успешный платёж — продлевает тариф пользователя. Идемпотентно (проверка статуса под
@@ -84,18 +143,30 @@ export async function applySucceededPayment(paymentId) {
     }
     await client.query("update public.payments set status = 'succeeded' where id = $1", [paymentId]);
 
-    const prof = await client.query("select tariff_id, tariff_expires_at from public.profiles where id = $1", [payment.user_id]);
+    const prof = await client.query("select tariff_id, tariff_expires_at, extra_subjects from public.profiles where id = $1", [payment.user_id]);
     const p = prof.rows[0];
     const now = Date.now();
-    const sameTariffStillActive = p && p.tariff_id === payment.tariff_id && p.tariff_expires_at && new Date(p.tariff_expires_at).getTime() > now;
-    const base = sameTariffStillActive ? new Date(p.tariff_expires_at).getTime() : now;
-    const newExpiry = new Date(base + payment.period_days * 24 * 3600 * 1000);
+    const sameTariffStillActive = !!(p && p.tariff_id === payment.tariff_id && p.tariff_expires_at && new Date(p.tariff_expires_at).getTime() > now);
+    let newExpiry;
 
-    await client.query("update public.profiles set tariff_id = $2, tariff_activated_at = now(), tariff_expires_at = $3 where id = $1", [
-      payment.user_id,
-      payment.tariff_id,
-      newExpiry.toISOString(),
-    ]);
+    if (payment.kind === "addon") {
+      // докупка предметов: срок тарифа не двигается, только растёт число доступных предметов
+      newExpiry = p?.tariff_expires_at ? new Date(p.tariff_expires_at) : new Date(now);
+      await client.query("update public.profiles set extra_subjects = least(20, extra_subjects + $2) where id = $1", [payment.user_id, payment.extra_subjects]);
+    } else {
+      const base = sameTariffStillActive ? new Date(p.tariff_expires_at).getTime() : now;
+      newExpiry = new Date(base + payment.period_days * 24 * 3600 * 1000);
+      // renewal возвращает прежний состав (extra_subjects записан в платёж при создании); обычная
+      // покупка тарифа сохраняет докупленные предметы только при продлении ТОГО ЖЕ ещё действующего
+      // тарифа — смена тарифа или покупка после окончания срока начинает с чистого состава.
+      const extras = payment.kind === "renewal" ? payment.extra_subjects : sameTariffStillActive ? p.extra_subjects : 0;
+      await client.query("update public.profiles set tariff_id = $2, tariff_activated_at = now(), tariff_expires_at = $3, extra_subjects = $4 where id = $1", [
+        payment.user_id,
+        payment.tariff_id,
+        newExpiry.toISOString(),
+        extras,
+      ]);
+    }
     await client.query("commit");
 
     // Чек — вне транзакции и best-effort: тариф уже применён, письмо не должно ни задерживать,
@@ -110,6 +181,8 @@ export async function applySucceededPayment(paymentId) {
         amountRub: payment.amount_rub,
         periodDays: payment.period_days,
         expiresAt: newExpiry.toISOString(),
+        kind: payment.kind,
+        extraSubjects: payment.extra_subjects,
       }).catch((e) => console.warn("не удалось отправить чек об оплате:", e?.message ?? e));
     }
   } catch (e) {
@@ -169,7 +242,7 @@ export async function getPaymentStatus(paymentId, userId, isAdmin) {
  *  электронная коммерция, см. src/lib/metrika.ts). Права на платёж уже проверены getPaymentStatus,
  *  сюда вызывается только после него. null — платежа нет. */
 export async function getPaymentSummary(paymentId) {
-  const { rows } = await pool.query("select amount_rub, tariff_id from public.payments where id = $1", [paymentId]);
+  const { rows } = await pool.query("select amount_rub, tariff_id, kind, extra_subjects from public.payments where id = $1", [paymentId]);
   if (!rows[0]) return null;
-  return { amountRub: Number(rows[0].amount_rub), tariffId: rows[0].tariff_id };
+  return { amountRub: Number(rows[0].amount_rub), tariffId: rows[0].tariff_id, kind: rows[0].kind, extraSubjects: rows[0].extra_subjects };
 }

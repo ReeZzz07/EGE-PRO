@@ -40,3 +40,17 @@ export async function consumeActionToken(token, purpose) {
   );
   return rows[0]?.user_id ?? null;
 }
+
+/** Читает токен БЕЗ погашения — нужно, чтобы после неудачного consumeActionToken объяснить
+ * пользователю причину (почта уже подтверждена / ссылка устарела), а не показывать одну и ту же
+ * общую ошибку. Раскрывает статус аккаунта только тому, у кого есть сам токен (хеш подобрать
+ * нельзя), так что перечислением пользователей это не становится. */
+export async function inspectActionToken(token, purpose) {
+  const { rows } = await pool.query(
+    `select t.user_id, (u.email_confirmed_at is not null) as confirmed
+     from auth.action_tokens t join auth.users u on u.id = t.user_id
+     where t.token_hash = $1 and t.purpose = $2`,
+    [hashToken(token), purpose]
+  );
+  return rows[0] ? { userId: rows[0].user_id, confirmed: rows[0].confirmed } : null;
+}

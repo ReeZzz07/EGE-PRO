@@ -5,6 +5,8 @@ import { plural } from "../lib/utils";
 import { loadDiagnosticResult, loadStudyPlan, saveStudyPlan, mirrorPlanToSupabase } from "../lib/planStorage";
 import { useAuth } from "../lib/auth";
 import { Icon, Reveal } from "./ui";
+import PaywallCard from "./PaywallCard";
+import type { View } from "./Header";
 
 const SUBJECT_DATIVE: Record<Subject, string> = {
   math: "математике",
@@ -21,7 +23,7 @@ const SUBJECT_DATIVE: Record<Subject, string> = {
   math_base: "математике (базовый уровень)",
 };
 
-export default function PlanView({ subject, onStartTraining, onSkipToBank }: { subject: Subject; onStartTraining: (taskId: string) => void; onSkipToBank: () => void }) {
+export default function PlanView({ subject, onStartTraining, onSkipToBank, onNav }: { subject: Subject; onStartTraining: (taskId: string) => void; onSkipToBank: () => void; onNav?: (v: View) => void }) {
   const meta = SUBJECTS[subject];
   const { profile, isGuestMode } = useAuth();
 
@@ -98,6 +100,18 @@ export default function PlanView({ subject, onStartTraining, onSkipToBank }: { s
             </button>
           )}
         </div>
+
+        {/* первый момент, когда платформа уже дала результат (уровень + план) — самое уместное место
+            показать, что на free упрёшься в 3 обращения к ИИ в день, а слабые темы разбирать долго */}
+        {onNav && profile && !profile.isAdmin && !isGuestMode && profile.tariffId === "free" && (
+          <PaywallCard
+            className="mt-9"
+            eyebrow="Чтобы план не упёрся в лимит"
+            title={result.weakTopics.length > 0 ? `Разбери слабые темы без лимита: ${result.weakTopics.slice(0, 3).join(", ")}` : "Пройди план с безлимитным ИИ-репетитором"}
+            text="На бесплатном тарифе ИИ-репетитор отвечает 3 раза в день — на разбор одной слабой темы этого обычно не хватает. На платных тарифах без лимита: подсказки по уровням, разбор ошибок по шагам, проверка сочинений по критериям и до 11 предметов."
+            onNav={onNav}
+          />
+        )}
       </Reveal>
     </div>
   );

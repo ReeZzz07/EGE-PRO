@@ -55,6 +55,8 @@ export interface AiTutorResponse {
   /** true — запрос отклонён, потому что ученик в экзамен-режиме (см. examMode выше); text уже
    *  содержит готовое сообщение об этом. */
   examBlocked?: boolean;
+  /** true — эта проверка сочинения была бесплатной пробной (тариф free), дальше только платно */
+  freeTrialUsed?: boolean;
 }
 
 export interface AiQuota {
@@ -63,6 +65,8 @@ export interface AiQuota {
   limit?: number;
   used?: number;
   remaining?: number;
+  /** сколько бесплатных проверок сочинения осталось (только у бесплатного тарифа) */
+  essayTrialLeft?: number;
 }
 
 /** Остаток дневной квоты ИИ-репетитора — чтобы честно показать ограничение free-тарифа ДО того,

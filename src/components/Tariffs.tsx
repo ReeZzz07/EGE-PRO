@@ -14,7 +14,10 @@ import { createPayment } from "../lib/payments";
 import { reachGoal } from "../lib/metrika";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
+import { useWelcomeOffer } from "../lib/offers";
 import { Icon, useToast } from "./ui";
+import WelcomeOfferBanner from "./WelcomeOfferBanner";
+import SubscriptionBanner from "./SubscriptionBanner";
 import type { View } from "./Header";
 
 export function money(rub: number): string {
@@ -25,6 +28,7 @@ export function money(rub: number): string {
 export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   const { profile, updateProfile } = useAuth();
   const { push } = useToast();
+  const offer = useWelcomeOffer();
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
@@ -68,7 +72,10 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
     }
   };
 
-  const discountedPrice = (priceRub: number) => (profile?.discountPercent ? Math.round(priceRub * (1 - profile.discountPercent / 100) * 100) / 100 : null);
+  // как и на сервере (payments.js): персональная скидка и приветственный оффер не суммируются —
+  // действует большая из двух
+  const effectiveDiscount = Math.max(profile?.discountPercent ?? 0, offer?.percent ?? 0);
+  const discountedPrice = (priceRub: number) => (effectiveDiscount ? Math.round(priceRub * (1 - effectiveDiscount / 100) * 100) / 100 : null);
 
   if (loading) {
     return <p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка тарифов…</p>;
@@ -83,6 +90,10 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
         {tariffs.some((t) => t.priceRub > 0) && <p className="mt-1 font-mono text-[11.5px] text-ink2">{content.perSubjectNote}</p>}
       </div>
 
+      {profile && profile.subscription && <SubscriptionBanner sub={profile.subscription} onNav={onNav} />}
+
+      {offer && <WelcomeOfferBanner offer={offer} />}
+
       {profile?.isAdmin && (
         <p className="mt-6 border-l-4 border-blue bg-blue/8 px-4 py-3 text-[13px] leading-relaxed text-ink2">
           <strong className="text-ink">Ты администратор</strong> — тарифы тебя не ограничивают, доступ ко всем предметам и функциям есть в любом случае.
@@ -91,7 +102,10 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {tariffs.map((t) => {
-          const isCurrent = profile?.tariffId === t.id;
+          // истёкший платный тариф больше не «текущий» — по условиям доступа это уже free
+          const expired = !!profile?.subscription?.expired;
+          const isCurrent = (expired ? "free" : profile?.tariffId) === t.id;
+          const isExpiredOne = expired && profile?.tariffId === t.id;
           const isPopular = !!t.badge && t.priceRub > 0;
           return (
             <div
@@ -117,7 +131,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
               )}
               {t.priceRub > 0 && discountedPrice(t.salePriceRub ?? t.priceRub) != null && (
                 <p className="mt-1 font-mono text-[12px] font-bold text-teal">
-                  К оплате с твоей скидкой −{profile!.discountPercent}%: {money(discountedPrice(t.salePriceRub ?? t.priceRub)!)}
+                  К оплате со скидкой −{effectiveDiscount}%: {money(discountedPrice(t.salePriceRub ?? t.priceRub)!)}
                 </p>
               )}
               <ul className="mt-4 flex-1 space-y-2 text-[13px] text-ink2">
@@ -135,22 +149,62 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
                   </li>
                 ))}
               </ul>
-              <button
-                onClick={() => choose(t)}
-                disabled={isCurrent || switching === t.id}
-                className={`mt-5 w-full justify-center px-4 py-2.5 text-[13px] ${isCurrent ? "btn btn-ghost" : "btn btn-ink"}`}
-              >
-                {isCurrent ? "Текущий тариф" : switching === t.id ? "Открываем оплату…" : profile ? "Выбрать" : "Начать"}
-              </button>
+              {isExpiredOne ? (
+                // тариф закончился — продлеваем «как было» (с докупленными предметами), а не выбираем заново
+                <button onClick={() => onNav({ name: "renew" })} className="btn btn-blue mt-5 w-full justify-center px-4 py-2.5 text-[13px]">
+                  Продлить с прежними настройками
+                </button>
+              ) : (
+                <button
+                  onClick={() => choose(t)}
+                  disabled={isCurrent || switching === t.id}
+                  className={`mt-5 w-full justify-center px-4 py-2.5 text-[13px] ${isCurrent ? "btn btn-ghost" : "btn btn-ink"}`}
+                >
+                  {isCurrent ? "Текущий тариф" : switching === t.id ? "Открываем оплату…" : profile ? "Выбрать" : "Начать"}
+                </button>
+              )}
+              {isExpiredOne && profile?.tariffExpiresAt && (
+                <p className="mt-2 text-center font-mono text-[11px] text-red">
+                  Закончился {new Date(profile.tariffExpiresAt).toLocaleDateString("ru-RU")}
+                </p>
+              )}
               {isCurrent && t.priceRub > 0 && profile?.tariffExpiresAt && (
                 <p className="mt-2 text-center font-mono text-[11px] text-ink2">
                   Оплачено до {new Date(profile.tariffExpiresAt).toLocaleDateString("ru-RU")}
+                  {profile.subscription?.renewal && (
+                    <>
+                      {" · "}
+                      <button onClick={() => onNav({ name: "renew" })} className="link-slide font-bold hover:text-ink">
+                        продлить
+                      </button>
+                    </>
+                  )}
                 </p>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* только то, что реально так работает (см. payments.js: разовый платёж на 30 дней, тариф
+          включает вебхук сразу после оплаты, чек уходит на почту; карту принимает ЮKassa, не мы) */}
+      {tariffs.some((t) => t.priceRub > 0) && (
+        <ul className="mx-auto mt-10 grid max-w-4xl gap-3 sm:grid-cols-3">
+          {[
+            { icon: "check", t: "Без автосписаний", d: "Оплата разовая на 30 дней. Карту мы не сохраняем и ничего не спишем сами — продлевать или нет, решаешь ты." },
+            { icon: "spark", t: "Доступ сразу", d: "Тариф включается автоматически, как только платёж пройдёт. Чек придёт на почту." },
+            { icon: "eyeOff", t: "Платёж защищён", d: "Оплата проходит на стороне ЮKassa — данные твоей карты мы не видим и не храним." },
+          ].map((x) => (
+            <li key={x.t} className="sheet flex items-start gap-3 p-4">
+              <Icon name={x.icon} size={18} className="mt-0.5 shrink-0 text-blue" />
+              <div>
+                <p className="font-display text-[13.5px] font-bold">{x.t}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">{x.d}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* управление предметами и удаление аккаунта — на странице профиля (см. ProfileView.tsx),
           рядом с остальными личными настройками, а не здесь */}
@@ -161,7 +215,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
               <strong className="text-ink">Ты администратор</strong> — тариф не ограничивает число предметов, подключено {profile.subjects.length}.
             </>
           ) : (
-            <>Подключено {profile.subjects.length} из {tariffs.find((t) => t.id === profile.tariffId)?.subjectsCount ?? "?"} предметов.</>
+            <>Подключено {profile.subjects.length + (profile.frozenSubjects?.length ?? 0)} из {profile.subscription?.subjectsCap ?? tariffs.find((t) => t.id === profile.tariffId)?.subjectsCount ?? "?"} предметов.</>
           )}{" "}
           <button onClick={() => onNav({ name: "subjects" })} className="link-slide font-bold text-ink2 hover:text-ink">
             управлять в «Мои предметы»

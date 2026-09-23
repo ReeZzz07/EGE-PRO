@@ -220,13 +220,13 @@ export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
         <FactTile
           icon="spark"
           label="тариф"
-          value={profile.isAdmin ? "не ограничен" : tariff?.name ?? "…"}
+          value={profile.isAdmin ? "не ограничен" : profile.subscription?.expired ? `${tariff?.name ?? "Тариф"} · закончился` : tariff?.name ?? "…"}
           onClick={() => onNav({ name: "subjects" })}
         />
         <FactTile
           icon="book"
           label="предметы"
-          value={profile.isAdmin ? `${profile.subjects.length}` : `${profile.subjects.length} из ${tariff?.subjectsCount ?? "?"}`}
+          value={profile.isAdmin ? `${profile.subjects.length}` : `${profile.subjects.length + (profile.frozenSubjects?.length ?? 0)} из ${profile.subscription?.subjectsCap ?? tariff?.subjectsCount ?? "?"}`}
           onClick={() => onNav({ name: "subjects" })}
         />
         <FactTile icon="target" label="класс" value={gradeLabel} onClick={() => onNav({ name: "settings" })} />

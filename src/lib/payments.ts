@@ -17,10 +17,12 @@ export async function createPayment(tariffId: string): Promise<{ confirmationUrl
 
 export type PaymentStatus = "pending" | "succeeded" | "canceled";
 
-export async function getPaymentStatus(paymentId: string): Promise<{ status?: PaymentStatus; amountRub?: number; tariffId?: string; error?: string }> {
+export type PaymentKind = "tariff" | "renewal" | "addon";
+
+export async function getPaymentStatus(paymentId: string): Promise<{ status?: PaymentStatus; amountRub?: number; tariffId?: string; kind?: PaymentKind; extraSubjects?: number; error?: string }> {
   const resp = await apiFetch(`/payments/${encodeURIComponent(paymentId)}/status`);
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) return { error: json.error ?? resp.statusText };
   // сумма и тариф приходят только у проведённого платежа — для цели Метрики «purchase»
-  return { status: json.status, amountRub: json.amountRub, tariffId: json.tariffId };
+  return { status: json.status, amountRub: json.amountRub, tariffId: json.tariffId, kind: json.kind, extraSubjects: json.extraSubjects };
 }
