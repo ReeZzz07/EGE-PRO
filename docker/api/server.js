@@ -41,6 +41,7 @@ import {
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { getWelcomeOffer } from "./offers.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
+import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
 import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
@@ -971,6 +972,94 @@ app.post("/admin/lifecycle-email/:kind/test", authMiddleware, requireAdmin, asyn
   }
 });
 
+// ─────────────────────── админка: рассылки по фильтру ───────────────────────
+// Отбор получателей — теми же фильтрами, что и список пользователей; вся логика и защиты — в campaigns.js.
+
+app.get("/admin/campaigns", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json({ campaigns: await listCampaigns(), limits: { maxRecipients: CAMPAIGN_MAX_RECIPIENTS, recentDays: CAMPAIGN_RECENT_DAYS, ctaPaths: CAMPAIGN_CTA_PATHS } });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/admin/campaigns/:id", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const c = await getCampaign(req.params.id);
+    if (!c) return res.status(404).json({ error: "Рассылка не найдена" });
+    res.json(c);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Сколько человек получит рассылку по этим условиям (+ пример и число исключённых «недавно получавших»)
+app.post("/admin/campaigns/preview", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const kind = String(req.body?.kind ?? "");
+    if (!["verify_link", "custom"].includes(kind)) return res.status(400).json({ error: "Неизвестный вид рассылки" });
+    res.json(await previewRecipients({ q: String(req.body?.q ?? "").trim().slice(0, 200), filters: req.body?.filters, kind, excludeRecent: req.body?.excludeRecent !== false }));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Готовое письмо с образцовым именем — для предпросмотра
+app.post("/admin/campaigns/render", authMiddleware, requireAdmin, async (req, res) => {
+  const invalid = validateCampaignContent("custom", req.body ?? {});
+  if (invalid) return res.status(400).json({ error: invalid });
+  const m = renderCampaignSample(req.body);
+  res.json({ subject: m.subject, html: m.html });
+});
+
+// Тестовое письмо на почту самого админа
+app.post("/admin/campaigns/test", authMiddleware, requireAdmin, async (req, res) => {
+  const invalid = validateCampaignContent("custom", req.body ?? {});
+  if (invalid) return res.status(400).json({ error: invalid });
+  try {
+    const email = await getUserEmail(req.user.sub);
+    const m = renderCampaignSample(req.body);
+    await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}` });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/admin/campaigns", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const b = req.body ?? {};
+    const result = await createCampaign({
+      adminId: req.user.sub,
+      kind: String(b.kind ?? ""),
+      subject: b.subject,
+      bodyText: b.bodyText,
+      eyebrow: b.eyebrow,
+      ctaLabel: b.ctaLabel,
+      ctaPath: b.ctaPath,
+      footer: b.footer,
+      filters: b.filters,
+      q: b.q,
+      excludeRecent: b.excludeRecent !== false,
+      confirmCount: b.confirmCount,
+    });
+    res.json(result);
+  } catch (e) {
+    if (e instanceof CampaignError) return res.status(e.code === "COUNT_MISMATCH" ? 409 : 400).json({ error: e.message, code: e.code, ...e.extra });
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/admin/campaigns/:id/cancel", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const ok = await cancelCampaign(req.params.id);
+    if (!ok) return res.status(409).json({ error: "Рассылка уже завершена или отменена" });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // ─────────────────────── админка: пользователи ───────────────────────
 // Просмотр/поиск/правка + действия, которые требует 152-ФЗ по запросу субъекта персональных
 // данных: полная выгрузка, анонимизация, удаление. См. docker/api/adminUsers.js и миграцию
@@ -1381,6 +1470,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const server = app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
 startLifecycleScheduler();
+resumeCampaigns().catch((e) => console.warn("[campaigns] не удалось возобновить рассылки:", e?.message ?? e));
 
 // раньше необработанное исключение/rejection (например, в неawait'нутом .catch() пула — см.
 // множество pool.query(...).catch(console.warn) выше, но не все асинхронные пути покрыты) просто

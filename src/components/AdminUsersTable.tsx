@@ -17,6 +17,7 @@ import {
 import AdminUserFilterPanel, { describeFilters } from "./AdminUserFilterPanel";
 import { UserDetailPanel, StatusBadge } from "./AdminUsers";
 import { fmtDate, UserModal } from "./AdminUserCard";
+import AdminCampaignComposer from "./AdminCampaignComposer";
 import { Icon } from "./ui";
 
 const PAGE_SIZE = 25;
@@ -60,6 +61,7 @@ export default function AdminUsersTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const requestRef = useRef(0);
 
   useEffect(() => {
@@ -91,6 +93,7 @@ export default function AdminUsersTable() {
   }, [refresh]);
 
   const closeModal = useCallback(() => setSelectedId(null), []);
+  const closeComposer = useCallback(() => setComposing(false), []);
 
   if (!profile) return null;
 
@@ -163,6 +166,9 @@ export default function AdminUsersTable() {
             <Icon name="refresh" size={13} /> Сбросить всё
           </button>
         )}
+        <button onClick={() => setComposing(true)} className="btn btn-blue ml-auto px-3.5 py-2 text-[12.5px]" title="Письмо тем, кто подходит под текущие фильтры и поиск">
+          <Icon name="send" size={13} /> Написать по фильтру
+        </button>
       </div>
 
       {showFilters && (
@@ -329,6 +335,12 @@ export default function AdminUsersTable() {
             </div>
           )}
         </div>
+      )}
+
+      {composing && (
+        <UserModal onClose={closeComposer}>
+          <AdminCampaignComposer filters={filters} onApplyFilters={changeFilters} onClose={closeComposer} />
+        </UserModal>
       )}
 
       {selectedId && (
