@@ -155,12 +155,13 @@ function persistView(v: View) {
 
 const AFTER_LOGIN_KEY = "ege-pro.after-login.v1";
 
-/** Куда вернуть после входа, если человека сюда привела ссылка из письма (сейчас — только /renew). */
+/** Куда вернуть после входа, если человека сюда привела ссылка из письма (/renew — продление,
+ *  /onboarding — анкета подготовки из письма-напоминания). */
 function takeAfterLoginView(): View | null {
   try {
     const v = sessionStorage.getItem(AFTER_LOGIN_KEY);
     sessionStorage.removeItem(AFTER_LOGIN_KEY);
-    return v === "renew" ? { name: "renew" } : null;
+    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : null;
   } catch {
     return null;
   }
@@ -180,6 +181,9 @@ function AppShell() {
   const [view, setViewRaw] = useState<View>(() => pathToView(window.location.pathname, window.location.search) ?? { name: "landing" });
   const { profile, loading } = useAuth();
   const restoredRef = useRef(false);
+  // зашли сразу по адресу /onboarding (ссылка из письма) — в отличие от внутренней навигации на онбординг, которая
+  // адреса не меняет и служит гостям на пути регистрации; только для такого захода нужна проверка «вошёл ли»
+  const onboardingLinkEntryRef = useRef(window.location.pathname === "/onboarding");
 
   // обновление страницы посреди задания/банка/статистики раньше всегда кидало на главную —
   // не по кнопке пользователя, а просто потому что view нигде не сохранялся. Сохраняем и
@@ -258,6 +262,19 @@ function AppShell() {
   useEffect(() => {
     // ссылка на продление из письма (/renew) без активной сессии: не теряем цель — просим войти и
     // после входа возвращаем именно на продление, а не на главную (см. AuthScreen onSuccess ниже)
+    if (profile) onboardingLinkEntryRef.current = false;
+    if (!loading && !profile && view.name === "onboarding" && onboardingLinkEntryRef.current) {
+      // ссылка на анкету из письма без входа: гостевой онбординг закончился бы формой РЕГИСТРАЦИИ, а человек
+      // уже зарегистрирован — просим войти и после входа возвращаем на анкету
+      onboardingLinkEntryRef.current = false;
+      try {
+        sessionStorage.setItem(AFTER_LOGIN_KEY, "onboarding");
+      } catch {
+        /* ignore */
+      }
+      setView({ name: "auth", mode: "login" });
+      return;
+    }
     if (!loading && !profile && view.name === "renew") {
       try {
         sessionStorage.setItem(AFTER_LOGIN_KEY, "renew");

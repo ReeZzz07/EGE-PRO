@@ -38,6 +38,9 @@ export function pathToView(pathname: string, search = ""): View | null {
       return { name: "tariffs" };
     case "/renew":
       return { name: "renew" };
+    // /onboarding — ссылка из письма-напоминания «заполни анкету» (см. AppShell: без входа сначала вход)
+    case "/onboarding":
+      return { name: "onboarding" };
     case "/oferta":
       return { name: "legal", doc: "offer" };
     case "/privacy":

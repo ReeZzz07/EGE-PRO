@@ -216,6 +216,7 @@ test("валидация содержимого: границы длины и б
   assert.ok(validateCampaignContent("custom", content({ subject: "x".repeat(201) })));
   assert.ok(validateCampaignContent("custom", content({ bodyText: "" })));
   assert.ok(validateCampaignContent("custom", content({ ctaPath: "/admin" })));
+  assert.equal(validateCampaignContent("custom", content({ ctaPath: "/onboarding" })), null, "страница онбординга — допустимая цель кнопки");
   assert.ok(validateCampaignContent("nope", content()));
 });
 

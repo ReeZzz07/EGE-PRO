@@ -106,6 +106,9 @@ describe("AdminCampaignComposer", () => {
   it("отправка: уходит подтверждённое число получателей, вид, фильтры и текст; затем показывается ход рассылки", async () => {
     setup();
     await screen.findByText("Анна Иванова");
+    // в списке «Куда ведёт кнопка» есть страница онбординга, и она выбрана для заготовки про анкету
+    expect(screen.getByRole("option", { name: "Онбординг (анкета подготовки)" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Куда ведёт кнопка/)).toHaveValue("/onboarding");
     fireEvent.click(ackBox());
     fireEvent.click(sendButton());
     await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
@@ -113,6 +116,7 @@ describe("AdminCampaignComposer", () => {
     expect(arg).toMatchObject({ kind: "custom", confirmCount: 12, excludeRecent: true });
     expect(arg.filters).toEqual(filters);
     expect(arg.content.subject).toMatch(/анкету|минута/i);
+    expect(arg.content.ctaPath).toBe("/onboarding"); // письмо про анкету ведёт на страницу онбординга
     expect(await screen.findByText("Отправляется…")).toBeInTheDocument();
     expect(screen.getByText(/отправлено 4/)).toBeInTheDocument();
     expect(screen.getByText(/ошибок 1/)).toBeInTheDocument();

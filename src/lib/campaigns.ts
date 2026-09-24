@@ -12,7 +12,7 @@ export interface CampaignContent {
   eyebrow: string;
   ctaLabel: string;
   /** куда ведёт кнопка: "" — главная платформы */
-  ctaPath: "" | "/tariffs" | "/renew";
+  ctaPath: "" | "/tariffs" | "/renew" | "/onboarding";
   footer: string;
 }
 
@@ -20,6 +20,7 @@ export const CTA_OPTIONS: { value: CampaignContent["ctaPath"]; label: string }[]
   { value: "", label: "Главная платформы" },
   { value: "/tariffs", label: "Тарифы" },
   { value: "/renew", label: "Продление тарифа" },
+  { value: "/onboarding", label: "Онбординг (анкета подготовки)" },
 ];
 
 export interface CampaignPreview {
@@ -176,7 +177,7 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
 
 Без неё персональный план и «Пробник» не знают, по какому предмету и в каком темпе тебя вести. Это займёт меньше минуты, а после сразу можно пройти диагностику и получить свой уровень.`,
       ctaLabel: "Заполнить анкету →",
-      ctaPath: "",
+      ctaPath: "/onboarding",
       footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
     },
     suggested: { funnel: { confirmed: "yes", onboarded: "no" }, label: "Подтвердил аккаунт — Да, Прошёл онбординг — Нет" },

@@ -20,8 +20,8 @@ import { fillBody, fillLine } from "./lifecycleEmails.js";
 export const MAX_RECIPIENTS = 500;
 export const SEND_DELAY_MS = 1200;
 export const RECENT_DAYS = 7;
-/** Куда ведёт кнопка письма: главная платформы, тарифы, продление тарифа. */
-export const CTA_PATHS = ["", "/tariffs", "/renew"];
+/** Куда ведёт кнопка письма: главная платформы, тарифы, продление тарифа, онбординг (анкета подготовки). */
+export const CTA_PATHS = ["", "/tariffs", "/renew", "/onboarding"];
 export const KINDS = ["verify_link", "custom"];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

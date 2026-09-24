@@ -14,6 +14,15 @@ describe("pathToView", () => {
     expect(pathToView("/")).toEqual({ name: "landing" });
   });
 
+  it("/renew и /onboarding — адреса из писем (продление тарифа и анкета подготовки)", () => {
+    expect(pathToView("/renew")).toEqual({ name: "renew" });
+    expect(viewToPath({ name: "renew" })).toBe("/renew");
+    expect(pathToView("/onboarding")).toEqual({ name: "onboarding" });
+    // внутренняя навигация на онбординг (гость на пути регистрации) адрес НЕ меняет — иначе проверка «вошёл ли»
+    // для ссылки из письма срабатывала бы и на обычный гостевой онбординг
+    expect(viewToPath({ name: "onboarding" })).toBe("/");
+  });
+
   it("неизвестный путь — null (AppShell выправляет адресную строку на /, не рендерит несуществующую страницу)", () => {
     expect(pathToView("/bank")).toBeNull();
     expect(pathToView("/admin")).toBeNull();
