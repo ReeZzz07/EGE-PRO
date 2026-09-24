@@ -137,9 +137,10 @@ ${bodyHtml}
 </body></html>`;
 }
 
-export async function sendVerifyEmail(to, verifyUrl) {
-  await sendMail({
-    to,
+/** Содержимое письма подтверждения почты — отдельно от отправки, чтобы админка могла показать его в
+ *  предпросмотре рассылки «повторная ссылка подтверждения». */
+export function buildVerifyEmail(verifyUrl) {
+  return {
     subject: "Подтверди email — ЕГЭ·ПРО",
     text: `Подтверди свой email, перейдя по ссылке: ${verifyUrl}\n\nЕсли ты не регистрировался(-лась) на ЕГЭ·ПРО — просто проигнорируй это письмо.`,
     html: wrapHtml(`
@@ -149,7 +150,11 @@ export async function sendVerifyEmail(to, verifyUrl) {
 <p style="font-size:12px;color:#8a8d9a;">Если кнопка не работает, скопируй ссылку: ${escapeHtml(verifyUrl)}</p>
 <p style="font-size:12px;color:#8a8d9a;">Если ты не регистрировался(-лась) на ЕГЭ·ПРО — просто проигнорируй это письмо.</p>
 `),
-  });
+  };
+}
+
+export async function sendVerifyEmail(to, verifyUrl) {
+  await sendMail({ to, ...buildVerifyEmail(verifyUrl) });
 }
 
 export async function sendPasswordResetEmail(to, resetUrl) {

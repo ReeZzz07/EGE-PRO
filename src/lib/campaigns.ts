@@ -91,14 +91,15 @@ export async function previewCampaign(kind: CampaignKind, filters: AdminUserFilt
   return { preview: (await resp.json()) as CampaignPreview };
 }
 
-export async function renderCampaign(content: CampaignContent): Promise<{ subject?: string; html?: string; error?: string }> {
-  const resp = await post("/admin/campaigns/render", content);
+/** Готовое письмо для предпросмотра: для своего письма — по тексту из формы, для ссылки подтверждения — стандартное. */
+export async function renderCampaign(kind: CampaignKind, content: CampaignContent): Promise<{ subject?: string; html?: string; error?: string }> {
+  const resp = await post("/admin/campaigns/render", { kind, ...content });
   if (!resp.ok) return { error: (await errorOf(resp)).error };
   return (await resp.json()) as { subject: string; html: string };
 }
 
-export async function sendCampaignTest(content: CampaignContent): Promise<{ error?: string }> {
-  const resp = await post("/admin/campaigns/test", content);
+export async function sendCampaignTest(kind: CampaignKind, content: CampaignContent): Promise<{ error?: string }> {
+  const resp = await post("/admin/campaigns/test", { kind, ...content });
   return resp.ok ? {} : { error: (await errorOf(resp)).error };
 }
 

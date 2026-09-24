@@ -62,6 +62,10 @@ const lastPreviewArg = (i: 0 | 1 | 2) => {
   const calls = vi.mocked(previewCampaign).mock.calls;
   return calls[calls.length - 1]?.[i];
 };
+const lastRenderKind = () => {
+  const calls = vi.mocked(renderCampaign).mock.calls;
+  return calls[calls.length - 1]?.[0];
+};
 const sendButton = () => screen.getByRole("button", { name: /Отправить \d+ письмам/ });
 const ackBox = () => screen.getByRole("checkbox", { name: /Я проверил/ });
 
@@ -172,7 +176,25 @@ describe("AdminCampaignComposer", () => {
     await waitFor(() => expect(sendButton()).toBeEnabled());
 
     fireEvent.click(screen.getByRole("button", { name: /Тестовое на admin@x\.test/ }));
-    await waitFor(() => expect(sendCampaignTest).toHaveBeenCalledWith(expect.objectContaining({ subject: "Привет", bodyText: "Текст {имя}" })));
+    await waitFor(() => expect(sendCampaignTest).toHaveBeenCalledWith("custom", expect.objectContaining({ subject: "Привет", bodyText: "Текст {имя}" })));
+  });
+
+  it("итоговый предпросмотр перед отправкой есть у обоих видов: для своего письма и для ссылки подтверждения", async () => {
+    vi.mocked(renderCampaign).mockImplementation(async (kind) => ({ subject: kind === "verify_link" ? "Подтверди email — ЕГЭ·ПРО" : "Тема своего письма", html: kind === "verify_link" ? "<p>подтверди почту</p>" : "<p>своё письмо</p>" }));
+    setup();
+    const frame = () => screen.getByTitle("Итоговый предпросмотр письма") as HTMLIFrameElement;
+    await waitFor(() => expect(frame().getAttribute("srcdoc")).toBe("<p>своё письмо</p>"));
+    expect(screen.getByTestId("final-preview")).toHaveTextContent("Тема своего письма");
+    expect(screen.getByTestId("final-preview")).toHaveTextContent("12 чел.");
+    expect(lastRenderKind()).toBe("custom");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Ссылка подтверждения почты" }));
+    await waitFor(() => expect(frame().getAttribute("srcdoc")).toBe("<p>подтверди почту</p>"));
+    expect(screen.getByTestId("final-preview")).toHaveTextContent("Подтверди email — ЕГЭ·ПРО");
+    expect(lastRenderKind()).toBe("verify_link");
+
+    fireEvent.click(screen.getByRole("button", { name: /Тестовое на admin@x\.test/ }));
+    await waitFor(() => expect(sendCampaignTest).toHaveBeenCalledWith("verify_link", expect.anything()));
   });
 
   it("опция «не писать недавно получавшим» уходит на сервер", async () => {

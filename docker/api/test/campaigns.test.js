@@ -12,6 +12,7 @@ import {
   getCampaign,
   listCampaigns,
   previewRecipients,
+  renderCampaignSample,
   resumeCampaigns,
   runCampaign,
   validateCampaignContent,
@@ -216,4 +217,13 @@ test("валидация содержимого: границы длины и б
   assert.ok(validateCampaignContent("custom", content({ bodyText: "" })));
   assert.ok(validateCampaignContent("custom", content({ ctaPath: "/admin" })));
   assert.ok(validateCampaignContent("nope", content()));
+});
+
+test("предпросмотр ссылки подтверждения: стандартное письмо с образцовой ссылкой; для своего — оформленное письмо", () => {
+  const v = renderCampaignSample("verify_link");
+  assert.equal(v.subject, "Подтверди email — ЕГЭ·ПРО");
+  assert.ok(v.html.includes("Подтвердить email") && v.html.includes("/verify-email?token="));
+  assert.ok(v.text.includes("/verify-email?token="));
+  const c = renderCampaignSample("custom", content());
+  assert.ok(c.html.includes("Аня, привет!"));
 });

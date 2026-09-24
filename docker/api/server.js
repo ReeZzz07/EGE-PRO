@@ -1006,19 +1006,21 @@ app.post("/admin/campaigns/preview", authMiddleware, requireAdmin, async (req, r
 
 // Готовое письмо с образцовым именем — для предпросмотра
 app.post("/admin/campaigns/render", authMiddleware, requireAdmin, async (req, res) => {
-  const invalid = validateCampaignContent("custom", req.body ?? {});
+  const kind = String(req.body?.kind ?? "custom");
+  const invalid = validateCampaignContent(kind, req.body ?? {});
   if (invalid) return res.status(400).json({ error: invalid });
-  const m = renderCampaignSample(req.body);
+  const m = renderCampaignSample(kind, req.body);
   res.json({ subject: m.subject, html: m.html });
 });
 
 // Тестовое письмо на почту самого админа
 app.post("/admin/campaigns/test", authMiddleware, requireAdmin, async (req, res) => {
-  const invalid = validateCampaignContent("custom", req.body ?? {});
+  const kind = String(req.body?.kind ?? "custom");
+  const invalid = validateCampaignContent(kind, req.body ?? {});
   if (invalid) return res.status(400).json({ error: invalid });
   try {
     const email = await getUserEmail(req.user.sub);
-    const m = renderCampaignSample(req.body);
+    const m = renderCampaignSample(kind, req.body);
     await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}` });
     res.json({ ok: true });
   } catch (e) {

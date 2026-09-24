@@ -89,6 +89,7 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
+  const [htmlKind, setHtmlKind] = useState<CampaignPreset["kind"] | null>(null);
   const [htmlSubject, setHtmlSubject] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [ack, setAck] = useState(false);
@@ -124,18 +125,19 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
     return () => clearTimeout(t);
   }, [kind, filters, excludeRecent]);
 
-  // предпросмотр письма — при смене текста (только для своего письма)
+  // предпросмотр письма — при смене вида или текста (для ссылки подтверждения — стандартное письмо)
   useEffect(() => {
-    if (kind !== "custom" || !contentOk) {
+    if (!contentOk) {
       setHtml(null);
       setRenderError(null);
       return;
     }
     const t = setTimeout(() => {
-      renderCampaign(content).then((res) => {
+      renderCampaign(kind, content).then((res) => {
         if (res.error) return setRenderError(res.error);
         setRenderError(null);
         setHtml(res.html ?? null);
+        setHtmlKind(kind);
         setHtmlSubject(res.subject ?? "");
       });
     }, 500);
@@ -152,6 +154,9 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
     }, 1500);
     return () => clearInterval(timer);
   }, [campaignId, campaignStatus]);
+
+  // предпросмотр показываем, только если он собран для выбранного вида письма (не остаток от прошлой заготовки)
+  const shownHtml = htmlKind === kind ? html : null;
 
   const chips = describeFilters(filters);
   if (filters.q.trim()) chips.unshift({ id: "q", text: `Поиск: «${filters.q.trim()}»`, clear: (f) => f });
@@ -188,7 +193,7 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
 
   const test = async () => {
     setTesting(true);
-    const res = await sendCampaignTest(content);
+    const res = await sendCampaignTest(kind, content);
     setTesting(false);
     if (res.error) push(res.error, "err");
     else push(`Тестовое письмо ушло на ${profile?.email}`, "ok");
@@ -358,9 +363,6 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
                     </span>
                     <textarea value={content.footer} onChange={(e) => setContent({ footer: e.target.value })} rows={2} maxLength={400} className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2 text-[13px]" />
                   </label>
-                  <button onClick={test} disabled={testing || !contentOk} className="btn btn-ghost px-4 py-2 text-[12.5px]">
-                    <Icon name="send" size={13} /> {testing ? "Отправляем…" : `Тестовое на ${profile?.email ?? "мою почту"}`}
-                  </button>
                 </div>
 
                 <div>
@@ -372,7 +374,7 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
                   )}
                   {renderError && <p className="mt-1 text-[12.5px] font-bold text-red">{renderError}</p>}
                   <div className="mt-1.5 overflow-hidden border-2 border-ink/20 bg-white">
-                    {html ? <iframe title="Предпросмотр письма" srcDoc={html} sandbox="" className="h-[560px] w-full border-0" /> : <p className="p-6 text-center text-[13px] text-ink2">Заполни тему и текст — здесь появится письмо</p>}
+                    {shownHtml ? <iframe title="Предпросмотр письма" srcDoc={shownHtml} sandbox="" className="h-[560px] w-full border-0" /> : <p className="p-6 text-center text-[13px] text-ink2">Заполни тему и текст — здесь появится письмо</p>}
                   </div>
                 </div>
               </div>
@@ -381,7 +383,32 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
 
           {/* 3. отправка */}
           <section className="mt-7 space-y-3">
-            <StepTitle n={3}>Отправка</StepTitle>
+            <StepTitle n={3}>Проверь письмо и отправь</StepTitle>
+
+            {/* итоговый предпросмотр — ровно то, что получат: и для своего письма, и для ссылки подтверждения */}
+            <div className="border-2 border-ink/20 bg-sheet p-3.5" data-testid="final-preview">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Письмо, которое получат {preview ? `${preview.count} чел.` : ""}</p>
+                  <p className="mt-1 text-[13px] text-ink2">
+                    Тема: <strong className="text-ink">{shownHtml ? htmlSubject : "—"}</strong>
+                  </p>
+                  <p className="text-[12px] text-ink2">Имя в приветствии — образец («Аня»); у каждого получателя будет его имя.</p>
+                </div>
+                <button onClick={test} disabled={testing || !contentOk} className="btn btn-ghost shrink-0 px-4 py-2 text-[12.5px]">
+                  <Icon name="send" size={13} /> {testing ? "Отправляем…" : `Тестовое на ${profile?.email ?? "мою почту"}`}
+                </button>
+              </div>
+              {renderError && <p className="mt-2 text-[12.5px] font-bold text-red">{renderError}</p>}
+              <div className="mx-auto mt-3 max-w-[620px] overflow-hidden border-2 border-ink/20 bg-white">
+                {shownHtml ? (
+                  <iframe title="Итоговый предпросмотр письма" srcDoc={shownHtml} sandbox="" className="h-[520px] w-full border-0" />
+                ) : (
+                  <p className="p-6 text-center text-[13px] text-ink2">{contentOk ? "Строим предпросмотр…" : "Заполни тему и текст — здесь появится письмо"}</p>
+                )}
+              </div>
+            </div>
+
             <label className="flex items-start gap-2.5 border-2 border-ink/20 bg-sheet p-3.5">
               <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={!preview || preview.count === 0 || preview.overLimit} className="mt-0.5 h-4 w-4" />
               <span className="text-[13px] leading-relaxed">

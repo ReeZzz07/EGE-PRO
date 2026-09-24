@@ -14,7 +14,7 @@
 import { pool } from "./db.js";
 import { buildUserWhere } from "./adminUsers.js";
 import { createActionToken } from "./authTokens.js";
-import { escapeHtml, paragraphHtml, sendMail, sendVerifyEmail, wrapBrandedHtml } from "./mailer.js";
+import { buildVerifyEmail, escapeHtml, paragraphHtml, sendMail, sendVerifyEmail, wrapBrandedHtml } from "./mailer.js";
 import { fillBody, fillLine } from "./lifecycleEmails.js";
 
 export const MAX_RECIPIENTS = 500;
@@ -114,8 +114,10 @@ ${paragraphs.map((p) => `<div style="margin:0 0 14px;">${paragraphHtml(p)}</div>
   };
 }
 
-/** Предпросмотр / тест: образцовое имя. */
-export function renderCampaignSample(c) {
+/** Предпросмотр / тест: образцовое имя. Для повторной ссылки подтверждения — то же стандартное письмо, что
+ *  реально уйдёт, с образцовой (нерабочей) ссылкой. */
+export function renderCampaignSample(kind, c = {}) {
+  if (kind === "verify_link") return buildVerifyEmail(`${siteUrl()}/verify-email?token=ОБРАЗЕЦ-ССЫЛКИ`);
   return buildCampaignEmail(c, { name: "Аня" });
 }
 
