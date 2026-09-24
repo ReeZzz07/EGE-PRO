@@ -24,25 +24,103 @@ export async function getUserEmail(id) {
   return rows[0]?.email ?? null;
 }
 
-/** Список/поиск — по email или имени (ilike, регистронезависимо). tariff_active — платный тариф,
- * действующий прямо сейчас (не free и срок либо не задан, либо ещё не истёк, см. resolveUserTariffGate
- * в tariffGate.js — та же логика "истёк = как будто free", тут для отображения в списке). */
-export async function searchUsers({ q, page = 0, pageSize = 25 }) {
-  const where = q ? "where u.email ilike $1 or p.full_name ilike $1" : "";
-  const params = q ? [`%${q}%`] : [];
+// ─────────────── фильтры списка пользователей ───────────────
+// Каждый булев фильтр — SQL-выражение «у пользователя есть X». Значение "yes" берёт выражение как есть,
+// "no" — его отрицание (инверсия): список получается ровно противоположным. Выражения никогда не
+// возвращают NULL (exists / is not null), поэтому NOT (...) не теряет строк.
+const BOOL_EXPR = {
+  confirmed: "u.email_confirmed_at is not null",
+  onboarded: "p.onboarded_at is not null",
+  diagnostic: "exists (select 1 from public.diagnostics d where d.user_id = u.id)",
+  first_task: "exists (select 1 from public.attempts a where a.user_id = u.id)",
+  ai_request: "exists (select 1 from public.ai_messages m where m.user_id = u.id and m.role = 'user')",
+  paid: "exists (select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded')",
+  // начал оплату (платёж создан, но не оплачен/отменён) и ни разу не заплатил
+  abandoned:
+    "(exists (select 1 from public.payments pa where pa.user_id = u.id and pa.status in ('pending', 'canceled')) and not exists (select 1 from public.payments pb where pb.user_id = u.id and pb.status = 'succeeded'))",
+};
+export const USER_BOOL_FILTERS = Object.keys(BOOL_EXPR);
+
+const SORT_COLUMNS = {
+  registered: "u.created_at",
+  name: "lower(p.full_name)",
+  email: "u.email",
+  tariff: "p.tariff_id",
+};
+
+// служебные символы LIKE (% и _) в поисковой строке ищем буквально; экранирующий символ — «!»
+// (не обратный слэш: так проще и не зависит от настройки standard_conforming_strings)
+const escapeLike = (s) => s.replace(/[!%_]/g, (c) => "!" + c);
+
+/** filters — { confirmed: "yes"|"no"|undefined, ..., region: "Москва", regionNot: true, city, cityNot }.
+ *  Неизвестные значения игнорируются — фильтр просто не применяется. Все значения идут параметрами. */
+export function buildUserWhere({ q, filters = {} }) {
+  const conds = [];
+  const params = [];
+  const add = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  const term = (q ?? "").trim();
+  if (term) {
+    const like = add(`%${escapeLike(term)}%`);
+    conds.push(`(u.id::text ilike ${like} escape '!' or u.email ilike ${like} escape '!' or p.full_name ilike ${like} escape '!')`);
+  }
+
+  for (const key of USER_BOOL_FILTERS) {
+    const v = filters[key];
+    if (v === "yes") conds.push(`(${BOOL_EXPR[key]})`);
+    else if (v === "no") conds.push(`not (${BOOL_EXPR[key]})`);
+  }
+
+  for (const [key, col] of [["region", "p.region"], ["city", "p.city"]]) {
+    const value = typeof filters[key] === "string" ? filters[key].trim().slice(0, 200) : "";
+    if (!value) continue;
+    const ph = add(value);
+    // «не из региона/города X» включает и тех, у кого поле не заполнено (is distinct from)
+    conds.push(filters[`${key}Not`] ? `lower(${col}) is distinct from lower(${ph})` : `lower(${col}) = lower(${ph})`);
+  }
+
+  return { where: conds.length ? `where ${conds.join(" and ")}` : "", params };
+}
+
+/** Список/поиск для таблицы админки: поиск по id, email и имени (ilike), булевы фильтры воронки с
+ * инверсией, фильтр по региону/городу, сортировка. Каждая строка несёт флаги воронки (подтвердил почту,
+ * онбординг, диагностика, первая задача, первый запрос к ИИ, оплата, брошенная оплата) — они рисуются
+ * значками в колонках. tariff_active — платный тариф, действующий прямо сейчас (не free и срок либо не
+ * задан, либо ещё не истёк, см. resolveUserTariffGate в tariffGate.js — та же логика "истёк = как будто
+ * free", тут для отображения в списке). */
+export async function searchUsers({ q, filters = {}, sort = "registered", dir = "desc", page = 0, pageSize = 25 }) {
+  const { where, params } = buildUserWhere({ q, filters });
+  const orderCol = SORT_COLUMNS[sort] ?? SORT_COLUMNS.registered;
+  const orderDir = dir === "asc" ? "asc" : "desc";
   const { rows } = await pool.query(
     `select u.id, u.email, u.created_at as registered_at, p.full_name, p.tariff_id, p.tariff_expires_at,
-            p.is_admin, p.discount_percent, p.anonymized_at,
-            (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active
+            p.is_admin, p.discount_percent, p.anonymized_at, p.region, p.city,
+            (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active,
+            ${USER_BOOL_FILTERS.map((k) => `(${BOOL_EXPR[k]}) as ${k}`).join(", ")}
      from auth.users u
      join public.profiles p on p.id = u.id
      ${where}
-     order by u.created_at desc
+     order by ${orderCol} ${orderDir} nulls last, u.id
      limit $${params.length + 1} offset $${params.length + 2}`,
     [...params, pageSize, page * pageSize]
   );
   const { rows: countRows } = await pool.query(`select count(*)::int as n from auth.users u join public.profiles p on p.id = u.id ${where}`, params);
-  return { rows, total: countRows[0].n };
+  const { rows: allRows } = await pool.query("select count(*)::int as n from public.profiles");
+  return { rows, total: countRows[0].n, overall: allRows[0].n };
+}
+
+/** Регионы и города, которые реально встречаются у пользователей — для выпадающих списков фильтра. */
+export async function getUserFacets() {
+  const regions = await pool.query(
+    "select region as value, count(*)::int as count from public.profiles where coalesce(region, '') <> '' group by region order by count desc, region limit 200"
+  );
+  const cities = await pool.query(
+    "select city as value, region, count(*)::int as count from public.profiles where coalesce(city, '') <> '' group by city, region order by count desc, city limit 500"
+  );
+  return { regions: regions.rows, cities: cities.rows };
 }
 
 /** Полная карточка пользователя для админки — профиль + тариф + список предметов. Не путать с
@@ -66,7 +144,16 @@ export async function getUserDetail(id) {
   const row = rows[0];
   if (!row) return null;
   const { rows: subjects } = await pool.query("select subject, added_at from public.profile_subjects where user_id = $1 order by added_at", [id]);
-  return { ...row, subjects };
+  // сводка активности — то, что стоит за флагами воронки в списке: когда началась работа с платформой
+  const one = async (sql) => (await pool.query(sql, [id])).rows[0];
+  const attempts = await one("select count(*)::int as count, min(created_at) as first_at, max(created_at) as last_at from public.attempts where user_id = $1");
+  const diagnostics = await one("select count(*)::int as count, min(finished_at) as first_at from public.diagnostics where user_id = $1");
+  const ai = await one("select count(*)::int as count, min(created_at) as first_at from public.ai_messages where user_id = $1 and role = 'user'");
+  const { rows: payments } = await pool.query(
+    "select id, tariff_id, amount_rub, status, kind, extra_subjects, created_at from public.payments where user_id = $1 order by created_at desc limit 10",
+    [id]
+  );
+  return { ...row, subjects, activity: { attempts, diagnostics, ai }, payments };
 }
 
 /** patch — любое подмножество { fullName, email, tariffId, tariffExpiresAt, discountPercent,

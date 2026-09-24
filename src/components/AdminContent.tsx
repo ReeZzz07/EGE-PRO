@@ -8,7 +8,7 @@ import type { View } from "./Header";
 import AdminTaskReview from "./AdminTaskReview";
 import AdminAiSettings from "./AdminAiSettings";
 import AdminTaskImport from "./AdminTaskImport";
-import AdminUsers from "./AdminUsers";
+import AdminUsersTable from "./AdminUsersTable";
 import AdminTariffs from "./AdminTariffs";
 import AdminLegalDocs from "./AdminLegalDocs";
 import AdminSeoSettings from "./AdminSeoSettings";
@@ -135,7 +135,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         </p>
       )}
 
-      <div className="mt-6 flex gap-2 border-b-2 border-ink/15 pb-px">
+      <div className="scrollbar-thin mt-6 flex gap-2 overflow-x-auto whitespace-nowrap border-b-2 border-ink/15 pb-px">
         <button
           onClick={() => setTab("content")}
           className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "content" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
@@ -218,7 +218,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
 
       {tab === "users" && (
         <div className="mt-6">
-          <AdminUsers />
+          <AdminUsersTable />
         </div>
       )}
 

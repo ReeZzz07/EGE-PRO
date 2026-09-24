@@ -1,15 +1,13 @@
-// Админка → «Пользователи»: поиск/просмотр карточки, тариф и срок его действия, персональная
-// скидка, и действия, которые требует 152-ФЗ по запросу субъекта персональных данных — полная
-// выгрузка, анонимизация, удаление. Пишет/удаляет через docker/api (не PostgREST напрямую, см.
-// src/lib/adminUsers.ts) — эти операции нужны привилегии выше, чем даёт RLS.
+// Карточка пользователя в админке (открывается в модальном окне из таблицы, см. AdminUsersTable.tsx):
+// тариф и срок его действия, персональная скидка, и действия, которые требует 152-ФЗ по запросу
+// субъекта персональных данных — полная выгрузка, анонимизация, удаление. Пишет/удаляет через
+// docker/api (не PostgREST напрямую, см. src/lib/adminUsers.ts) — эти операции нужны привилегии
+// выше, чем даёт RLS.
 import { useEffect, useState } from "react";
-import { useAuth } from "../lib/auth";
-import { isSupabaseConfigured } from "../lib/supabase";
 import { SUBJECTS } from "../data/tasks";
 import { loadAllTariffs, type Tariff } from "../lib/tariffs";
 import { GRADE_OPTS, GOAL_OPTS, TIME_OPTS } from "./OnboardingFlow";
 import {
-  searchAdminUsers,
   loadAdminUserDetail,
   updateAdminUser,
   exportAdminUserData,
@@ -18,9 +16,8 @@ import {
   type AdminUserListItem,
   type AdminUserDetail,
 } from "../lib/adminUsers";
+import { ActivitySection, FunnelSteps, fmtDate } from "./AdminUserCard";
 import { Icon, useToast } from "./ui";
-
-const PAGE_SIZE = 20;
 
 /** Код → подпись для полей анкеты онбординга (см. OnboardingFlow.tsx) — та же анкета, что видит
  *  ученик, но здесь только для чтения: значения приходят из профиля, который правит сам ученик на
@@ -30,10 +27,6 @@ const GOAL_LABELS: Record<string, string> = Object.fromEntries(GOAL_OPTS.map((o)
 const TIME_LABELS: Record<number, string> = Object.fromEntries(TIME_OPTS.map((o) => [o.v, o.l]));
 const GENDER_LABELS: Record<string, string> = { m: "Мужской", f: "Женский" };
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 /** <input type="date"> отдаёт "YYYY-MM-DD" без времени — трактуем как "тариф действует ПО КОНЕЦ
  *  этого дня", а не с полуночи, иначе выбор "сегодня" выглядел бы уже истёкшим сразу после сохранения. */
@@ -54,14 +47,14 @@ function addDays(dateInputValue: string, days: number): string {
   return from.toISOString().slice(0, 10);
 }
 
-function StatusBadge({ user }: { user: AdminUserListItem | AdminUserDetail }) {
+export function StatusBadge({ user }: { user: AdminUserListItem | AdminUserDetail }) {
   if (user.anonymized_at) return <span className="rounded-sm border-2 border-ink/30 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-ink2">анонимизирован</span>;
   if (user.tariff_id === "free") return <span className="rounded-sm border-2 border-ink/15 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-ink2">free</span>;
   if (user.tariff_active) return <span className="rounded-sm border-2 border-blue bg-blue/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-blue">оплачен</span>;
   return <span className="rounded-sm border-2 border-red bg-red/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-red">истёк</span>;
 }
 
-function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId: string; onChanged: () => void; onClose: () => void }) {
+export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId: string; onChanged: () => void; onClose: () => void }) {
   const { push } = useToast();
   const [detail, setDetail] = useState<AdminUserDetail | null>(null);
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
@@ -150,8 +143,8 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
   const selectedTariff = tariffs.find((t) => t.id === tariffId);
 
   return (
-    <div className="border-t-2 border-ink/15 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 pr-10">
         <div>
           <div className="flex items-center gap-2">
             <span className="font-display text-[15px] font-bold">{detail.full_name || "Без имени"}</span>
@@ -162,9 +155,6 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
             {detail.email} · регистрация {fmtDate(detail.registered_at)} · id: {detail.id}
           </p>
         </div>
-        <button onClick={onClose} className="btn btn-ghost px-3 py-1.5 text-[12px]">
-          <Icon name="x" size={13} /> Закрыть
-        </button>
       </div>
 
       {isSelf && (
@@ -178,6 +168,8 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
           Данные анонимизированы {fmtDate(detail.anonymized_at)} — вход в аккаунт заблокирован, email/имя стёрты. Экспорт и повторная анонимизация недоступны.
         </p>
       )}
+
+      <FunnelSteps detail={detail} />
 
       <div className="mt-4">
         <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Результат онбординга</p>
@@ -205,6 +197,8 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
           <p><span className="text-ink2">Пол:</span> <strong>{(detail.gender && GENDER_LABELS[detail.gender]) || "—"}</strong></p>
         </div>
       </div>
+
+      <ActivitySection detail={detail} />
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="space-y-3">
@@ -340,108 +334,6 @@ function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string; ownId:
               </div>
             </div>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function AdminUsers() {
-  const { profile } = useAuth();
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
-  const [rows, setRows] = useState<AdminUserListItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const refresh = () => {
-    setLoading(true);
-    searchAdminUsers(query, page, PAGE_SIZE).then(({ rows, total }) => {
-      setRows(rows);
-      setTotal(total);
-      setLoading(false);
-    });
-  };
-
-  useEffect(() => {
-    const t = setTimeout(refresh, 250);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, page]);
-
-  if (!profile) return null;
-
-  return (
-    <div className="sheet p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-bold">Пользователи</h2>
-          <p className="mt-1 text-[12.5px] text-ink2">Тариф, срок оплаты, персональные скидки и действия с персональными данными по 152-ФЗ.</p>
-        </div>
-      </div>
-
-      {!isSupabaseConfigured && (
-        <p className="mt-4 border-l-4 border-amber bg-amber/10 px-4 py-3 text-[13px] leading-relaxed text-ink2">
-          <strong className="text-ink">Бэкенд не подключён:</strong> список пользователей не загрузится.
-        </p>
-      )}
-
-      <div className="relative mt-4">
-        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink2">
-          <Icon name="search" size={15} />
-        </span>
-        <input
-          value={query}
-          onChange={(e) => {
-            setPage(0);
-            setQuery(e.target.value);
-          }}
-          placeholder="Email или имя…"
-          className="input-blank w-full max-w-sm rounded-sm px-3 py-2 pl-9 text-[13px]"
-        />
-      </div>
-
-      <div className="mt-4 divide-y-2 divide-ink/10 border-2 border-ink/15">
-        {loading ? (
-          <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>
-        ) : rows.length === 0 ? (
-          <p className="py-8 text-center text-[13px] text-ink2">Никого не нашлось.</p>
-        ) : (
-          rows.map((u) => (
-            <div key={u.id}>
-              <button onClick={() => setSelectedId(selectedId === u.id ? null : u.id)} className="flex w-full flex-wrap items-center justify-between gap-3 p-3.5 text-left hover:bg-hl/60">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13.5px] font-bold">{u.full_name || u.email}</span>
-                    <StatusBadge user={u} />
-                    {u.is_admin && <span className="rounded-sm border-2 border-ink bg-hl px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase">админ</span>}
-                    {u.discount_percent != null && <span className="rounded-sm border-2 border-teal bg-teal/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-teal">−{u.discount_percent}%</span>}
-                  </div>
-                  <p className="mt-1 font-mono text-[11px] text-ink2">
-                    {u.email} · рег. {fmtDate(u.registered_at)}
-                    {u.tariff_id !== "free" && ` · до ${fmtDate(u.tariff_expires_at)}`}
-                  </p>
-                </div>
-                <Icon name={selectedId === u.id ? "chevronDown" : "chevronDown"} size={14} />
-              </button>
-              {selectedId === u.id && <UserDetailPanel id={u.id} ownId={profile.id} onChanged={refresh} onClose={() => setSelectedId(null)} />}
-            </div>
-          ))
-        )}
-      </div>
-
-      {total > PAGE_SIZE && (
-        <div className="mt-4 flex items-center justify-center gap-3">
-          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="btn btn-ghost px-3 py-1.5 text-[12px] disabled:opacity-40">
-            ← Назад
-          </button>
-          <span className="font-mono text-[12px] text-ink2">
-            {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
-          </span>
-          <button onClick={() => setPage((p) => p + 1)} disabled={(page + 1) * PAGE_SIZE >= total} className="btn btn-ghost px-3 py-1.5 text-[12px] disabled:opacity-40">
-            Вперёд →
-          </button>
         </div>
       )}
     </div>

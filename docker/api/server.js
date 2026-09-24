@@ -38,7 +38,7 @@ import {
   reserveEssayCheckSlot,
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
-import { searchUsers, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
+import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { getWelcomeOffer } from "./offers.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail } from "./lifecycleEmails.js";
@@ -981,7 +981,32 @@ app.get("/admin/users", authMiddleware, requireAdmin, async (req, res) => {
     const page = Math.max(0, Number(req.query.page) || 0);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
     const q = req.query.q ? String(req.query.q).trim() : "";
-    res.json(await searchUsers({ q: q || undefined, page, pageSize }));
+    // булевы фильтры воронки: ?confirmed=yes|no, ?paid=yes|no и т.д. (no — инверсия), регион/город с
+    // флагом инверсии: ?region=Москва&regionNot=1 (см. buildUserWhere в adminUsers.js)
+    const filters = {};
+    for (const key of USER_BOOL_FILTERS) {
+      const v = String(req.query[key] ?? "");
+      if (v === "yes" || v === "no") filters[key] = v;
+    }
+    for (const key of ["region", "city"]) {
+      if (req.query[key]) {
+        filters[key] = String(req.query[key]);
+        filters[`${key}Not`] = req.query[`${key}Not`] === "1";
+      }
+    }
+    const sort = String(req.query.sort ?? "registered");
+    const dir = req.query.dir === "asc" ? "asc" : "desc";
+    res.json(await searchUsers({ q: q || undefined, filters, sort, dir, page, pageSize }));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Регионы и города, реально встречающиеся у пользователей — для выпадающих списков фильтра. Путь
+// объявлен ДО /admin/users/:id, иначе «facets» разобрался бы как id пользователя.
+app.get("/admin/users-facets", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json(await getUserFacets());
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
