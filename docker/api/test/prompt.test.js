@@ -14,6 +14,11 @@ import {
   stripSequenceAnswer,
   stripAnswerDeclaration,
   stripFinalBareNumberFormula,
+  stripAnswerLeak,
+  findAnswerLeakIndex,
+  hasModelGlitch,
+  describeUnseenMedia,
+  isMultiItemStatement,
   DEFAULT_POLICY,
 } from "../prompt.js";
 
@@ -383,4 +388,171 @@ test("stripFinalBareNumberFormula: промежуточная формула в�
   const result = stripFinalBareNumberFormula(withIntermediateStep);
   assert.equal(result.trimmed, false);
   assert.equal(result.text, withIntermediateStep);
+});
+
+
+// ─────────────── сверка с эталонным ответом из БД, сбои модели, заготовки, достоверность ───────────────
+// Все примеры — живые ответы прод-репетитора из аудита 24.09.2026 (см. память проекта).
+
+const MC = ["Выберите три верных ответа из шести.", "1) дно ротовой полости", "2) участвует в выведении половых продуктов", "3) обеспечивает удаление мочи", "4) дыхательный клапан", "5) усиливает звук", "6) расширение задней кишки"];
+
+test("findAnswerLeakIndex: код выбора, названный россыпью («2, 3 и 6») или слитно, — утечка (bio-13948)", () => {
+  assert.notEqual(findAnswerLeakIndex("Итак, верные варианты — 2, 3 и 6.", "236", MC), -1);
+  assert.notEqual(findAnswerLeakIndex("Ответ: 236", "236", MC), -1);
+  assert.equal(findAnswerLeakIndex("Разберём пункты 1 и 4, они неверные.", "236", MC), -1);
+});
+
+test("findAnswerLeakIndex: число — по границам слова: 704 не находится в 7040 и в 1704", () => {
+  assert.notEqual(findAnswerLeakIndex("Значит, расстояние 704 км.", "704", ["Сколько километров?"]), -1);
+  assert.equal(findAnswerLeakIndex("Получилось 7040 и 1704", "704", ["Сколько километров?"]), -1);
+});
+
+test("findAnswerLeakIndex: десятичная запятая и точка эквивалентны; отрицательное отличается от положительного", () => {
+  assert.notEqual(findAnswerLeakIndex("Итого 0.35", "0,35", ["Найдите вероятность"]), -1);
+  assert.equal(findAnswerLeakIndex("Итого -2,7", "2,7", ["Найдите значение"]), -1);
+  assert.notEqual(findAnswerLeakIndex("Итого -2,7", "-2,7", ["Найдите значение"]), -1);
+});
+
+test("findAnswerLeakIndex: 1–2-значные числа не сверяются (слишком часты в вычислениях)", () => {
+  assert.equal(findAnswerLeakIndex("Получаем 24 и ещё 3", "24", ["Найдите площадь"]), -1);
+  assert.equal(findAnswerLeakIndex("Получаем 1", "1", ["Найдите время"]), -1);
+});
+
+test("findAnswerLeakIndex: слово-ответ в любой форме и любой вариант через «/» (lit-7623, bio-49157)", () => {
+  assert.notEqual(findAnswerLeakIndex("Этот приём называется олицетворением.", "олицетворение", ["Укажите приём"]), -1);
+  assert.notEqual(findAnswerLeakIndex("Это часть обмена веществ.", "обмен веществ/обменвеществ/метаболизм", ["Впишите термин"]), -1);
+  assert.notEqual(findAnswerLeakIndex("Речь о метаболизме клетки.", "обмен веществ/метаболизм", ["Впишите термин"]), -1);
+});
+
+test("findAnswerLeakIndex: то, что уже есть в условии, утечкой не считается", () => {
+  assert.equal(findAnswerLeakIndex("Ты говоришь о 704 км", "704", ["Теплоход прошёл 704 км?"]), -1);
+  assert.equal(findAnswerLeakIndex("Речь про Иркутск", "Иркутск", ["Найдите город Иркутск на схеме"]), -1);
+});
+
+test("stripAnswerLeak: обрубает с начала абзаца с ответом и приглашает доделать самому", () => {
+  const text = "Шаг 1. Считаем скорости.\n\nШаг 2. Подставляем: S = 704 км.\n\nВот и всё.";
+  const r = stripAnswerLeak(text, "704", ["Сколько километров?"]);
+  assert.equal(r.trimmed, true);
+  assert.match(r.text, /^Шаг 1\. Считаем скорости\./);
+  assert.doesNotMatch(r.text, /704/);
+  assert.match(r.text, /Дальше — твой ход/);
+});
+
+test("stripAnswerLeak: ответ уже в первом абзаце — вместо пустого текста короткое объяснение", () => {
+  const r = stripAnswerLeak("Ответ 704 км.", "704", ["Сколько километров?"]);
+  assert.equal(r.trimmed, true);
+  assert.doesNotMatch(r.text, /704/);
+  assert.match(r.text, /слишком близко/);
+});
+
+test("stripAnswerLeak: утечки нет или эталона нет — текст не меняется", () => {
+  const text = "Найди скорости по течению и против него.";
+  assert.deepEqual(stripAnswerLeak(text, "704", ["x"]), { text, trimmed: false });
+  assert.deepEqual(stripAnswerLeak(text, null, ["x"]), { text, trimmed: false });
+});
+
+test("hasModelGlitch: иероглифы и служебные токены модели — сбой; обычный русский/английский текст — нет", () => {
+  assert.equal(hasModelGlitch("Подумай, как 电解水溶液 связан с ионами"), true);
+  assert.equal(hasModelGlitch("...текст\n<|im_start|>assistant\nТема задания"), true);
+  assert.equal(hasModelGlitch("Тема: electrolysis (электролиз), формула CuCl₂ → Cu + Cl₂"), false);
+});
+
+test("isMultiItemStatement: список пунктов — да, обычная задача — нет", () => {
+  assert.equal(isMultiItemStatement(MC), true);
+  assert.equal(isMultiItemStatement(["Решите уравнение log2(x-1)=3"]), false);
+  assert.equal(isMultiItemStatement(["А) Рижский | 1) A", "Б) Финский | 2) B", "В) Ботнический | 3) C"]), true);
+});
+
+test("buildHintPrompt: многопунктное задание на уровнях 2–3 — заготовка не передаётся, на уровне 1 передаётся", () => {
+  const t = { topic: "Земноводные", egeNumber: 11, statement: MC, hints: ["Вспомни функции клоаки.", "Верные — 2, 3, 6 потому что…", "Ответ: 236"] };
+  const l1 = buildHintPrompt("policy", t, 0);
+  const l2 = buildHintPrompt("policy", t, 1);
+  const l3 = buildHintPrompt("policy", t, 2);
+  assert.match(l1, /Вспомни функции клоаки/);
+  assert.doesNotMatch(l2, /Верные — 2, 3, 6/);
+  assert.doesNotMatch(l3, /Ответ: 236/);
+  assert.match(l3, /содержит готовый разбор или ответ/);
+});
+
+test("buildHintPrompt: заготовка с эталонным ответом внутри не попадает в промпт, даже если это не список", () => {
+  const t = { topic: "Лексика", egeNumber: 35, statement: ["Вставьте слово в пропуск."], hints: ["Подумай о значении.", "Смотри на контекст.", "Подходит слово involves — включает в себя."] };
+  const withAnswer = buildHintPrompt("policy", t, 2, { answer: "involves" });
+  assert.doesNotMatch(withAnswer, /involves/);
+  assert.match(withAnswer, /не передаём/i);
+  const withoutAnswer = buildHintPrompt("policy", t, 2, {});
+  assert.match(withoutAnswer, /involves/);
+});
+
+test("промпты с заданием содержат правила достоверности: не выдумывать отсутствующий текст/картинки, не уводить от верного, только по-русски", () => {
+  for (const prompt of [buildHintPrompt("policy", task, 0), buildExplainPrompt("policy", task), buildChatPrompt("policy", task)]) {
+    assert.match(prompt, /ПРАВИЛА ДОСТОВЕРНОСТИ/);
+    assert.match(prompt, /НЕ придумывай его содержание/);
+    assert.match(prompt, /не объявляй правильное рассуждение/);
+    assert.match(prompt, /только по-русски/);
+  }
+});
+
+test("промпты: приложенное, чего модель не видит (график без vision, аудио), называется явно", () => {
+  const ctx = { unseenMedia: describeUnseenMedia({ media: [{ storage_path: "a/g.png" }, { storage_path: "a/rec.mp3" }] }, false) };
+  const prompt = buildExplainPrompt("policy", task, ctx);
+  assert.match(prompt, /НЕ видишь/);
+  assert.match(prompt, /аудиозапись/);
+  assert.match(prompt, /рисунок, график, схема или карта/);
+  assert.doesNotMatch(buildExplainPrompt("policy", task, {}), /НЕ видишь/);
+});
+
+test("describeUnseenMedia: формулы (.svg) не считаются «невидимыми»; с vision картинки видны, аудио — нет", () => {
+  assert.deepEqual(describeUnseenMedia({ media: [{ storage_path: "a/f.svg" }] }, false), []);
+  assert.deepEqual(describeUnseenMedia({ media: [{ storage_path: "a/g.png" }] }, true), []);
+  assert.equal(describeUnseenMedia({ media: [{ storage_path: "a/rec.mp3" }] }, true).length, 1);
+  assert.deepEqual(describeUnseenMedia(undefined, false), []);
+});
+
+// Живые ответы аудита 24.09.2026: вердикт по каждому пункту БЕЗ слов «верно/подходит» — обычный фильтр их
+// пропускал, «широкий» (для заданий с выбором/сопоставлением пунктов) обрубает после первого вердикта.
+test("stripPerItemVerdicts(broad): bio-13948 — «действительно участвует», «не является», «Да, клоака…» по каждому пункту", () => {
+  const live = `Давай посмотрим на каждый пункт:
+
+1) **Дно ротовой полости** — Клоака не связана с ротовой полостью.
+
+2) **Участвует в выведении половых продуктов** — Клоака действительно участвует в выведении половых продуктов.
+
+3) **Обеспечивает удаление мочи** — Да, клоака у амфибий также служит для удаления мочи.
+
+4) **Дыхательный клапан** — Клоака не является дыхательным клапаном.`;
+  assert.equal(stripPerItemVerdicts(live).trimmed, false); // обычный режим этих слов не знает
+  const r = stripPerItemVerdicts(live, { broad: true });
+  assert.equal(r.trimmed, true);
+  assert.match(r.text, /1\) \*\*Дно ротовой полости/);
+  assert.doesNotMatch(r.text, /Обеспечивает удаление мочи/);
+  assert.doesNotMatch(r.text, /Дыхательный клапан/);
+});
+
+test("stripPerItemVerdicts(broad): hist-39183 — «### Шаг N» с «точно относится» — обрубается после первого шага", () => {
+  const live = `Установим соответствие.
+
+### Шаг 1: Внешняя политика Василия I
+- **Факт 5**: Установление династических отношений. Он действительно устанавливал династические связи.
+
+### Шаг 2: Крымская война
+- **Факт 1**: Гибель Истомина. Этот факт точно относится к Крымской войне.
+
+### Шаг 3: Внешняя политика Ивана IV
+- **Факт 4**: Завоевание Казанского ханства.`;
+  const r = stripPerItemVerdicts(live, { broad: true });
+  assert.equal(r.trimmed, true);
+  assert.match(r.text, /Шаг 1/);
+  assert.doesNotMatch(r.text, /Гибель Истомина/);
+});
+
+test("stripPerItemVerdicts(broad): обычные шаги решения без вердиктов по пунктам — не трогает", () => {
+  const plain = `### Шаг 1: Понимаем условие
+Нужно найти площадь.
+
+### Шаг 2: Вспоминаем формулу
+S = a·h.
+
+### Шаг 3: Подставляем
+Что получится?`;
+  assert.equal(stripPerItemVerdicts(plain, { broad: true }).trimmed, false);
 });

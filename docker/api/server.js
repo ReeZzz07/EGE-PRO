@@ -23,6 +23,11 @@ import {
   stripSequenceAnswer,
   stripAnswerDeclaration,
   stripFinalBareNumberFormula,
+  stripAnswerLeak,
+  findAnswerLeakIndex,
+  hasModelGlitch,
+  describeUnseenMedia,
+  isMultiItemStatement,
   DEFAULT_POLICY,
 } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
@@ -1299,6 +1304,22 @@ async function dbSafeTaskById(id) {
   };
 }
 
+/** Эталонный ответ задания — только для серверной сверки утечки (см. stripAnswerLeak в prompt.js), в
+ *  модель он не передаётся. Статические задания — из TASK_ANSWERS, остальные — из БД. Варианты через «/». */
+async function referenceAnswer(taskId) {
+  if (!taskId) return null;
+  if (TASK_ANSWERS[taskId]) return TASK_ANSWERS[taskId].join("/");
+  try {
+    const { rows } = await pool.query("select answer from public.tasks where id = $1 and bucket <> 'essay'", [taskId]);
+    return rows[0]?.answer || null;
+  } catch (e) {
+    console.warn("не удалось прочитать эталонный ответ для сверки утечки:", e?.message ?? e);
+    return null;
+  }
+}
+
+const MODEL_GLITCH_TEXT = "Не получилось сформулировать ответ — попробуй задать вопрос ещё раз.";
+
 app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
   const [settings, policy] = await Promise.all([resolveAiSettings(), resolveSystemPrompt()]);
   if (!settings.apiKey) return res.status(500).json({ error: "Ключ ИИ-провайдера не настроен — задай его в /admin → «ИИ-репетитор»" });
@@ -1376,8 +1397,14 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
       });
     }
 
+    const refAnswer = task && task.answerType !== "essay" ? await referenceAnswer(body.taskId) : null;
+    const promptCtx = { answer: refAnswer, unseenMedia: describeUnseenMedia(task, supportsVision(settings)) };
     const system =
-      body.mode === "hint" ? buildHintPrompt(policy, task, body.hintLevel ?? 0) : body.mode === "explain_topic" ? buildExplainPrompt(policy, task) : buildChatPrompt(policy, task);
+      body.mode === "hint"
+        ? buildHintPrompt(policy, task, body.hintLevel ?? 0, promptCtx)
+        : body.mode === "explain_topic"
+          ? buildExplainPrompt(policy, task, promptCtx)
+          : buildChatPrompt(policy, task, promptCtx);
     const history = (body.history ?? []).slice(-8);
 
     // иллюстрации к заданию — в промпт (формулы текстом всегда, картинки в vision, если провайдер
@@ -1392,6 +1419,16 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     let text;
     try {
       text = await callText(settings, system, messages);
+      // сбой модели (иероглифы, служебные токены) — один повтор; не помогло — честный текст вместо мусора,
+      // а слот возвращаем: ученик не должен платить лимитом за ответ, который не смог получить
+      if (hasModelGlitch(text)) {
+        console.warn("модель вернула ответ со сбоем (иероглифы/служебные токены) — повторяю запрос", { taskId: body.taskId, mode: body.mode });
+        text = await callText(settings, system, messages);
+        if (hasModelGlitch(text)) {
+          await releaseDailyAiSlot(limitCheck.reservationId);
+          return res.json({ text: MODEL_GLITCH_TEXT });
+        }
+      }
     } catch (e) {
       // Слот уже списан в reserveDailyAiSlot выше (до вызова модели — это и чинит гонку, см.
       // комментарий там), но если сама модель не ответила (сеть, таймаут, ошибка провайдера),
@@ -1425,7 +1462,7 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     // ответе сама сведена до голого числа ("d = 4×3" → "d = 12"). См. stripFinalBareNumberFormula
     // в prompt.js про эвристику и её ложноположительные случаи.
     if (task && (body.mode === "hint" || body.mode === "explain_topic" || body.mode === "chat")) {
-      let stripped = stripPerItemVerdicts(text);
+      let stripped = stripPerItemVerdicts(text, { broad: isMultiItemStatement(task.statement) });
       const seqStripped = stripSequenceAnswer(stripped.text);
       if (seqStripped.trimmed) stripped = seqStripped;
       const declStripped = stripAnswerDeclaration(stripped.text);
@@ -1435,6 +1472,16 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
       if (stripped.trimmed) {
         console.warn("postfilter: утечка готового ответа — обрублено", { taskId: body.taskId, mode: body.mode, userId });
         text = stripped.text;
+      }
+      // Шестой фильтр — прямая сверка с эталонным ответом из БД (остальные — эвристики по форме).
+      // В чате не трогаем, если ученик сам назвал этот ответ в сообщении: репетитор вправе на него сослаться.
+      const studentNamedIt = body.mode === "chat" && refAnswer && findAnswerLeakIndex(String(body.message ?? ""), refAnswer, []) !== -1;
+      if (refAnswer && !studentNamedIt) {
+        const exact = stripAnswerLeak(text, refAnswer, task.statement);
+        if (exact.trimmed) {
+          console.warn("postfilter: в ответе модели прозвучал эталонный ответ — обрублено", { taskId: body.taskId, mode: body.mode, userId });
+          text = exact.text;
+        }
       }
     }
 
