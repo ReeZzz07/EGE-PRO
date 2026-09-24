@@ -5,7 +5,7 @@ import { plural } from "../lib/utils";
 import { getAvailableSubjects, hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import { DEFAULT_FILTERS, filterTasks, loadTaskBankFilters, saveTaskBankFilters, type TaskStatus } from "../lib/taskFilters";
 import type { View } from "./Header";
-import { Icon, Reveal } from "./ui";
+import { Icon, Reveal, statementPreview } from "./ui";
 
 const PAGE_SIZE = 30;
 
@@ -197,7 +197,7 @@ export default function TaskBank({ onNav, initialSubject }: { onNav: (v: View) =
                     ) : null}
                   </div>
                   <h3 className="font-display mt-3 text-[15px] font-bold leading-snug">{t.topic}</h3>
-                  <p className="mt-1.5 line-clamp-2 flex-1 text-[12.5px] leading-relaxed text-ink2">{t.statement[0]}</p>
+                  <p className="mt-1.5 line-clamp-2 flex-1 text-[12.5px] leading-relaxed text-ink2">{statementPreview(t.statement[0])}</p>
                   <div className="mt-4 flex items-center justify-between border-t border-dashed border-ink/20 pt-3">
                     <span className="flex items-center gap-1.5" title={`Сложность: ${DIFF_LABEL[t.difficulty]}`}>
                       {[1, 2, 3].map((d) => (

@@ -5,16 +5,19 @@ function diagnosticPool(subject: Subject): EgeTask[] {
   return TASKS.filter((t) => t.subject === subject && t.answerType !== "essay");
 }
 
-/** Подбирает 8–12 заданий вперемешку по темам и сложности (раздел 3.1 ТЗ). */
-export function pickDiagnosticTasks(subject: Subject, count = 10): EgeTask[] {
-  const pool = diagnosticPool(subject);
+/** Равномерно берёт count элементов по возрастанию сложности (порядок пула при равной сложности сохраняется). */
+export function spreadPick<T extends { difficulty: number }>(pool: T[], count: number): T[] {
   if (pool.length <= count) return pool;
-  // равномерно берём по возрастанию сложности, чередуя темы
   const sorted = [...pool].sort((a, b) => a.difficulty - b.difficulty);
   const step = sorted.length / count;
-  const picked: EgeTask[] = [];
+  const picked: T[] = [];
   for (let i = 0; i < count; i++) picked.push(sorted[Math.floor(i * step)]);
   return picked;
+}
+
+/** Подбирает 8–12 заданий вперемешку по темам и сложности (раздел 3.1 ТЗ). */
+export function pickDiagnosticTasks(subject: Subject, count = 10): EgeTask[] {
+  return spreadPick(diagnosticPool(subject), count);
 }
 
 export interface DiagnosticAnswer {

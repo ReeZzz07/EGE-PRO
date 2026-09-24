@@ -422,7 +422,7 @@ function resetAfterDurationDiscovered(el: HTMLAudioElement) {
 
 /** Одно вложение задания — по расширению файла решает, как его показать: .mp3 — запись для
  *  аудирования (см. <audio> в clean-html.mjs — сама запись, а не иллюстрация, поэтому плеер на всю
- *  ширину, а не картинка), .svg — формула Wiris без своего "фото-обрамления", в размер строки текста,
+ *  ширину, а не картинка), .svg — формула Wiris без своего "фото-обрамления", в натуральном размере (Wiris рисует её сразу под нужный кегль — принудительная высота сжимала дроби и степени до нечитаемых),
  *  остальное — настоящая иллюстрация/чертёж, крупнее и в рамке. */
 export function MediaItem({ src }: { src: string }) {
   if (/\.mp3$/i.test(src)) {
@@ -441,7 +441,7 @@ export function MediaItem({ src }: { src: string }) {
     <img
       src={src}
       alt={isFormula ? "формула" : "Иллюстрация к заданию"}
-      className={isFormula ? "mx-0.5 inline-block h-6 w-auto align-middle object-contain" : "mx-1 inline-block max-h-72 w-auto rounded-sm border-2 border-ink/15 align-middle object-contain"}
+      className={isFormula ? "mx-0.5 inline-block max-w-full align-middle" : "mx-1 inline-block max-h-72 w-auto rounded-sm border-2 border-ink/15 align-middle object-contain"}
     />
   );
 }
@@ -462,4 +462,32 @@ export function StatementLine({ text, images }: { text: string; images?: string[
       })}
     </>
   );
+}
+
+/** Условие задания целиком: строки с формулами на местах маркеров + картинки без маркера отдельным блоком
+ *  (то же, что SolveView). Диагностика и пробник раньше печатали строки как есть — вместо формулы
+ *  ученик видел «[ИЗОБРАЖЕНИЕ 1]». */
+export function TaskStatement({ task, className = "space-y-2" }: { task: { statement: string[]; images?: string[] }; className?: string }) {
+  const extra = (task.images ?? []).filter((_, i) => !usedImageMarkerIndices(task.statement).has(i));
+  return (
+    <>
+      <div className={className}>
+        {task.statement.map((p, i) => (
+          <p key={i}>
+            <StatementLine text={p} images={task.images} />
+          </p>
+        ))}
+      </div>
+      {extra.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {extra.map((src, i) => <MediaItem key={i} src={src} />)}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Строка условия для коротких превью (line-clamp) в списках: без служебных маркеров картинок. */
+export function statementPreview(line: string | undefined): string {
+  return (line ?? "").replace(IMAGE_MARKER_RE, "…").replace(/(?:…\s*){2,}/g, "… ").replace(/\s{2,}/g, " ").trim();
 }

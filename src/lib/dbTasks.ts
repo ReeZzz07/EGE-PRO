@@ -7,6 +7,7 @@
 // дешёвым запросом сразу при старте, чтобы Dashboard/TaskBank сразу показывали верные цифры.
 import { useSyncExternalStore } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { spreadPick } from "./diagnostic";
 import { TASKS, SUBJECTS, type EgeTask, type Subject, type EssayCriterion } from "../data/tasks";
 
 interface DbTaskRow {
@@ -241,6 +242,68 @@ export async function hydrateSubjectTasks(subject: Subject): Promise<void> {
     loadingSubjects.delete(subject);
     bump();
   }
+}
+
+// ─────────────────────── быстрая подгрузка для диагностики ───────────────────────
+// Диагностике нужны 5–10 заданий, а не весь предмет (у биологии — 11 тыс. заданий, ~10 МБ JSON с
+// вложениями): лёгким запросом берём только id и сложность автопроверяемых заданий, выбираем тем же
+// алгоритмом, что и раньше (spreadPick), и догружаем полные тексты лишь выбранных.
+const DIAGNOSTIC_COUNTS = [5, 10] as const;
+const diagnosticPicks = new Map<Subject, Map<number, string[]>>();
+const diagnosticReady = new Set<Subject>();
+const diagnosticInFlight = new Map<Subject, Promise<void>>();
+
+/** true, пока набор для диагностики по предмету ещё готовится (при выключенном бэкенде — никогда). */
+export function isDiagnosticLoading(subject: Subject): boolean {
+  return isSupabaseConfigured && !!supabase && !diagnosticReady.has(subject);
+}
+
+/** Готовый набор диагностики (в порядке выбора) или null, если быстрый путь не сработал — тогда
+ *  вызывающий берёт pickDiagnosticTasks по полностью загруженному предмету. */
+export function getDiagnosticPick(subject: Subject, count: number): EgeTask[] | null {
+  const ids = diagnosticPicks.get(subject)?.get(count);
+  if (!ids) return null;
+  const byId = new Map(TASKS.filter((t) => t.subject === subject).map((t) => [t.id, t]));
+  const tasks = ids.map((id) => byId.get(id)).filter((t): t is EgeTask => !!t);
+  return tasks.length === ids.length ? tasks : null;
+}
+
+export function hydrateDiagnosticTasks(subject: Subject): Promise<void> {
+  if (!isSupabaseConfigured || !supabase || diagnosticReady.has(subject)) return Promise.resolve();
+  const running = diagnosticInFlight.get(subject);
+  if (running) return running;
+  const job = (async () => {
+    try {
+      const { data, error } = await supabase!
+        .from("tasks")
+        .select("id, confidence")
+        .eq("published", true)
+        .eq("subject", subject)
+        .eq("bucket", "auto")
+        .not("answer", "is", null)
+        .order("id")
+        .range(0, 19999);
+      if (error || !data) throw new Error(error?.message ?? "нет данных");
+      const pool = (data as { id: string; confidence: string | null }[]).map((r) => ({ id: r.id, difficulty: confidenceToDifficulty(r.confidence) }));
+      const picks = new Map<number, string[]>();
+      for (const n of DIAGNOSTIC_COUNTS) picks.set(n, spreadPick(pool, n).map((p) => p.id));
+      const ids = [...new Set([...picks.values()].flat())];
+      await hydrateTasksByIds(ids);
+      const have = new Set(TASKS.filter((t) => t.subject === subject).map((t) => t.id));
+      if (ids.some((id) => !have.has(id))) throw new Error("не все выбранные задания загрузились");
+      diagnosticPicks.set(subject, picks);
+    } catch (e) {
+      // быстрый путь не удался — грузим предмет целиком, как раньше
+      console.warn(`Быстрая загрузка диагностики (${subject}) не удалась, грузим весь предмет:`, e);
+      await hydrateSubjectTasks(subject);
+    } finally {
+      diagnosticReady.add(subject);
+      diagnosticInFlight.delete(subject);
+      bump();
+    }
+  })();
+  diagnosticInFlight.set(subject, job);
+  return job;
 }
 
 /** Заявки hydrateTasksByIds, которые уже в полёте — Statistics/тетрадь ошибок/store.tsx все зовут

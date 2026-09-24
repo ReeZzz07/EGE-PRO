@@ -1,7 +1,7 @@
 // Подбор заданий и подсчёт результата диагностики — определяет и что покажет ученику первым
 // экраном после регистрации, и на какие темы укажет план подготовки (weakTopics).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LEVEL_LABEL, pickDiagnosticTasks, scoreDiagnostic, type DiagnosticAnswer } from "./diagnostic";
+import { LEVEL_LABEL, pickDiagnosticTasks, scoreDiagnostic, spreadPick, type DiagnosticAnswer } from "./diagnostic";
 import { TASKS, type EgeTask } from "../data/tasks";
 
 function task(over: Partial<EgeTask> & { id: string }): EgeTask {
@@ -52,6 +52,15 @@ describe("pickDiagnosticTasks", () => {
   it("другой предмет в пуле не подмешивается", () => {
     TASKS.push(task({ id: "r1", subject: "rus" }), task({ id: "m1", subject: "math" }));
     expect(pickDiagnosticTasks("rus", 10).map((t) => t.id)).toEqual(["r1"]);
+  });
+});
+
+describe("spreadPick", () => {
+  it("тот же выбор, что у pickDiagnosticTasks, — иначе быстрая загрузка выдала бы другие задания", () => {
+    for (let i = 0; i < 40; i++) TASKS.push(task({ id: `t${i}`, difficulty: ((i % 3) + 1) as 1 | 2 | 3 }));
+    const viaTasks = pickDiagnosticTasks("rus", 10).map((t) => t.id);
+    const viaLight = spreadPick(TASKS.map((t) => ({ id: t.id, difficulty: t.difficulty })), 10).map((t) => t.id);
+    expect(viaLight).toEqual(viaTasks);
   });
 });
 

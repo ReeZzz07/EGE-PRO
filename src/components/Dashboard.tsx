@@ -9,7 +9,7 @@ import { formatClock, plural, useCountdown, useScramble } from "../lib/utils";
 import { getAvailableSubjects, getGlobalPointsTotal, getGlobalTaskTotal, getSubjectPointsTotal, getSubjectsPointsTotal, getSubjectsTaskTotal, hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
 import { loadWelcomeEmailContentForViewer, type WelcomeEmailSettings } from "../lib/welcomeEmailSettings";
 import type { View } from "./Header";
-import { Icon, ProgressRing, Reveal, useToast } from "./ui";
+import { Icon, ProgressRing, Reveal, statementPreview, useToast } from "./ui";
 import WelcomeContentModal from "./WelcomeContentModal";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
 import SubscriptionBanner from "./SubscriptionBanner";
@@ -593,7 +593,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
                             </span>
                           </div>
                           <h3 className="font-display mt-1.5 text-lg font-bold leading-snug">{task.topic}</h3>
-                          <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink2">{task.statement[0]}</p>
+                          <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink2">{statementPreview(task.statement[0])}</p>
                           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] font-semibold text-ink2">
                             <span className="rounded-sm border border-ink/20 px-2 py-0.5">{task.points} первичный {plural(task.points, "балл", "балла", "баллов")}</span>
                             <span className="rounded-sm border border-ink/20 px-2 py-0.5">{derived.solvedIds.has(task.id) ? "уже решено ✓" : "ещё не решено"}</span>

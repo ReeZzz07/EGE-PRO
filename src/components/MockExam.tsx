@@ -9,7 +9,7 @@ import { hydrateSubjectTasks, hydrateTasksByIds, isSubjectLoading, useTasksVersi
 import { convertByFraction, isGradeSubject, loadLatestScoreScale, lookupSecondary, type ScorePoint } from "../lib/scoreScale";
 import { getExamStructure, pickExamVariant } from "../lib/examVariant";
 import { getExamAttempt, saveExamAttempt } from "../lib/examAttempts";
-import { Icon, Reveal } from "./ui";
+import { Icon, Reveal, TaskStatement } from "./ui";
 import { reachGoalOnce } from "../lib/metrika";
 
 type Phase = "setup" | "running" | "grading" | "result";
@@ -304,8 +304,8 @@ export default function MockExam({
 
         <div className="sheet mt-4 p-6">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">{current.topic} {isEssay ? "· развёрнутый ответ" : ""}</p>
-          <div className="mt-3 space-y-2 text-[15px] leading-relaxed">
-            {current.statement.map((p, i) => <p key={i}>{p}</p>)}
+          <div className="mt-3 text-[15px] leading-relaxed">
+            <TaskStatement task={current} />
           </div>
           {isEssay ? (
             <textarea

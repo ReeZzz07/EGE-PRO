@@ -8,7 +8,7 @@ import { deleteExamAttempt, listExamAttempts, type ExamAttempt } from "../lib/ex
 import { countScheduledTopics } from "../lib/spacedReview";
 import type { View } from "./Header";
 import TutorChat from "./TutorChat";
-import { Icon, Reveal } from "./ui";
+import { Icon, Reveal, statementPreview } from "./ui";
 
 /* ─────────── Сохранённые варианты «Экзамен-режима» ─────────── */
 function ExamAttemptsSection({ onNav }: { onNav: (v: View) => void }) {
@@ -130,7 +130,7 @@ export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
                     <span className="font-mono text-[11px] text-ink2">№ {t.fipiId}</span>
                   </div>
                   <h3 className="font-display mt-3 text-base font-bold leading-snug">{t.topic}</h3>
-                  <p className="mt-1.5 line-clamp-2 flex-1 text-[12.5px] leading-relaxed text-ink2">{t.statement[0]}</p>
+                  <p className="mt-1.5 line-clamp-2 flex-1 text-[12.5px] leading-relaxed text-ink2">{statementPreview(t.statement[0])}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-dashed border-ink/20 pt-3 text-[12px]">
                     <span className="flex items-center gap-1.5 font-bold text-red">
                       <Icon name="x" size={13} /> {wrongs.length} {plural(wrongs.length, "ошибка", "ошибки", "ошибок")}

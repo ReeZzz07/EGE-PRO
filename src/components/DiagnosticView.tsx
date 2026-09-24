@@ -1,38 +1,38 @@
 import { useEffect, useMemo, useState } from "react";
+import type { EgeTask } from "../data/tasks";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { checkAnswer } from "../lib/utils";
 import { pickDiagnosticTasks, scoreDiagnostic, LEVEL_LABEL, type DiagnosticAnswer, type DiagnosticResult } from "../lib/diagnostic";
 import { reachGoalOnce } from "../lib/metrika";
 import { saveDiagnosticResult, mirrorDiagnosticToSupabase } from "../lib/planStorage";
 import { useAuth } from "../lib/auth";
-import { hydrateSubjectTasks, isSubjectLoading, useTasksVersion } from "../lib/dbTasks";
-import { Icon, Reveal } from "./ui";
+import { getDiagnosticPick, hydrateDiagnosticTasks, isDiagnosticLoading, useTasksVersion } from "../lib/dbTasks";
+import { Icon, Reveal, TaskStatement } from "./ui";
 
 type Phase = "setup" | "running" | "result";
 
 export default function DiagnosticView({ subject, onFinish, onSkip }: { subject: Subject; onFinish: (result: DiagnosticResult) => void; onSkip: () => void }) {
   const meta = SUBJECTS[subject];
   const { profile, isGuestMode } = useAuth();
-  const tasksVersion = useTasksVersion();
+  useTasksVersion(); // перерисовка, когда набор заданий загрузился
   const [phase, setPhase] = useState<Phase>("setup");
-  const [count, setCount] = useState(10);
+  // набор фиксируем в момент старта — фоновая подгрузка банка не должна менять задания посреди диагностики
+  const [tasks, setTasks] = useState<EgeTask[]>([]);
   const [idx, setIdx] = useState(0);
   const [value, setValue] = useState("");
   const [answers, setAnswers] = useState<DiagnosticAnswer[]>([]);
 
   useEffect(() => {
-    hydrateSubjectTasks(subject);
+    hydrateDiagnosticTasks(subject);
   }, [subject]);
-  const loadingBank = isSubjectLoading(subject);
+  const loadingBank = isDiagnosticLoading(subject);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const tasks = useMemo(() => pickDiagnosticTasks(subject, count), [subject, count, tasksVersion]);
   const task = tasks[idx];
 
   const result = useMemo(() => (phase === "result" ? scoreDiagnostic(subject, answers) : null), [phase, subject, answers]);
 
   const start = (n: number) => {
-    setCount(n);
+    setTasks(getDiagnosticPick(subject, n) ?? pickDiagnosticTasks(subject, n));
     setPhase("running");
   };
 
@@ -96,8 +96,8 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
 
         <div key={task.id} className="sheet anim-rise mt-6 p-6">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">{task.topic}</p>
-          <div className="mt-3 space-y-2 text-[15px] leading-relaxed">
-            {task.statement.map((p, i) => <p key={i}>{p}</p>)}
+          <div className="mt-3 text-[15px] leading-relaxed">
+            <TaskStatement task={task} />
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <input

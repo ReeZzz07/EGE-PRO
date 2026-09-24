@@ -5,7 +5,7 @@
 // на нечитаемость подсказок.
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { TutorText } from "./ui";
+import { TaskStatement, TutorText, statementPreview } from "./ui";
 
 describe("TutorText", () => {
   it("обычный многострочный текст — каждая строка своим абзацем", () => {
@@ -100,5 +100,30 @@ describe("TutorText", () => {
     const { container } = render(<TutorText text={"\\[ x(6) = -1 + 6 \\cdot 6 - 6^2 \\]\n\\[ |\\Delta x| = |0| \\]"} />);
     expect(container.textContent).not.toMatch(/\\cdot|\\Delta|\^2|\\\[/);
     expect(container.querySelectorAll(".katex-display").length).toBe(2);
+  });
+});
+
+describe("TaskStatement", () => {
+  it("маркер [ИЗОБРАЖЕНИЕ N] заменяется формулой на своём месте, сырой маркер не виден", () => {
+    const { container } = render(
+      <TaskStatement task={{ statement: ["Найдите корень уравнения [ИЗОБРАЖЕНИЕ 1] Если корней несколько…"], images: ["/f/1.svg"] }} />
+    );
+    expect(container.textContent).not.toMatch(/ИЗОБРАЖЕНИЕ/);
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("/f/1.svg");
+    expect(img?.getAttribute("alt")).toBe("формула");
+  });
+
+  it("картинка без маркера в тексте показывается отдельным блоком", () => {
+    const { container } = render(<TaskStatement task={{ statement: ["Смотри рисунок."], images: ["/f/plot.png"] }} />);
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+  });
+});
+
+describe("statementPreview", () => {
+  it("вырезает служебные маркеры картинок из превью", () => {
+    expect(statementPreview("Найдите корень  [ИЗОБРАЖЕНИЕ 1]  Если корней несколько")).toBe("Найдите корень … Если корней несколько");
+    expect(statementPreview("[ИЗОБРАЖЕНИЕ 1] [ИЗОБРАЖЕНИЕ 2] равно")).toBe("… равно");
+    expect(statementPreview(undefined)).toBe("");
   });
 });
