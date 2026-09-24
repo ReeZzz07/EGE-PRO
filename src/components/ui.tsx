@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import katex from "katex";
 
 /* ─────────── Иконки (свои, штриховые) ─────────── */
@@ -436,13 +436,58 @@ export function MediaItem({ src }: { src: string }) {
       />
     );
   }
-  const isFormula = /\.svg$/i.test(src);
+  return <LoadingImage key={src} src={src} isFormula={/\.svg$/i.test(src)} />;
+}
+
+/** Картинка с заглушкой на время загрузки: при медленной сети на месте формулы/рисунка не пустота (текст
+ *  «Найдите значение выражения .» выглядел бы оборванным), а мерцающий прямоугольник; если файл не пришёл —
+ *  «повторить». Пока грузится, сам <img> остаётся в DOM (невидимым), иначе браузер не стал бы качать. */
+function LoadingImage({ src, isFormula }: { src: string; isFormula: boolean }) {
+  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+  const [attempt, setAttempt] = useState(0);
+  const ref = useRef<HTMLImageElement>(null);
+  const url = attempt ? `${src}${src.includes("?") ? "&" : "?"}retry=${attempt}` : src;
+
+  // картинка из кэша браузера могла загрузиться раньше, чем React повесил onLoad
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el?.complete && el.naturalWidth > 0) setState("ok");
+  }, [url]);
+
+  const alt = isFormula ? "формула" : "Иллюстрация к заданию";
+  const skeleton = isFormula ? "h-6 w-14 align-middle" : "h-40 w-56 max-w-full align-middle";
   return (
-    <img
-      src={src}
-      alt={isFormula ? "формула" : "Иллюстрация к заданию"}
-      className={isFormula ? "mx-0.5 inline-block max-w-full align-middle" : "mx-1 inline-block max-h-72 w-auto rounded-sm border-2 border-ink/15 align-middle object-contain"}
-    />
+    <>
+      {state === "loading" && (
+        <span role="img" aria-busy="true" aria-label="Изображение загружается" className={`mx-1 inline-block rounded-sm bg-ink/10 motion-safe:animate-pulse ${skeleton}`} />
+      )}
+      {state === "error" && (
+        <button
+          type="button"
+          onClick={() => {
+            setState("loading");
+            setAttempt((n) => n + 1);
+          }}
+          className="mx-1 inline-flex items-center gap-1 rounded-sm border border-ink/20 px-1.5 py-0.5 align-middle text-[12px] font-semibold text-ink2 hover:text-ink"
+        >
+          <Icon name="refresh" size={12} /> {isFormula ? "формула не загрузилась" : "изображение не загрузилось"} — повторить
+        </button>
+      )}
+      <img
+        ref={ref}
+        src={url}
+        alt={alt}
+        onLoad={() => setState("ok")}
+        onError={() => setState("error")}
+        className={
+          state !== "ok"
+            ? "pointer-events-none absolute h-0 w-0 opacity-0"
+            : isFormula
+              ? "mx-0.5 inline-block max-w-full align-middle"
+              : "mx-1 inline-block max-h-72 w-auto rounded-sm border-2 border-ink/15 align-middle object-contain"
+        }
+      />
+    </>
   );
 }
 

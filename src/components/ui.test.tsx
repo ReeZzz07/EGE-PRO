@@ -3,7 +3,7 @@
 // отвечает markdown-подобным текстом ("###" заголовки, "-"/"•" списки, **bold**) — до этого он
 // показывался как сырой текст с видимыми решётками/звёздочками, что и было жалобой пользователя
 // на нечитаемость подсказок.
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TaskStatement, TutorText, statementPreview } from "./ui";
 
@@ -125,5 +125,22 @@ describe("statementPreview", () => {
     expect(statementPreview("Найдите корень  [ИЗОБРАЖЕНИЕ 1]  Если корней несколько")).toBe("Найдите корень … Если корней несколько");
     expect(statementPreview("[ИЗОБРАЖЕНИЕ 1] [ИЗОБРАЖЕНИЕ 2] равно")).toBe("… равно");
     expect(statementPreview(undefined)).toBe("");
+  });
+});
+
+describe("MediaItem: заглушка на время загрузки", () => {
+  it("пока картинка грузится — виден индикатор, после загрузки — сама картинка", () => {
+    const { container } = render(<TaskStatement task={{ statement: ["Найдите [ИЗОБРАЖЕНИЕ 1] значение"], images: ["/f/1.svg"] }} />);
+    expect(screen.getByLabelText("Изображение загружается")).toBeInTheDocument();
+    fireEvent.load(container.querySelector("img")!);
+    expect(screen.queryByLabelText("Изображение загружается")).not.toBeInTheDocument();
+  });
+
+  it("ошибка загрузки — кнопка «повторить», после клика запрос уходит заново", () => {
+    const { container } = render(<TaskStatement task={{ statement: ["Смотри [ИЗОБРАЖЕНИЕ 1]"], images: ["/f/1.svg"] }} />);
+    fireEvent.error(container.querySelector("img")!);
+    fireEvent.click(screen.getByRole("button", { name: /повторить/ }));
+    expect(container.querySelector("img")!.getAttribute("src")).toBe("/f/1.svg?retry=1");
+    expect(screen.getByLabelText("Изображение загружается")).toBeInTheDocument();
   });
 });
