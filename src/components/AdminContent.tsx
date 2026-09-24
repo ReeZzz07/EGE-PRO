@@ -100,7 +100,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
     if (!profile) return;
     const res = await saveLegalEntityInfo(legalEntity, profile.id);
     if (res.error) push(res.error, "err");
-    else push("Сохранено — реквизиты в футере обновятся сразу", "ok");
+    else push("Сохранено — подвал сайта обновится сразу", "ok");
   };
 
   const save = async (key: "hero" | "capabilities" | "process" | "faq" | "ticker", data: unknown) => {
@@ -404,12 +404,13 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       {/* ── реквизиты ИП (футер) ── */}
       <div className="mt-6">
         <SectionShell
-          title="Реквизиты (футер)"
-          hint="ИНН и ОГРНИП показываются под копирайтом в подвале на каждой странице сайта. Пустое поле — строка просто не выводится."
+          title="Подвал сайта"
+          hint="Текст под логотипом и реквизиты (ИНН, ОГРНИП) показываются в подвале на каждой странице сайта. Пустой ИНН/ОГРНИП — строка не выводится; пустой текст — вернётся текст по умолчанию."
           onSave={saveLegalEntity}
           onReset={() => setLegalEntity(DEFAULT_LEGAL_ENTITY)}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Текст в подвале (под логотипом)" value={legalEntity.footerText} onChange={(v) => setLegalEntity((s) => ({ ...s, footerText: v }))} area />
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Field label="ИНН" value={legalEntity.inn} onChange={(v) => setLegalEntity((s) => ({ ...s, inn: v }))} />
             <Field label="ОГРНИП" value={legalEntity.ogrnip} onChange={(v) => setLegalEntity((s) => ({ ...s, ogrnip: v }))} />
           </div>

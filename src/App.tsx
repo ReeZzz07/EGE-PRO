@@ -51,10 +51,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             </span>
             <span className="font-display text-[15px] font-black">ЕГЭ·ПРО</span>
           </div>
-          <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-paper/60">
-            Тренажёр подготовки к ЕГЭ с ИИ-репетитором. Задания соответствуют формату Открытого банка заданий ФИПИ (fipi.ru).
-            Учебный проект: не является официальным ресурсом ФИПИ или Рособрнадзора.
-          </p>
+          <p className="mt-4 max-w-sm whitespace-pre-line text-[13px] leading-relaxed text-paper/60">{legalEntity.footerText}</p>
           <p className="mt-4 font-mono text-[11px] text-paper/40">© 2026 · сделано для тех, кто метит на 100 баллов</p>
           {(legalEntity.inn || legalEntity.ogrnip) && (
             <p className="mt-1 font-mono text-[11px] text-paper/40">
