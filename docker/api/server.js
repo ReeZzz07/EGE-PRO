@@ -32,7 +32,7 @@ import {
 } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
-import { buildTaskAttachments, buildUserContent, supportsVision } from "./taskImages.js";
+import { buildTaskAttachments, buildUserContent, supportsVision, settingsForTask } from "./taskImages.js";
 import {
   resolveUserTariffGate,
   countTodayTutorMessages,
@@ -1327,6 +1327,8 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
   const body = req.body ?? {};
   try {
     const task = body.taskId ? safeTaskById(body.taskId) ?? (await dbSafeTaskById(body.taskId)) : undefined;
+    // задание с рисунком/графиком при текстовой основной модели идёт на vision-модель (см. settingsForTask)
+    const taskSettings = settingsForTask(settings, task);
     const gate = await resolveUserTariffGate(userId);
 
     // Экзамен-режим (SolveView.tsx) блокирует кнопки подсказок 1/2/3 на клиенте, но чат с
@@ -1367,7 +1369,7 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
       }
       let assessment;
       try {
-        assessment = await callClaudeEssayAssessor(settings, policy, task, body.essayText ?? "");
+        assessment = await callClaudeEssayAssessor(taskSettings, policy, task, body.essayText ?? "");
       } catch (e) {
         // как и у hint/chat — неудачный вызов модели не должен стоить ученику одной из его
         // (щедрых, но конечных) проверок на день.
@@ -1398,7 +1400,7 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     }
 
     const refAnswer = task && task.answerType !== "essay" ? await referenceAnswer(body.taskId) : null;
-    const promptCtx = { answer: refAnswer, unseenMedia: describeUnseenMedia(task, supportsVision(settings)) };
+    const promptCtx = { answer: refAnswer, unseenMedia: describeUnseenMedia(task, supportsVision(taskSettings)) };
     const system =
       body.mode === "hint"
         ? buildHintPrompt(policy, task, body.hintLevel ?? 0, promptCtx)
@@ -1411,19 +1413,19 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     // умеет) — см. taskImages.js. Только для режимов, где реально идёт речь о конкретном задании.
     let userContent = body.message ?? "";
     if (task?.media?.length && body.mode !== "check_essay") {
-      const attachments = buildTaskAttachments(task.media, supportsVision(settings));
-      userContent = buildUserContent(settings.provider, userContent, attachments);
+      const attachments = buildTaskAttachments(task.media, supportsVision(taskSettings));
+      userContent = buildUserContent(taskSettings.provider, userContent, attachments);
     }
     const messages = [...history, { role: "user", content: userContent }];
 
     let text;
     try {
-      text = await callText(settings, system, messages);
+      text = await callText(taskSettings, system, messages);
       // сбой модели (иероглифы, служебные токены) — один повтор; не помогло — честный текст вместо мусора,
       // а слот возвращаем: ученик не должен платить лимитом за ответ, который не смог получить
       if (hasModelGlitch(text)) {
         console.warn("модель вернула ответ со сбоем (иероглифы/служебные токены) — повторяю запрос", { taskId: body.taskId, mode: body.mode });
-        text = await callText(settings, system, messages);
+        text = await callText(taskSettings, system, messages);
         if (hasModelGlitch(text)) {
           await releaseDailyAiSlot(limitCheck.reservationId);
           return res.json({ text: MODEL_GLITCH_TEXT });

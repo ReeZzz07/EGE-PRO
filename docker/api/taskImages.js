@@ -39,6 +39,23 @@ export function supportsVision(settings) {
   return /vl/i.test(settings.model || "");
 }
 
+/** Модель для заданий с рисунками, когда основная — текстовая (qwen-max и т.п.): без неё репетитор «не видит
+ *  изображение» (графики, чертежи, схемы, карты — у ~10 тыс. заданий банка), хотя всё остальное решает нормально.
+ *  Переопределяется переменной окружения AI_VISION_MODEL. У Anthropic все модели мультимодальные — не нужна. */
+export const QWEN_DEFAULT_VISION_MODEL = process.env.AI_VISION_MODEL || "qwen-vl-max";
+
+/** Есть ли у задания растровые вложения (график/чертёж/схема) — формулы Wiris (.svg) идут текстом, аудио не картинка. */
+export function hasRasterMedia(mediaRows) {
+  return (mediaRows ?? []).some((m) => !/\.(svg|mp3)$/i.test(m.storage_path ?? ""));
+}
+
+/** Настройки провайдера для конкретного задания: если у него есть рисунок, а основная модель Qwen без vision —
+ *  берём vision-модель Qwen только для этого запроса (текстовые задания остаются на основной). */
+export function settingsForTask(settings, task) {
+  if (settings.provider !== "qwen" || supportsVision(settings) || !hasRasterMedia(task?.media)) return settings;
+  return { ...settings, model: QWEN_DEFAULT_VISION_MODEL };
+}
+
 /** Разбирает task_media задания на текстовые формулы (из MathML) и картинки для vision. */
 export function buildTaskAttachments(mediaRows, allowVision) {
   const formulasText = [];

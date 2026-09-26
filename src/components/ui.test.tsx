@@ -144,3 +144,18 @@ describe("MediaItem: заглушка на время загрузки", () => {
     expect(screen.getByLabelText("Изображение загружается")).toBeInTheDocument();
   });
 });
+
+describe("StatementBody: таблицы в условии", () => {
+  it("строки «a | b | c» показываются таблицей (заголовок с colspan, шапка — th), обычный текст — абзацами", () => {
+    const { container } = render(
+      <TaskStatement task={{ statement: ["Проанализируйте таблицу.", "Показатель | Содержание", "Калий, мг | 238 | 240 | 250", "Кальций, мг | 15 | 10 | 12", "1) Утверждение."] }} />
+    );
+    const table = screen.getByTestId("statement-table");
+    expect(table.querySelectorAll("tr")).toHaveLength(3);
+    expect(table.querySelector("th[colspan='3']")?.textContent).toBe("Содержание");
+    expect(table.querySelectorAll("td")).toHaveLength(8);
+    expect(container.textContent).not.toMatch(/\|/);
+    expect(screen.getByText("Проанализируйте таблицу.")).toBeInTheDocument();
+    expect(screen.getByText("1) Утверждение.")).toBeInTheDocument();
+  });
+});

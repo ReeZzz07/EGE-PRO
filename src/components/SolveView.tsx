@@ -10,7 +10,7 @@ import type { View } from "./Header";
 import TutorChat from "./TutorChat";
 import EssayView from "./EssayView";
 import ReadAloudView from "./ReadAloudView";
-import { Burst, Icon, MediaItem, Stamp, StatementLine, TutorText, useToast, usedImageMarkerIndices } from "./ui";
+import { Burst, Icon, MediaItem, Stamp, StatementBody, TutorText, useToast, usedImageMarkerIndices } from "./ui";
 import { reachGoalOnce } from "../lib/metrika";
 
 type Phase = "solve" | "wrong" | "correct" | "revealed";
@@ -337,11 +337,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
             <h1 className="font-display mt-4 text-xl font-bold leading-snug sm:text-2xl">{task.topic}</h1>
 
             <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-ink/90">
-              {task.statement.map((p, i) => (
-                <p key={i} className="[overflow-wrap:anywhere]">
-                  <StatementLine text={p} images={task.images} />
-                </p>
-              ))}
+              <StatementBody statement={task.statement} images={task.images} />
             </div>
 
             {/* картинки без своего маркера в тексте (ручной/ZIP-импорт вообще не расставляет

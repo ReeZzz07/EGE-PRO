@@ -9,7 +9,7 @@ import { useEssayCheckAllowed, useEssayTrialLeft } from "../lib/tariffs";
 import PaywallCard from "./PaywallCard";
 import { callAiTutor, type EssayAssessment } from "../lib/aiTutor";
 import { useVoiceRecorder } from "../lib/useVoiceRecorder";
-import { Icon, MediaItem, StatementLine, usedImageMarkerIndices } from "./ui";
+import { Icon, MediaItem, StatementBody, usedImageMarkerIndices } from "./ui";
 import type { View } from "./Header";
 
 type Phase = "write" | "checking" | "result";
@@ -146,11 +146,7 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
         </div>
         <h1 className="font-display mt-4 text-xl font-bold leading-snug sm:text-2xl">{task.topic}</h1>
         <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-ink/90">
-          {task.statement.map((p, i) => (
-            <p key={i}>
-              <StatementLine text={p} images={task.images} />
-            </p>
-          ))}
+          <StatementBody statement={task.statement} images={task.images} />
         </div>
 
         {extraImages.length > 0 && (

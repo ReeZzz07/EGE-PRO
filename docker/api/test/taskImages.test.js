@@ -13,7 +13,7 @@ const STORAGE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "taskimg-test-"));
 process.env.STORAGE_ROOT = STORAGE_ROOT;
 fs.mkdirSync(path.join(STORAGE_ROOT, "task-media"), { recursive: true });
 
-const { buildTaskAttachments, buildUserContent, supportsVision } = await import("../taskImages.js");
+const { buildTaskAttachments, buildUserContent, supportsVision, hasRasterMedia, settingsForTask, QWEN_DEFAULT_VISION_MODEL } = await import("../taskImages.js");
 
 function writeMedia(relPath, content) {
   const full = path.join(STORAGE_ROOT, "task-media", relPath);
@@ -117,4 +117,31 @@ test("buildUserContent: картинки + qwen — формат image_url вм�
   const res = buildUserContent("qwen", "вопрос", attachments);
   assert.equal(res[0].type, "image_url");
   assert.match(res[0].image_url.url, /^data:image\/png;base64,AAA$/);
+});
+
+// Живая жалоба (26.09.2026): на «клетчатой бумаге» репетитор отвечал «я не могу видеть изображение» — прод работает на
+// текстовой qwen-max, а рисунки есть у ~10 тыс. заданий. Задания с рисунком теперь идут на vision-модель Qwen.
+test("hasRasterMedia: график/чертёж — да; формулы .svg и аудио — нет; пусто — нет", () => {
+  assert.equal(hasRasterMedia([{ storage_path: "a/1.png" }]), true);
+  assert.equal(hasRasterMedia([{ storage_path: "a/f.svg" }, { storage_path: "a/rec.mp3" }]), false);
+  assert.equal(hasRasterMedia([{ storage_path: "a/f.svg" }, { storage_path: "a/g.jpg" }]), true);
+  assert.equal(hasRasterMedia(undefined), false);
+});
+
+test("settingsForTask: Qwen без vision + рисунок → vision-модель только для этого запроса; исходные настройки не меняются", () => {
+  const base = { provider: "qwen", apiKey: "k", model: "", baseUrl: "" };
+  const withImg = settingsForTask(base, { media: [{ storage_path: "g.png" }] });
+  assert.equal(withImg.model, QWEN_DEFAULT_VISION_MODEL);
+  assert.equal(supportsVision(withImg), true);
+  assert.equal(base.model, "");
+  assert.equal(settingsForTask(base, { media: [{ storage_path: "f.svg" }] }), base, "формулы идут текстом — vision не нужен");
+  assert.equal(settingsForTask(base, undefined), base);
+});
+
+test("settingsForTask: уже vision-модель Qwen или Anthropic — настройки не трогаем", () => {
+  const vl = { provider: "qwen", apiKey: "k", model: "qwen-vl-plus" };
+  const claude = { provider: "anthropic", apiKey: "k", model: "" };
+  const task = { media: [{ storage_path: "g.png" }] };
+  assert.equal(settingsForTask(vl, task), vl);
+  assert.equal(settingsForTask(claude, task), claude);
 });

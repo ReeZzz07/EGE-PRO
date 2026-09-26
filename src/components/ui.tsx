@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import katex from "katex";
+import { parseStatementBlocks } from "../lib/statementBlocks";
 
 /* ─────────── Иконки (свои, штриховые) ─────────── */
 const PATHS: Record<string, ReactNode> = {
@@ -517,11 +518,7 @@ export function TaskStatement({ task, className = "space-y-2" }: { task: { state
   return (
     <>
       <div className={className}>
-        {task.statement.map((p, i) => (
-          <p key={i}>
-            <StatementLine text={p} images={task.images} />
-          </p>
-        ))}
+        <StatementBody statement={task.statement} images={task.images} />
       </div>
       {extra.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -535,4 +532,44 @@ export function TaskStatement({ task, className = "space-y-2" }: { task: { state
 /** Строка условия для коротких превью (line-clamp) в списках: без служебных маркеров картинок. */
 export function statementPreview(line: string | undefined): string {
   return (line ?? "").replace(IMAGE_MARKER_RE, "…").replace(/(?:…\s*){2,}/g, "… ").replace(/\s{2,}/g, " ").trim();
+}
+
+/** Строки условия → абзацы и таблицы (строки «a | b | c» подряд — это таблица из исходного задания, см.
+ *  lib/statementBlocks.ts). Пользователь: «содержание таблицы прослеживается, но не показывается таблицей —
+ *  неудобно читать, а люди платят за удобство» (26.09.2026). */
+export function StatementBody({ statement, images }: { statement: string[]; images?: string[] }) {
+  return (
+    <>
+      {parseStatementBlocks(statement).map((b, i) =>
+        b.kind === "text" ? (
+          <p key={i} className="[overflow-wrap:anywhere]">
+            <StatementLine text={b.text} images={images} />
+          </p>
+        ) : (
+          <div key={i} className="max-w-full overflow-x-auto">
+            <table className="w-full border-collapse text-[14px] leading-snug" data-testid="statement-table">
+              <tbody>
+                {b.rows.map((row, r) => (
+                  <tr key={r}>
+                    {row.map((c, k) => {
+                      const Cell = c.header ? "th" : "td";
+                      return (
+                        <Cell
+                          key={k}
+                          colSpan={c.colSpan}
+                          className={`border border-ink/25 px-2.5 py-1.5 align-top ${c.header ? "bg-ink/5 text-left font-bold" : k === 0 ? "font-semibold" : "tabular-nums"}`}
+                        >
+                          <StatementLine text={c.text} images={images} />
+                        </Cell>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+    </>
+  );
 }
