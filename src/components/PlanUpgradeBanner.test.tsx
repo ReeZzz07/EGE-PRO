@@ -1,11 +1,13 @@
 // Постоянная плашка «про тарифы» для тех, кто прошёл диагностику, но остался на free (см. PlanUpgradeBanner.tsx).
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import PlanUpgradeBanner from "./PlanUpgradeBanner";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import PlanUpgradeBanner, { PLAN_UPGRADE_DISMISSED_KEY } from "./PlanUpgradeBanner";
 
 const offer = { percent: 30, expiresAt: new Date(Date.now() + 50 * 3600 * 1000).toISOString() };
 
 describe("PlanUpgradeBanner", () => {
+  beforeEach(() => sessionStorage.clear());
+
   it("показывает предмет и до трёх слабых тем; без скидки блока скидки нет", () => {
     render(<PlanUpgradeBanner subjectName="Русский язык" weakTopics={["Паронимы", "Ударения", "НЕ с частями речи", "Пунктуация"]} offer={null} onNav={vi.fn()} />);
     expect(screen.getByText(/Русский язык/)).toBeInTheDocument();
@@ -26,13 +28,28 @@ describe("PlanUpgradeBanner", () => {
     expect(screen.getByTestId("plan-upgrade-offer")).toHaveTextContent("−30% на первую оплату");
   });
 
-  it("кнопки ведут на тарифы и на план; закрыть плашку нельзя", () => {
+  it("кнопки ведут на тарифы и на план", () => {
     const onNav = vi.fn();
     render(<PlanUpgradeBanner subjectName="Физика" weakTopics={[]} offer={null} onNav={onNav} />);
     fireEvent.click(screen.getByRole("button", { name: /Смотреть тарифы/ }));
     expect(onNav).toHaveBeenLastCalledWith({ name: "tariffs" });
     fireEvent.click(screen.getByRole("button", { name: /Открыть план/ }));
     expect(onNav).toHaveBeenLastCalledWith({ name: "plan" });
-    expect(screen.queryByRole("button", { name: /Скрыть/ })).not.toBeInTheDocument();
+  });
+
+  it("кнопка сворачивает плашку; в пределах сессии она не возвращается при повторном показе (перемонтировании)", () => {
+    const { unmount } = render(<PlanUpgradeBanner subjectName="Физика" weakTopics={[]} offer={null} onNav={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Свернуть/ }));
+    expect(screen.queryByTestId("plan-upgrade-banner")).not.toBeInTheDocument();
+    unmount();
+    render(<PlanUpgradeBanner subjectName="Физика" weakTopics={[]} offer={null} onNav={vi.fn()} />);
+    expect(screen.queryByTestId("plan-upgrade-banner")).not.toBeInTheDocument();
+  });
+
+  it("новая сессия (sessionStorage пуст) — плашка снова показывается", () => {
+    sessionStorage.setItem(PLAN_UPGRADE_DISMISSED_KEY, "1");
+    sessionStorage.clear(); // как открытие сайта в новой вкладке/визите
+    render(<PlanUpgradeBanner subjectName="Физика" weakTopics={[]} offer={null} onNav={vi.fn()} />);
+    expect(screen.getByTestId("plan-upgrade-banner")).toBeInTheDocument();
   });
 });

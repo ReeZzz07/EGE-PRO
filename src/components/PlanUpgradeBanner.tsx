@@ -1,13 +1,25 @@
 // Постоянная плашка на главном экране для тех, кто уже увидел свой план (прошёл диагностику), но остался
 // на бесплатном тарифе. Раньше единственное, что напоминало им про оплату на дашборде, — плашка скидки, и
 // та исчезала вместе с таймером (разбор воронки 26.09.2026: 11 человек дошли до плана, никто не заплатил, а
-// после истечения скидки на главном экране про тарифы не было ни слова). Эту плашку скрыть нельзя — она
-// пропадает только с оплатой; если скидка ещё жива, её таймер показан прямо здесь (отдельная плашка скидки
-// на дашборде тогда не нужна — см. Dashboard.tsx).
+// после истечения скидки на главном экране про тарифы не было ни слова). Плашку можно свернуть кнопкой —
+// на время текущей сессии (вкладки/визита): sessionStorage переживает переходы по приложению и перезагрузку,
+// но в следующей сессии плашка снова на месте; насовсем она пропадает только с оплатой. Если скидка ещё жива,
+// её таймер показан прямо здесь (отдельная плашка скидки на дашборде тогда не нужна — см. Dashboard.tsx).
+import { useState } from "react";
 import type { WelcomeOffer } from "../lib/offers";
 import { Icon } from "./ui";
 import { OfferClock } from "./WelcomeOfferBanner";
 import type { View } from "./Header";
+
+export const PLAN_UPGRADE_DISMISSED_KEY = "ege-pro.plan-upgrade-dismissed.v1";
+
+function readDismissed(): boolean {
+  try {
+    return sessionStorage.getItem(PLAN_UPGRADE_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export default function PlanUpgradeBanner({
   subjectName,
@@ -20,7 +32,17 @@ export default function PlanUpgradeBanner({
   offer: WelcomeOffer | null;
   onNav: (v: View) => void;
 }) {
+  const [dismissed, setDismissed] = useState(readDismissed);
+  if (dismissed) return null;
   const topics = weakTopics.slice(0, 3);
+  const dismiss = () => {
+    try {
+      sessionStorage.setItem(PLAN_UPGRADE_DISMISSED_KEY, "1");
+    } catch {
+      /* без sessionStorage свернётся только до перемонтирования — не критично */
+    }
+    setDismissed(true);
+  };
   return (
     <div data-testid="plan-upgrade-banner" className="anim-rise mt-6 flex flex-wrap items-center justify-between gap-3 border-2 border-ink bg-hl px-4 py-3.5 sm:px-5">
       <div className="flex min-w-0 items-start gap-3">
@@ -47,6 +69,9 @@ export default function PlanUpgradeBanner({
         </button>
         <button onClick={() => onNav({ name: "plan" })} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
           Открыть план
+        </button>
+        <button onClick={dismiss} aria-label="Свернуть до следующего визита" className="btn btn-ghost px-2.5 py-2 text-[12.5px]">
+          <Icon name="x" size={13} />
         </button>
       </div>
     </div>
