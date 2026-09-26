@@ -266,9 +266,12 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
           на первой отрисовке стартовала на ~100px ниже своей же "прилипшей" позиции — прилипшая
           высота (calc(100vh-6rem), см. TutorChat.tsx) в этой точке уже не помещалась и обрезала
           низ чата экраном (реальный баг, поймано на скриншоте пользователя). */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.55fr_1fr]">
+      {/* minmax(0, …) слева и минимум справа: у fr-колонки минимум по умолчанию — min-content содержимого, и
+          если в листе задания оказывается что-то, что не переносится, левая колонка раздувалась и выдавливала чат
+          в полоску шириной ~50px (скриншот пользователя 26.09.2026). Теперь чат не уже 340px в любом случае. */}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(340px,1fr)]">
         {/* ─── лист задания ─── */}
-        <div className="relative">
+        <div className="relative min-w-0">
           <div className="mb-5 flex flex-wrap items-center gap-3">
             <button onClick={() => goTo({ name: "bank" })} className="link-slide flex items-center gap-2 text-sm font-bold text-ink2 hover:text-ink">
               <Icon name="arrowL" size={16} /> Банк заданий
@@ -335,7 +338,7 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
 
             <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-ink/90">
               {task.statement.map((p, i) => (
-                <p key={i}>
+                <p key={i} className="[overflow-wrap:anywhere]">
                   <StatementLine text={p} images={task.images} />
                 </p>
               ))}
