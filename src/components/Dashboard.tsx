@@ -13,6 +13,7 @@ import { Icon, ProgressRing, Reveal, statementPreview, useToast } from "./ui";
 import WelcomeContentModal from "./WelcomeContentModal";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
 import SubscriptionBanner from "./SubscriptionBanner";
+import PlanUpgradeBanner from "./PlanUpgradeBanner";
 import { useWelcomeOffer } from "../lib/offers";
 
 /** «Мои предметы» — тарифы обещают "N предметов на выбор" (public.tariffs.subjectsCount), эта
@@ -317,6 +318,11 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   // зарегистрированных до неё, их ещё нет, даже если онбординг давно пройден.
   const profileDataMissing = !!profile && (!profile.region || !profile.city || profile.age == null || !profile.gender);
 
+  // человек уже видел свой план (прошёл диагностику), но остался на free: постоянная плашка «про тарифы» —
+  // в отличие от плашки скидки, она не пропадает вместе с таймером (см. PlanUpgradeBanner.tsx)
+  const diagnosticDone = primarySubject && profile ? loadDiagnosticResult(primarySubject, profile.id) : null;
+  const showPlanUpgrade = !!profile && !isGuestMode && !profile.isAdmin && profile.tariffId === "free" && !!primarySubject && !!diagnosticDone;
+
   return (
     <div className="mx-auto max-w-[1600px] px-4">
       {welcomeContent && profile && (
@@ -331,7 +337,9 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
 
       {profile && !isGuestMode && profile.subscription && <SubscriptionBanner sub={profile.subscription} onNav={onNav} />}
 
-      {offer && profile?.tariffId === "free" && <WelcomeOfferBanner offer={offer} onNav={onNav} />}
+      {showPlanUpgrade && primarySubject && <PlanUpgradeBanner subjectName={SUBJECTS[primarySubject].name} weakTopics={diagnosticDone?.weakTopics ?? []} offer={offer} onNav={onNav} />}
+
+      {offer && profile?.tariffId === "free" && !showPlanUpgrade && <WelcomeOfferBanner offer={offer} onNav={onNav} />}
 
       {profile && !isGuestMode && (!profile.onboardedAt ? (
         <OnboardingNudge onNav={onNav} />
