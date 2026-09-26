@@ -3,7 +3,7 @@
 // сервере, а тестовому письму нужен SMTP-транспорт.
 import { apiFetch } from "./supabase";
 
-export type LifecycleKind = "activation" | "abandoned" | "expiring" | "expired";
+export type LifecycleKind = "activation" | "plan" | "abandoned" | "expiring" | "expired";
 
 export interface LifecycleTexts {
   subject: string;

@@ -3,7 +3,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { findActivationCandidates, findAbandonedPaymentCandidates, findExpiryCandidates } from "../lifecycle.js";
+import { findActivationCandidates, findPlanNudgeCandidates, findAbandonedPaymentCandidates, findExpiryCandidates } from "../lifecycle.js";
 import { createTestUser, deleteTestUser, createTestPayment, pool } from "./helpers.js";
 
 after(() => pool.end());
@@ -147,5 +147,74 @@ test("срок тарифа: за 3 дня до окончания — «ско�
     assert.ok((await findExpiryCandidates(false, 1000)).map((r) => r.id).includes(soon));
   } finally {
     for (const id of [soon, far, gone, longGone, free, admin]) await deleteTestUser(id);
+  }
+});
+
+// plan_nudge: единственное письмо, уходящее ПОСЛЕ того, как человек увидел пейволл (сделал диагностику),
+// а не до него — см. разбор воронки 26.09.2026.
+async function insertDiagnostic(userId, hoursAgo, subject = "math", weakTopics = ["Производная"]) {
+  await pool.query("insert into public.diagnostics (user_id, subject, finished_at, result) values ($1, $2, now() - make_interval(hours => $3), $4)", [
+    userId,
+    subject,
+    hoursAgo,
+    JSON.stringify({ weakTopics }),
+  ]);
+}
+
+test("напоминание про план: диагностика 30ч назад, free — в выборке, с темой и слабыми темами", async () => {
+  const id = await makeRealisticUser();
+  try {
+    await insertDiagnostic(id, 30, "rus", ["Паронимы", "НЕ с разными частями речи"]);
+    const rows = await findPlanNudgeCandidates(1000);
+    const row = rows.find((r) => r.id === id);
+    assert.ok(row, "должен попасть в выборку");
+    assert.equal(row.subject, "rus");
+    assert.deepEqual(row.result.weakTopics, ["Паронимы", "НЕ с разными частями речи"]);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("напоминание про план: слишком свежая (10ч) или слишком старая (6 дней) диагностика, платный тариф, админ — не в выборке", async () => {
+  const fresh = await makeRealisticUser();
+  const old = await makeRealisticUser();
+  const paid = await makeRealisticUser({ tariffId: "attestat" });
+  const admin = await makeRealisticUser({ isAdmin: true });
+  try {
+    await insertDiagnostic(fresh, 10);
+    await insertDiagnostic(old, 24 * 6);
+    await insertDiagnostic(paid, 30);
+    await insertDiagnostic(admin, 30);
+    const got = (await findPlanNudgeCandidates(1000)).map((r) => r.id);
+    for (const id of [fresh, old, paid, admin]) assert.ok(!got.includes(id), id);
+  } finally {
+    for (const id of [fresh, old, paid, admin]) await deleteTestUser(id);
+  }
+});
+
+test("напоминание про план: несколько диагностик — окно и содержание письма берутся по ПОСЛЕДНЕЙ", async () => {
+  const id = await makeRealisticUser();
+  try {
+    await insertDiagnostic(id, 200, "math", ["Старая тема"]); // за окном (>5 дней) — сама по себе не подошла бы
+    await insertDiagnostic(id, 30, "rus", ["Новая тема"]); // но последняя — в окне
+    const rows = await findPlanNudgeCandidates(1000);
+    const row = rows.find((r) => r.id === id);
+    assert.ok(row, "должна учитываться последняя диагностика, а не только самая ранняя");
+    assert.equal(row.subject, "rus");
+    assert.deepEqual(row.result.weakTopics, ["Новая тема"]);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("напоминание про план: уже получал это письмо — не повторно", async () => {
+  const id = await makeRealisticUser();
+  try {
+    await insertDiagnostic(id, 30);
+    await pool.query("insert into public.lifecycle_emails (user_id, kind) values ($1, 'plan_nudge')", [id]);
+    const got = (await findPlanNudgeCandidates(1000)).map((r) => r.id);
+    assert.ok(!got.includes(id));
+  } finally {
+    await deleteTestUser(id);
   }
 });

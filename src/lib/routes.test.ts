@@ -28,6 +28,11 @@ describe("pathToView", () => {
     expect(viewToPath({ name: "subjects" })).toBe("/subjects");
   });
 
+  it("/plan — адрес из письма-напоминания про план после диагностики (plan_nudge)", () => {
+    expect(pathToView("/plan")).toEqual({ name: "plan" });
+    expect(viewToPath({ name: "plan" })).toBe("/plan");
+  });
+
   it("неизвестный путь — null (AppShell выправляет адресную строку на /, не рендерит несуществующую страницу)", () => {
     expect(pathToView("/bank")).toBeNull();
     expect(pathToView("/admin")).toBeNull();
@@ -49,7 +54,6 @@ describe("viewToPath", () => {
       { name: "bank", subject: "math" },
       { name: "task", id: "t1" },
       { name: "admin" },
-      { name: "plan", subject: "fiz" },
       { name: "mock-exam" },
     ];
     for (const v of internalViews) expect(viewToPath(v)).toBe("/");

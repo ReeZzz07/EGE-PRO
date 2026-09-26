@@ -116,3 +116,21 @@ test("buildLifecycleEmail: ctx.cta/ctaPath переопределяют кноп
   const withoutOverride = await buildLifecycleEmail("abandoned", { имя: "", тариф: "Аттестат" }, { siteUrl: "https://x.test" });
   assert.match(withoutOverride.text, /\/tariffs/, "без переопределения остаётся дефолтный путь шаблона");
 });
+
+// "plan" — письмо после диагностики тем, кто не оплатил (см. разбор воронки 26.09.2026): проверяем, что
+// абзац со слабыми темами выпадает целиком, когда их нет (диагностика прошла без единой слабой темы), а
+// абзац про лимит ИИ-репетитора на free-тарифе остаётся — это и есть сама причина написать письмо.
+test("plan: {темы} пусто (диагностика без слабых тем) — абзац с ними выпадает, но абзац про лимит ИИ остаётся", async () => {
+  const withTopics = await buildLifecycleEmail("plan", { имя: "Аня", предмет: "Математика (профиль)", темы: "Производная, стереометрия" }, { siteUrl: "https://x.test" });
+  assert.match(withTopics.text, /Производная, стереометрия/);
+  assert.match(withTopics.text, /3 раза в день/);
+
+  const noTopics = await buildLifecycleEmail("plan", { имя: "Аня", предмет: "Математика (профиль)", темы: "" }, { siteUrl: "https://x.test" });
+  assert.doesNotMatch(noTopics.text, /Есть над чем поработать/);
+  assert.match(noTopics.text, /3 раза в день/, "предложение оплаты не должно теряться вместе со слабыми темами");
+});
+
+test("plan: кнопка ведёт на /plan", async () => {
+  const m = await buildLifecycleEmail("plan", SAMPLE_VARS, { siteUrl: "https://x.test" });
+  assert.match(m.text, /https:\/\/x\.test\/plan/);
+});

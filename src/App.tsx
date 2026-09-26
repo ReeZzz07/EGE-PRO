@@ -154,12 +154,12 @@ const AFTER_LOGIN_KEY = "ege-pro.after-login.v1";
 
 /** Куда вернуть после входа, если человека сюда привела ссылка из письма (/renew — продление,
  *  /onboarding — анкета подготовки из письма-напоминания, /subjects — докупка предметов из письма
- *  о незавершённой оплате). */
+ *  о незавершённой оплате, /plan — письмо-напоминание про план после диагностики). */
 function takeAfterLoginView(): View | null {
   try {
     const v = sessionStorage.getItem(AFTER_LOGIN_KEY);
     sessionStorage.removeItem(AFTER_LOGIN_KEY);
-    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : null;
+    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : v === "plan" ? { name: "plan" } : null;
   } catch {
     return null;
   }
@@ -187,8 +187,8 @@ function AppShell() {
   // не по кнопке пользователя, а просто потому что view нигде не сохранялся. Сохраняем и
   // восстанавливаем при следующей загрузке (для авторизованных — см. эффект ниже).
   const setView = (v: View) => {
-    // цель «после входа» живёт только пока человек остаётся на пути вход → продление/докупка предметов
-    if (v.name !== "auth" && v.name !== "renew" && v.name !== "subjects") {
+    // цель «после входа» живёт только пока человек остаётся на пути вход → продление/докупка предметов/план
+    if (v.name !== "auth" && v.name !== "renew" && v.name !== "subjects" && v.name !== "plan") {
       try {
         sessionStorage.removeItem(AFTER_LOGIN_KEY);
       } catch {
@@ -286,6 +286,16 @@ function AppShell() {
     if (!loading && !profile && view.name === "subjects") {
       try {
         sessionStorage.setItem(AFTER_LOGIN_KEY, "subjects");
+      } catch {
+        /* ignore */
+      }
+      setView({ name: "auth", mode: "login" });
+      return;
+    }
+    // ссылка на план из письма-напоминания после диагностики (plan_nudge, см. lifecycle.js) — та же схема
+    if (!loading && !profile && view.name === "plan") {
+      try {
+        sessionStorage.setItem(AFTER_LOGIN_KEY, "plan");
       } catch {
         /* ignore */
       }

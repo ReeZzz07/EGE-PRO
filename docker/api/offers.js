@@ -35,13 +35,21 @@ export async function getWelcomeOffer(userId) {
   if (!cfg.enabled) return { active: false };
   const { rows } = await pool.query(
     `select u.email_confirmed_at, p.is_admin,
-            exists(select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded') as has_paid
+            exists(select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded') as has_paid,
+            (select min(d.finished_at) from public.diagnostics d where d.user_id = u.id) as first_diagnostic_at
      from auth.users u join public.profiles p on p.id = u.id where u.id = $1`,
     [userId]
   );
   const r = rows[0];
   if (!r || r.is_admin || r.has_paid || !r.email_confirmed_at) return { active: false };
-  const expires = new Date(r.email_confirmed_at).getTime() + cfg.hours * 3600 * 1000;
+  // Окно отсчитывалось только от подтверждения почты — но пейволл (экран «План подготовки») человек
+  // видит не сразу, а после онбординга и диагностики, на что на практике уходит от нескольких часов
+  // до нескольких суток (живые данные 26.09.2026: часть пользователей добиралась до диагностики уже
+  // с считаными часами до истечения скидки, часть — когда она уже истекла). Если диагностика пройдена
+  // ПОЗЖЕ подтверждения почты, окно начинается заново от неё — тогда у человека, который только что
+  // впервые увидел пейволл, полные cfg.hours на руках, а не огрызок или уже истёкшее окно.
+  const basis = r.first_diagnostic_at && new Date(r.first_diagnostic_at) > new Date(r.email_confirmed_at) ? r.first_diagnostic_at : r.email_confirmed_at;
+  const expires = new Date(basis).getTime() + cfg.hours * 3600 * 1000;
   if (expires <= Date.now()) return { active: false };
   return { active: true, percent: cfg.percent, expiresAt: new Date(expires).toISOString() };
 }

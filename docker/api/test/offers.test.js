@@ -85,3 +85,63 @@ test("оффер: настройки из app_settings (процент/часы/
     await deleteTestUser(id);
   }
 });
+
+// Пункт из разбора воронки 26.09.2026: между подтверждением почты и первой диагностикой у реальных
+// пользователей проходит от нескольких часов до нескольких суток — окно в 72 часа от подтверждения
+// часто истекало ещё до того, как человек впервые видел пейволл (экран «План подготовки»). Диагностика
+// позже подтверждения должна давать полные cfg.hours от СЕБЯ, а не от уже почти истёкшего окна.
+async function insertDiagnostic(userId, hoursAgo, subject = "math") {
+  await pool.query("insert into public.diagnostics (user_id, subject, finished_at) values ($1, $2, now() - make_interval(hours => $3))", [userId, subject, hoursAgo]);
+}
+
+test("оффер: диагностика ПОЗЖЕ подтверждения — окно отсчитывается заново от неё, а не от уже почти истёкшего confirmed", async () => {
+  const id = await createTestUser();
+  try {
+    await setConfirmedAgo(id, 70); // подтвердил 70ч назад — по старой логике оставалось бы ~2ч
+    await insertDiagnostic(id, 10); // но диагностику прошёл только 10ч назад
+    const o = await getWelcomeOffer(id);
+    assert.equal(o.active, true);
+    const hoursLeft = (new Date(o.expiresAt).getTime() - Date.now()) / 3600000;
+    assert.ok(hoursLeft > 61 && hoursLeft < 63, `ожидали ~62ч (72-10), получили ${hoursLeft}`); // не ~2ч
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("оффер: диагностика позже подтверждения, но и с неё уже прошло больше 72ч — не активен", async () => {
+  const id = await createTestUser();
+  try {
+    await setConfirmedAgo(id, 200);
+    await insertDiagnostic(id, 80);
+    assert.equal((await getWelcomeOffer(id)).active, false);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("оффер: диагностика была РАНЬШЕ подтверждения (гостевой прогон до входа) — окно всё равно от подтверждения, не назад в прошлое", async () => {
+  const id = await createTestUser();
+  try {
+    await insertDiagnostic(id, 100); // диагностика раньше — не должна отодвигать окно в прошлое
+    await setConfirmedAgo(id, 1);
+    const o = await getWelcomeOffer(id);
+    const hoursLeft = (new Date(o.expiresAt).getTime() - Date.now()) / 3600000;
+    assert.ok(hoursLeft > 70.9 && hoursLeft <= 71.01, `ожидали ~71ч от подтверждения, получили ${hoursLeft}`);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("оффер: несколько диагностик — учитывается САМАЯ РАННЯЯ (первое реальное появление у пейволла), не последняя", async () => {
+  const id = await createTestUser();
+  try {
+    await setConfirmedAgo(id, 100);
+    await insertDiagnostic(id, 50, "math");
+    await insertDiagnostic(id, 5, "rus"); // повторная диагностика много позже — не должна продлевать заново
+    const o = await getWelcomeOffer(id);
+    const hoursLeft = (new Date(o.expiresAt).getTime() - Date.now()) / 3600000;
+    assert.ok(hoursLeft > 21 && hoursLeft < 23, `ожидали ~22ч (72-50), получили ${hoursLeft}`);
+  } finally {
+    await deleteTestUser(id);
+  }
+});

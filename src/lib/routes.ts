@@ -14,8 +14,9 @@ export function viewToPath(view: View): string {
   if (view.name === "tariffs") return "/tariffs";
   // /renew — продление тарифа «как было»: сюда ведут письма о сроке тарифа (docker/api/mailer.js)
   if (view.name === "renew") return "/renew";
-  // /subjects — см. pathToView ниже
+  // /subjects, /plan — см. pathToView ниже
   if (view.name === "subjects") return "/subjects";
+  if (view.name === "plan") return "/plan";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
   // /payment/return не строится через setView() изнутри приложения — на него попадают только
   // редиректом от ЮKassa (см. PaymentReturnView.tsx) — но path нужен и для симметрии с
@@ -46,6 +47,10 @@ export function pathToView(pathname: string, search = ""): View | null {
     // /subjects — ссылка из письма «оплата докупки предметов не завершена» (см. lifecycle.js)
     case "/subjects":
       return { name: "subjects" };
+    // /plan — ссылка из письма-напоминания «твой план ждёт» (см. lifecycle.js); subject не в пути —
+    // PlanView сама берёт effectivePrimarySubject(profile), как и обычная внутренняя навигация на план
+    case "/plan":
+      return { name: "plan" };
     case "/oferta":
       return { name: "legal", doc: "offer" };
     case "/privacy":
