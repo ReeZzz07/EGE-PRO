@@ -16,6 +16,7 @@ import {
   stripFinalBareNumberFormula,
   stripAnswerLeak,
   findAnswerLeakIndex,
+  cleanReferenceAnswer,
   hasModelGlitch,
   describeUnseenMedia,
   isMultiItemStatement,
@@ -555,4 +556,13 @@ S = a·h.
 ### Шаг 3: Подставляем
 Что получится?`;
   assert.equal(stripPerItemVerdicts(plain, { broad: true }).trimmed, false);
+});
+
+test("cleanReferenceAnswer: хвосты импорта отбрасываются, «Ответ: …» приоритетнее обломка, пусто — null", () => {
+  assert.equal(cleanReferenceAnswer("84\n\nАвтор: реальное задание (собрано И. Ермолаевым)"), "84");
+  assert.equal(cleanReferenceAnswer("45\r\n\r\nЗадание было на ЕГЭ-2025"), "45");
+  assert.equal(cleanReferenceAnswer("а.\n\nОтвет: 112222"), "112222");
+  assert.equal(cleanReferenceAnswer("размножение / репродукция"), "размножение / репродукция");
+  assert.equal(cleanReferenceAnswer(""), null);
+  assert.equal(cleanReferenceAnswer(null), null);
 });

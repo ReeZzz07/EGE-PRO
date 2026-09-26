@@ -104,3 +104,59 @@ describe("sanitizeExplanation", () => {
     expect(sanitizeExplanation(['Смотри правило («важно»)'])).toEqual(['Смотри правило («важно»)']);
   });
 });
+
+// Жалоба 27.09.2026: биология «Признаки живого», эталон «размножение / воспроизведение / репродукция /
+// самовоспроизведение» — ответ «размножение» отмечался неверным, потому что вся строка шла ОДНИМ вариантом.
+describe("answerVariants — несколько допустимых ответов в одной строке", () => {
+  it("« / » разделяет варианты; полная строка остаётся первой (её показывают как эталон)", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    const v = answerVariants("размножение / воспроизведение / репродукция / самовоспроизведение");
+    expect(v[0]).toBe("размножение / воспроизведение / репродукция / самовоспроизведение");
+    expect(v.slice(1)).toEqual(["размножение", "воспроизведение", "репродукция", "самовоспроизведение"]);
+  });
+
+  it("цифровые наборы («346 / 78») и «//» — тоже альтернативы", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    expect(answerVariants("346 / 78")).toEqual(["346 / 78", "346", "78"]);
+    expect(answerVariants("наполнить // заполнить")).toEqual(["наполнить // заполнить", "наполнить", "заполнить"]);
+  });
+
+  it("слэш между двумя словами без пробелов — альтернатива; единицы измерения и дроби — нет", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    expect(answerVariants("КОНСТАНТИНОПОЛЬ/ЦАРЬГРАД")).toEqual(["КОНСТАНТИНОПОЛЬ/ЦАРЬГРАД", "КОНСТАНТИНОПОЛЬ", "ЦАРЬГРАД"]);
+    for (const a of ["225 кВ/м", "2,2 км/ч", "3,1 м/с", "250 кг·м/с", "3/4", "5"]) expect(answerVariants(a)).toEqual([a]);
+  });
+
+  it("служебные пометки банка после ответа (ЕГЭ-2026, ссылка на видео, автор, «Открытый вариант…») в варианты не попадают", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    expect(answerVariants("451326 / 623154\n\nЕГЭ-2026. Основная волна.")).toEqual(["451326 / 623154", "451326", "623154"]);
+    expect(answerVariants("45\n\nЗадание было на ЕГЭ-2025")).toEqual(["45"]);
+    expect(answerVariants("34152\n\nhttps://kinescope.io/embed/3L4SdmkoNajct13ErW7N1V")).toEqual(["34152"]);
+    expect(answerVariants("84\n\nАвтор: реальное задание (собрано И. Ермолаевым), ред. ChemFamily")).toEqual(["84"]);
+    expect(answerVariants("15\r\n\r\nОткрытый вариант ФИПИ 2026")).toEqual(["15"]);
+  });
+
+  it("«а.⏎⏎Ответ: 112222» — настоящий ответ во второй строке, обломок «а.» ответом не считается", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    expect(answerVariants("а.\n\nОтвет: 112222")).toEqual(["112222"]);
+    expect(answerVariants("Б\n\nЕГЭ-2025, основная волна")).toEqual(["Б"]); // короткая строка — сам ответ, а не обломок
+  });
+
+  it("пустая строка — нет вариантов; целиком «мусорная» (обрывок пояснения) — остаётся как есть, без выдуманных вариантов", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    expect(answerVariants("")).toEqual([]);
+    const junk = "ы:\n3) клубеньковые бактерии (симбионты бобовых растений, гетеротрофы); 5) венерина мухоловка (хищное растение, фотоавтотроф, так как насекомых ловит как дополнительный источник азота)";
+    expect(answerVariants(junk)).toEqual([junk]);
+  });
+
+  it("вместе с checkAnswer: любой из вариантов засчитывается, посторонний — нет", async () => {
+    const { answerVariants } = await import("./dbTasks");
+    const { checkAnswer } = await import("./utils");
+    const acc = answerVariants("размножение / воспроизведение / репродукция");
+    expect(checkAnswer("размножение", acc)).toBe(true);
+    expect(checkAnswer("Репродукция", acc)).toBe(true);
+    expect(checkAnswer("рост", acc)).toBe(false);
+    // ответ с приклеенной пометкой банка раньше был недостижим — верный «45» отмечался неверным
+    expect(checkAnswer("45", answerVariants("45\n\nЗадание было на ЕГЭ-2025"))).toBe(true);
+  });
+});

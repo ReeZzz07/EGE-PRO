@@ -51,6 +51,38 @@ export function sanitizeExplanation(steps: string[]): string[] {
   return kept;
 }
 
+/** Допустимые ответы задания из строки `tasks.answer`. В БД (импорт) она бывает такой:
+ *  1) «размножение / воспроизведение / репродукция» — несколько допустимых ответов ОДНОЙ строкой (~980 заданий; «346 / 78»
+ *     у русского — два допустимых набора цифр, «наполнить // заполнить»);
+ *  2) «84⏎⏎Автор: реальное задание…», «45⏎⏎Задание было на ЕГЭ-2025», «34152⏎⏎https://kinescope.io/…» — ответ с
+ *     приклеенной служебной пометкой (~1600 заданий), а у части — «а.⏎⏎Ответ: 112222», где настоящий ответ во второй строке.
+ *  Раньше вся строка целиком шла в answers ОДНИМ вариантом — и верный ответ («размножение», «45») отмечался неверным
+ *  (жалоба пользователя 27.09.2026, биология «Признаки живого»; на проде так было у ~2500 заданий). Разделители
+ *  вариантов: « / », «//» и слэш между двумя словами (у обеих частей от 4 букв — иначе это единицы: кВ/м, км/ч, м/с).
+ *  Первым идёт очищенная строка ответа целиком (её показывают как эталон), дальше — отдельные варианты. */
+export function answerVariants(answer: string): string[] {
+  const META = /^(?:ЕГЭ[-\s]?\d{4}|Задание было|Открытый вариант|Автор:|Истончик:|Источник:)|основная волна|резерв\.?$|пересдача|досрочн|https?:\/\//i;
+  const lines = answer
+    .split(/[\r\n]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return [];
+  const explicit = lines.map((l) => /^Ответы?\s*:\s*(.+)$/i.exec(l)?.[1]?.trim()).filter((x): x is string => !!x);
+  // «а.» / «ы:» — обломок разбора, не ответ; длинные строки — кусок пояснения, а не ответ
+  const plain = lines.filter((l) => !META.test(l) && l.length <= 80);
+  const noStubs = plain.filter((l) => !/^[^\d]{1,2}$/.test(l));
+  // если после отсева обломков ничего не осталось — короткая строка и есть ответ («Б⏎⏎ЕГЭ-2025, основная волна»)
+  // в «ответе» есть длинный кусок пояснения (импорт съехал) — настоящего ответа тут не вычленить, ничего не выдумываем
+  const looksLikeExplanation = lines.some((l) => l.length > 80 && !META.test(l));
+  const candidates = explicit.length ? explicit : looksLikeExplanation ? [] : noStubs.length ? noStubs : plain;
+  if (candidates.length === 0) return [answer];
+  const parts = candidates
+    .flatMap((l) => l.split(/\s+\/{1,2}\s+|\/\/|(?<=[A-Za-zА-Яа-яЁё-]{4})\/(?=[A-Za-zА-Яа-яЁё-]{4})/))
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return [...new Set([...candidates, ...parts])];
+}
+
 function confidenceToDifficulty(confidence: string | null): 1 | 2 | 3 {
   if (confidence === "high") return 1;
   if (confidence === "low") return 3;
@@ -107,7 +139,7 @@ function toEgeTask(row: DbTaskRow): EgeTask {
     points: row.points,
     statement,
     images: images.length ? images : undefined,
-    answers: row.answer ? [row.answer] : [],
+    answers: row.answer ? answerVariants(row.answer) : [],
     answerNote: "см. формат ответа в условии задания",
     explanation: sanitizeExplanation((row.explanation ?? "").split(/\n+/).filter(Boolean)),
     hints: hints3,

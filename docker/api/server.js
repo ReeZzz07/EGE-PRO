@@ -25,6 +25,7 @@ import {
   stripFinalBareNumberFormula,
   stripAnswerLeak,
   findAnswerLeakIndex,
+  cleanReferenceAnswer,
   hasModelGlitch,
   describeUnseenMedia,
   isMultiItemStatement,
@@ -1311,7 +1312,7 @@ async function referenceAnswer(taskId) {
   if (TASK_ANSWERS[taskId]) return TASK_ANSWERS[taskId].join("/");
   try {
     const { rows } = await pool.query("select answer from public.tasks where id = $1 and bucket <> 'essay'", [taskId]);
-    return rows[0]?.answer || null;
+    return cleanReferenceAnswer(rows[0]?.answer);
   } catch (e) {
     console.warn("не удалось прочитать эталонный ответ для сверки утечки:", e?.message ?? e);
     return null;

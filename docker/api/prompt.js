@@ -279,6 +279,15 @@ function answerPatterns(answer, statement) {
     });
 }
 
+/** Эталон из tasks.answer без служебных хвостов импорта: «84⏎⏎Автор: …», «45⏎⏎Задание было на ЕГЭ-2025»,
+ *  «а.⏎⏎Ответ: 112222» (у ~2600 заданий) — для сверки утечки нужен сам ответ, а не вся строка. */
+export function cleanReferenceAnswer(raw) {
+  const lines = String(raw ?? "").split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const explicit = lines.map((l) => /^Ответы?\s*:\s*(.+)$/i.exec(l)?.[1]?.trim()).find(Boolean);
+  return explicit ?? lines[0];
+}
+
 /** Позиция первого появления эталонного ответа в тексте или -1. Не считается утечкой то, что уже
  *  есть в самом условии задания. */
 export function findAnswerLeakIndex(text, answer, statement = []) {
