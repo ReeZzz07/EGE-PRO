@@ -23,6 +23,11 @@ describe("pathToView", () => {
     expect(viewToPath({ name: "onboarding" })).toBe("/");
   });
 
+  it("/subjects — адрес из письма «оплата не завершена» (докупка предметов)", () => {
+    expect(pathToView("/subjects")).toEqual({ name: "subjects" });
+    expect(viewToPath({ name: "subjects" })).toBe("/subjects");
+  });
+
   it("неизвестный путь — null (AppShell выправляет адресную строку на /, не рендерит несуществующую страницу)", () => {
     expect(pathToView("/bank")).toBeNull();
     expect(pathToView("/admin")).toBeNull();

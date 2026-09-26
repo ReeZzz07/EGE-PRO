@@ -83,6 +83,46 @@ test("брошенная оплата: pending 2 часа назад — в вы
   }
 });
 
+// Регрессия: раньше запрос требовал p.tariff_id = 'free' для ЛЮБОГО вида платежа — уже оплативший тариф
+// человек, бросивший докупку предметов или продление, никогда не попадал в выборку (найдено на реальных
+// данных прода 26.09.2026: платёж kind=addon от уже оплатившего пользователя завис в pending и письмо
+// не ушло). Условие теперь требует free-тариф только для kind='tariff' (первая покупка).
+test("брошенная оплата: докупка предметов/продление у УЖЕ оплатившего тариф — в выборке; бросил вторую покупку тарифа — нет", async () => {
+  const abandonedAddon = await makeRealisticUser({ tariffId: "attestat" });
+  const abandonedRenewal = await makeRealisticUser({ tariffId: "attestat" });
+  const abandonedSecondTariff = await makeRealisticUser({ tariffId: "attestat" });
+  try {
+    for (const [id, kind] of [
+      [abandonedAddon, "addon"],
+      [abandonedRenewal, "renewal"],
+      [abandonedSecondTariff, "tariff"],
+    ]) {
+      // все трое уже когда-то успешно купили тариф (kind='tariff') — иначе их tariff_id не был бы 'attestat'
+      await pool.query("insert into public.payments (user_id, tariff_id, amount_rub, period_days, status, kind) values ($1,'attestat',1990,30,'succeeded','tariff')", [id]);
+      const p = await createTestPayment(id, { status: "pending", kind });
+      await pool.query("update public.payments set created_at = now() - interval '2 hours' where id = $1", [p]);
+    }
+    const got = await ids(findAbandonedPaymentCandidates);
+    assert.ok(got.includes(abandonedAddon), "докупка предметов должна попадать в выборку даже с платным тарифом");
+    assert.ok(got.includes(abandonedRenewal), "продление должно попадать в выборку даже с платным тарифом");
+    assert.ok(!got.includes(abandonedSecondTariff), "повторная покупка ТАРИФА уже оплатившим — не повод для этого письма");
+  } finally {
+    for (const id of [abandonedAddon, abandonedRenewal, abandonedSecondTariff]) await deleteTestUser(id);
+  }
+});
+
+test("брошенная оплата: kind попадает в результат — нужен для правильной кнопки в письме (addon → /subjects, renewal → /renew)", async () => {
+  const id = await makeRealisticUser();
+  try {
+    const p = await createTestPayment(id, { status: "pending", kind: "addon" });
+    await pool.query("update public.payments set created_at = now() - interval '2 hours' where id = $1", [p]);
+    const rows = await findAbandonedPaymentCandidates(1000);
+    assert.equal(rows.find((r) => r.id === id)?.kind, "addon");
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
 test("срок тарифа: за 3 дня до окончания — «скоро», после окончания — «закончился»; один раз на период; free/админ не получают", async () => {
   const soon = await makeRealisticUser({ tariffId: "vuz", tariffExpiresAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString() });
   const far = await makeRealisticUser({ tariffId: "vuz", tariffExpiresAt: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString() });

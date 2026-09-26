@@ -186,7 +186,11 @@ function summaryBlock(summary) {
 /**
  * Собирает письмо: { subject, text, html }.
  * override — { subject, bodyText, footer } из формы админки (даже несохранённые), иначе берётся сохранённое/дефолт.
- * ctx — { siteUrl, offer, summary: { tariffName, extraSubjects, amountRub } }.
+ * ctx — { siteUrl, offer, summary: { tariffName, extraSubjects, amountRub }, cta, ctaPath }. cta/ctaPath — не
+ * редактируются в админке (см. AdminLifecycleEmails.tsx — там только тема/текст/подвал), но некоторым видам
+ * письма кнопка нужна разная в зависимости от повода отправки в ЭТОТ раз (см. sendPaymentAbandonedEmail ниже:
+ * «оплата не завершена» уходит и за первую покупку тарифа, и за докупку предметов, и за продление — у каждого
+ * своя страница), поэтому переопределяются на уровне вызова, а не самого шаблона.
  */
 export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null) {
   const t = TEMPLATES[kind];
@@ -195,9 +199,11 @@ export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null)
   const subjectSrc = override?.subject?.trim() ? override.subject : saved.subject;
   const bodySrc = override?.bodyText?.trim() ? override.bodyText : saved.bodyText;
   const footer = (typeof override?.footer === "string" ? override.footer : saved.footer).trim();
+  const cta = ctx.cta || t.cta;
+  const ctaPath = ctx.ctaPath || t.ctaPath;
 
   const base = ctx.siteUrl || "https://ege-tutor.ru";
-  const url = `${base}${t.ctaPath}`;
+  const url = `${base}${ctaPath}`;
   const name = String(vars.имя ?? "").trim();
   const greeting = name ? `${name}, привет!` : "Привет!";
   const paragraphs = fillBody(bodySrc, vars);
@@ -207,7 +213,7 @@ export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null)
 
   return {
     subject: fillLine(subjectSrc, vars),
-    text: `${greeting}\n\n${paragraphs.join("\n\n")}${summary.text}${offer.text}\n\n${t.cta.replace(/\s*→$/, "")}: ${url}${footer ? `\n\n${footer}` : ""}`,
+    text: `${greeting}\n\n${paragraphs.join("\n\n")}${summary.text}${offer.text}\n\n${cta.replace(/\s*→$/, "")}: ${url}${footer ? `\n\n${footer}` : ""}`,
     html: wrapBrandedHtml(
       `
 <p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">${escapeHtml(t.eyebrow)}</p>
@@ -215,7 +221,7 @@ export async function buildLifecycleEmail(kind, vars, ctx = {}, override = null)
 ${bodyHtml}
 ${summary.html}
 ${offer.html}
-<p style="margin:26px 0 4px;"><a href="${escapeHtml(url)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">${escapeHtml(t.cta)}</a></p>
+<p style="margin:26px 0 4px;"><a href="${escapeHtml(url)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">${escapeHtml(cta)}</a></p>
 `,
       base,
       footer
@@ -237,8 +243,19 @@ export async function sendActivationEmail(to, { fullName, siteUrl, offer } = {})
   await sendMail({ to, ...m });
 }
 
-export async function sendPaymentAbandonedEmail(to, { fullName, siteUrl, tariffName, offer } = {}) {
-  const m = await buildLifecycleEmail("abandoned", { имя: fullName ?? "", тариф: tariffName }, { siteUrl, offer });
+// Кнопка/страница зависят от того, ЧТО именно не было доплачено (payments.kind — см. payments.js):
+// первая покупка тарифа ведёт на /tariffs как раньше, а продление и докупка предметов — каждое на свою
+// страницу (иначе, например, уже оплативший тариф человек, бросивший докупку предмета, попадал бы на
+// список тарифов, где нечего покупать заново — сам повод письма пропадал бы у него на глазах).
+export const ABANDONED_CTA_BY_KIND = {
+  tariff: { cta: "Вернуться к тарифам →", ctaPath: "/tariffs" },
+  renewal: { cta: "Вернуться к продлению →", ctaPath: "/renew" },
+  addon: { cta: "Вернуться к докупке предметов →", ctaPath: "/subjects" },
+};
+
+export async function sendPaymentAbandonedEmail(to, { fullName, siteUrl, tariffName, offer, kind = "tariff" } = {}) {
+  const { cta, ctaPath } = ABANDONED_CTA_BY_KIND[kind] ?? ABANDONED_CTA_BY_KIND.tariff;
+  const m = await buildLifecycleEmail("abandoned", { имя: fullName ?? "", тариф: tariffName }, { siteUrl, offer, cta, ctaPath });
   await sendMail({ to, ...m });
 }
 

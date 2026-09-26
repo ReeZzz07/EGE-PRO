@@ -50,16 +50,20 @@ export async function findActivationCandidates(limit = BATCH) {
 
 export async function findAbandonedPaymentCandidates(limit = BATCH) {
   const { rows } = await pool.query(
-    `select distinct on (u.id) u.id, u.email, p.full_name, t.name as tariff_name
+    `select distinct on (u.id) u.id, u.email, p.full_name, t.name as tariff_name, pay.kind
      from public.payments pay
        join auth.users u on u.id = pay.user_id
        join public.profiles p on p.id = u.id
        join public.tariffs t on t.id = pay.tariff_id
      where pay.status in ('pending', 'canceled')
        and pay.created_at between now() - interval '3 days' and now() - interval '1 hour'
-       and not p.is_admin and p.tariff_id = 'free'
+       and not p.is_admin
+       -- «бросил первую покупку тарифа» — только пока тариф так и не куплен ни разу (p.tariff_id
+       -- ещё free). Продление/докупку это условие раньше ошибочно тоже требовало p.tariff_id = 'free',
+       -- из-за чего эти письма никогда не уходили уже оплатившим — у них tariff_id ВСЕГДА не free.
+       and (pay.kind <> 'tariff' or p.tariff_id = 'free')
        and u.email not like '%.local'
-       and not exists (select 1 from public.payments ok where ok.user_id = u.id and ok.status = 'succeeded')
+       and not exists (select 1 from public.payments ok where ok.user_id = u.id and ok.status = 'succeeded' and ok.kind = pay.kind)
        and not exists (select 1 from public.lifecycle_emails l where l.user_id = u.id and l.kind = 'payment_abandoned')
      order by u.id, pay.created_at desc
      limit $1`,
@@ -135,7 +139,7 @@ export async function runLifecycleEmails({ ignoreQuietHours = false } = {}) {
   for (const c of await findAbandonedPaymentCandidates()) {
     if (!(await claim(c.id, "payment_abandoned"))) continue;
     try {
-      await sendPaymentAbandonedEmail(c.email, { fullName: c.full_name, siteUrl, tariffName: c.tariff_name, offer: await getWelcomeOffer(c.id) });
+      await sendPaymentAbandonedEmail(c.email, { fullName: c.full_name, siteUrl, tariffName: c.tariff_name, kind: c.kind, offer: await getWelcomeOffer(c.id) });
       sent.abandoned++;
     } catch (e) {
       console.warn("не удалось отправить письмо о брошенной оплате:", e?.message ?? e);

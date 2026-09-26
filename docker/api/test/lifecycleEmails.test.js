@@ -2,7 +2,7 @@
 // переопределение из админки, оформление. SMTP не трогаем — только сборка письма.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { KINDS, TEMPLATES, SAMPLE_VARS, buildLifecycleEmail, buildSampleEmail, fillBody, fillLine, resolveLifecycleTemplates } from "../lifecycleEmails.js";
+import { KINDS, TEMPLATES, SAMPLE_VARS, buildLifecycleEmail, buildSampleEmail, fillBody, fillLine, resolveLifecycleTemplates, ABANDONED_CTA_BY_KIND } from "../lifecycleEmails.js";
 import { pool } from "./helpers.js";
 
 after(async () => {
@@ -93,4 +93,26 @@ test("подвал: у писем о сроке тарифа дефолт не �
   assert.ok(!empty.html.includes("каждого оплаченного периода") && !empty.text.includes("Свой подвал") && !empty.text.includes("каждого оплаченного периода"));
   await pool.query("update public.app_settings set value = $1 where key = 'lifecycle_emails'", [JSON.stringify({ expired: { subject: "T", bodyText: "B", footer: "" } })]);
   assert.ok(!(await buildSampleEmail("expired")).html.includes("каждого оплаченного периода"));
+});
+
+// Кнопка/страница письма «Оплата не завершена» зависит от ВИДА платежа (payments.kind), а не только от
+// того, что покупали, — найдено на реальных данных прода 26.09.2026 (см. lifecycle.test.js: раньше
+// письмо для докупки/продления у уже оплатившего тариф не уходило вовсе). Здесь — что кнопка/путь
+// действительно РАЗНЫЕ и ведут туда, где реально можно доплатить именно этот вид платежа.
+test("ABANDONED_CTA_BY_KIND: у каждого вида платежа — своя кнопка и путь; неизвестный вид не задан явно", () => {
+  assert.equal(ABANDONED_CTA_BY_KIND.tariff.ctaPath, "/tariffs");
+  assert.equal(ABANDONED_CTA_BY_KIND.renewal.ctaPath, "/renew");
+  assert.equal(ABANDONED_CTA_BY_KIND.addon.ctaPath, "/subjects");
+  const paths = new Set(Object.values(ABANDONED_CTA_BY_KIND).map((v) => v.ctaPath));
+  assert.equal(paths.size, 3, "у всех трёх видов путь должен отличаться");
+  for (const v of Object.values(ABANDONED_CTA_BY_KIND)) assert.match(v.cta, /→$/);
+});
+
+test("buildLifecycleEmail: ctx.cta/ctaPath переопределяют кнопку шаблона (нужно письму «Оплата не завершена» под конкретный вид платежа)", async () => {
+  const withOverride = await buildLifecycleEmail("abandoned", { имя: "", тариф: "Аттестат" }, { siteUrl: "https://x.test", cta: "Докупить предметы →", ctaPath: "/subjects" });
+  assert.match(withOverride.text, /https:\/\/x\.test\/subjects/);
+  assert.match(withOverride.text, /Докупить предметы/);
+  assert.doesNotMatch(withOverride.text, /\/tariffs/);
+  const withoutOverride = await buildLifecycleEmail("abandoned", { имя: "", тариф: "Аттестат" }, { siteUrl: "https://x.test" });
+  assert.match(withoutOverride.text, /\/tariffs/, "без переопределения остаётся дефолтный путь шаблона");
 });

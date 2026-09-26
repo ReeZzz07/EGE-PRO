@@ -37,10 +37,10 @@ export async function sweepLeftoverTestUsers() {
 
 /** Строка платежа напрямую в БД, минуя ЮKassa (см. payments.js/yookassa.js) — applySucceededPayment
  *  работает только с этой таблицей и public.profiles, ей не важно, как платёж туда попал. */
-export async function createTestPayment(userId, { tariffId = "attestat", amountRub = 1990, periodDays = 30, status = "pending" } = {}) {
+export async function createTestPayment(userId, { tariffId = "attestat", amountRub = 1990, periodDays = 30, status = "pending", kind = "tariff" } = {}) {
   const { rows } = await pool.query(
-    `insert into public.payments (user_id, tariff_id, amount_rub, period_days, status) values ($1,$2,$3,$4,$5) returning id`,
-    [userId, tariffId, amountRub, periodDays, status]
+    `insert into public.payments (user_id, tariff_id, amount_rub, period_days, status, kind) values ($1,$2,$3,$4,$5,$6) returning id`,
+    [userId, tariffId, amountRub, periodDays, status, kind]
   );
   return rows[0].id;
 }

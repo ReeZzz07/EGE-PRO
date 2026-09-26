@@ -153,12 +153,13 @@ function persistView(v: View) {
 const AFTER_LOGIN_KEY = "ege-pro.after-login.v1";
 
 /** Куда вернуть после входа, если человека сюда привела ссылка из письма (/renew — продление,
- *  /onboarding — анкета подготовки из письма-напоминания). */
+ *  /onboarding — анкета подготовки из письма-напоминания, /subjects — докупка предметов из письма
+ *  о незавершённой оплате). */
 function takeAfterLoginView(): View | null {
   try {
     const v = sessionStorage.getItem(AFTER_LOGIN_KEY);
     sessionStorage.removeItem(AFTER_LOGIN_KEY);
-    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : null;
+    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : null;
   } catch {
     return null;
   }
@@ -186,8 +187,8 @@ function AppShell() {
   // не по кнопке пользователя, а просто потому что view нигде не сохранялся. Сохраняем и
   // восстанавливаем при следующей загрузке (для авторизованных — см. эффект ниже).
   const setView = (v: View) => {
-    // цель «после входа» живёт только пока человек остаётся на пути вход → продление
-    if (v.name !== "auth" && v.name !== "renew") {
+    // цель «после входа» живёт только пока человек остаётся на пути вход → продление/докупка предметов
+    if (v.name !== "auth" && v.name !== "renew" && v.name !== "subjects") {
       try {
         sessionStorage.removeItem(AFTER_LOGIN_KEY);
       } catch {
@@ -275,6 +276,16 @@ function AppShell() {
     if (!loading && !profile && view.name === "renew") {
       try {
         sessionStorage.setItem(AFTER_LOGIN_KEY, "renew");
+      } catch {
+        /* ignore */
+      }
+      setView({ name: "auth", mode: "login" });
+      return;
+    }
+    // ссылка на докупку предметов из письма («оплата не завершена», см. lifecycle.js) — та же схема, что у /renew
+    if (!loading && !profile && view.name === "subjects") {
+      try {
+        sessionStorage.setItem(AFTER_LOGIN_KEY, "subjects");
       } catch {
         /* ignore */
       }
