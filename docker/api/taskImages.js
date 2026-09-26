@@ -31,12 +31,17 @@ function sniffMime(buf) {
   return null;
 }
 
-/** true, если провайдер/модель в текущих настройках умеют смотреть на картинки. Все актуальные
- *  модели Claude — мультимодальные по умолчанию; у Qwen vision есть только у qwen-vl-* моделей,
- *  обычный qwen-max/qwen-plus текстовый и вернёт ошибку на image-блок. */
+/** true, если провайдер/модель в текущих настройках умеют смотреть на картинки. Все актуальные модели Claude —
+ *  мультимодальные. У Qwen — не все, и ошибиться опасно: «текстовые» qwen-max/qwen3-max/qwen-plus и даже
+ *  qwen3.6-max-preview картинку ПРИНИМАЮТ без ошибки, но не видят её и уверенно описывают выдуманное (проверено на
+ *  проде 27.09.2026: «закат над озером» вместо треугольника на клетчатой бумаге). Реально видят: *-vl-*, *-omni-*,
+ *  qvq и семейство qwen3.5 и новее (кроме qwen3.6-max/qwen3.7-max — те текстовые: последняя отвечает 400). */
 export function supportsVision(settings) {
   if (settings.provider === "anthropic") return true;
-  return /vl/i.test(settings.model || "");
+  const model = settings.model || "";
+  if (/vl|omni|qvq/i.test(model)) return true;
+  if (/qwen(?:3\.[5-9]|[4-9])/i.test(model) && !/qwen3\.[67]-max/i.test(model)) return true;
+  return false;
 }
 
 /** Модель для заданий с рисунками, когда основная — текстовая (qwen-max и т.п.): без неё репетитор «не видит

@@ -145,3 +145,17 @@ test("settingsForTask: уже vision-модель Qwen или Anthropic — на
   assert.equal(settingsForTask(vl, task), vl);
   assert.equal(settingsForTask(claude, task), claude);
 });
+
+// Проверено на проде 27.09.2026 живыми запросами с картинкой: видят — qwen3.5+/3.8-max/vl/omni; НЕ видят, но и не
+// падают, а выдумывают («закат над озером») — qwen-max, qwen3-max, qwen-plus, qwen3.6-max-preview; qwen3.7-max — 400.
+test("supportsVision: реально мультимодальные модели Qwen — да; «текстовые max/plus» — нет (они молча выдумывают картинку)", () => {
+  const q = (model) => supportsVision({ provider: "qwen", model });
+  for (const m of ["qwen3.8-max", "qwen3.8-max-0902", "qwen3.5-plus", "qwen3.6-plus", "qwen3.7-plus", "qwen3.8-flash", "qwen-vl-max", "qwen3-vl-plus", "qwen3.8-omni-flash"]) assert.equal(q(m), true, m);
+  for (const m of ["", "qwen-max", "qwen3-max", "qwen-plus", "qwen3.6-max-preview", "qwen3.7-max", "qwen3-235b-a22b"]) assert.equal(q(m), false, m || "(пусто)");
+  assert.equal(supportsVision({ provider: "anthropic", model: "" }), true);
+});
+
+test("settingsForTask: основная модель qwen3.8-max уже видит картинки — переключения на другую нет", () => {
+  const s = { provider: "qwen", apiKey: "k", model: "qwen3.8-max" };
+  assert.equal(settingsForTask(s, { media: [{ storage_path: "g.png" }] }), s);
+});
