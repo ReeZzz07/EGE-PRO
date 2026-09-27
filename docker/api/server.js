@@ -1405,11 +1405,15 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     // в чате вердикт сверки с эталоном (модель эталона не видит — только «верно/неверно» по ПОСЛЕДНЕМУ сообщению ученика)
     const verdict = body.mode === "chat" && refAnswer ? checkStudentAnswer(body.message, refAnswer) : null;
     const promptCtx = { answer: refAnswer, verdict, unseenMedia: describeUnseenMedia(task, supportsVision(taskSettings)) };
+    // hint/explain_topic получают эталон как СКРЫТУЮ ориентировку (chat — нет: там вместо этого вердикт по
+    // сообщению ученика, см. verdict выше) — иначе на первом заходе модель может увести к правдоподобному,
+    // но неверному термину (живая жалоба 28.09.2026). Открытую утечку по-прежнему ловит постфильтр ниже.
+    const hintExplainCtx = { ...promptCtx, orientAnswer: refAnswer };
     const system =
       body.mode === "hint"
-        ? buildHintPrompt(policy, task, body.hintLevel ?? 0, promptCtx)
+        ? buildHintPrompt(policy, task, body.hintLevel ?? 0, hintExplainCtx)
         : body.mode === "explain_topic"
-          ? buildExplainPrompt(policy, task, promptCtx)
+          ? buildExplainPrompt(policy, task, hintExplainCtx)
           : buildChatPrompt(policy, task, promptCtx);
     const history = (body.history ?? []).slice(-8);
 

@@ -5,6 +5,7 @@
 // это единственная защита от прямой утечки ответа через сам системный промпт.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   buildChatPrompt,
   buildEssaySystemPrompt,
@@ -616,4 +617,34 @@ test("verdictBlock + buildChatPrompt: вердикт попадает в про�
 
 test("правила достоверности: не начинать каждый ответ с приветствия", () => {
   assert.match(buildChatPrompt("policy", { topic: "т", egeNumber: 1, statement: ["у"] }), /Не начинай каждый ответ с приветствия/);
+});
+
+// Скрытая ориентировка для hint/explain_topic (28.09.2026) — модель теперь ЗНАЕТ ответ внутренне (в отличие от
+// chat, где вместо этого вердикт), но ей по-прежнему запрещено называть его; открытую утечку ловит отдельный
+// постфильтр на сервере (stripAnswerLeak), а здесь проверяем только сам системный промпт.
+test("buildHintPrompt/buildExplainPrompt: ctx.orientAnswer добавляет скрытую ориентировку с запретом её называть", () => {
+  const t = { topic: "Методы биологии", egeNumber: 1, statement: ["Заполните ячейку."], hints: ["h1", "h2", "h3"] };
+  for (const prompt of [buildHintPrompt("policy", t, 0, { orientAnswer: "биохимический" }), buildExplainPrompt("policy", t, { orientAnswer: "биохимический" })]) {
+    assert.match(prompt, /ВНУТРЕННЯЯ ОРИЕНТИРОВКА/);
+    assert.match(prompt, /биохимический/);
+    assert.match(prompt, /ученику её не показывай/);
+    assert.match(prompt, /не называть финальный ответ.*действует без исключений/i);
+  }
+});
+
+test("buildHintPrompt/buildExplainPrompt: без orientAnswer — прежнее поведение («ответ не передан, не угадывай»)", () => {
+  const t = { topic: "т", egeNumber: 1, statement: ["у"], hints: ["h1", "h2", "h3"] };
+  const prompt = buildExplainPrompt("policy", t, {});
+  assert.match(prompt, /тебе не передан правильный ответ/);
+  assert.doesNotMatch(prompt, /ВНУТРЕННЯЯ ОРИЕНТИРОВКА/);
+});
+
+// taskBlock сама по себе режимо-независима — реагирует на ctx.orientAnswer, кто бы его ни передал (см. тест выше).
+// Что именно НЕ передаёт его чату — решение server.js: там chat получает обычный promptCtx (без orientAnswer),
+// а hint/explain_topic — отдельный hintExplainCtx = { ...promptCtx, orientAnswer: refAnswer }.
+test("server.js: только hint/explain_topic получают orientAnswer, chat — обычный promptCtx без него", () => {
+  const src = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(src, /const hintExplainCtx = \{ \.\.\.promptCtx, orientAnswer: refAnswer \};/);
+  assert.match(src, /buildChatPrompt\(policy, task, promptCtx\)/);
+  assert.doesNotMatch(src, /buildChatPrompt\(policy, task, hintExplainCtx\)/);
 });
