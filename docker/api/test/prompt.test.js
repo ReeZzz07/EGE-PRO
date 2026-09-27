@@ -20,6 +20,7 @@ import {
   cleanReferenceAnswer,
   checkStudentAnswer,
   verdictBlock,
+  normalizeCriterionCode,
   hasModelGlitch,
   describeUnseenMedia,
   isMultiItemStatement,
@@ -647,4 +648,16 @@ test("server.js: только hint/explain_topic получают orientAnswer, 
   assert.match(src, /const hintExplainCtx = \{ \.\.\.promptCtx, orientAnswer: refAnswer \};/);
   assert.match(src, /buildChatPrompt\(policy, task, promptCtx\)/);
   assert.doesNotMatch(src, /buildChatPrompt\(policy, task, hintExplainCtx\)/);
+});
+
+// Живая жалоба (28.09.2026): при проверке сочинения с картинкой модель иногда возвращает код критерия
+// латиницей («K1»), хотя в БД он записан кириллицей («К1») — визуально неотличимо. Раньше сравнение "==="
+// такое не находило: реальное название критерия подменялось голым кодом, а его максимум балла тихо становился
+// равен собственной оценке модели (выглядело как «всегда набрано полностью» вместо честного максимума).
+test("normalizeCriterionCode: латиница/кириллица неотличимы после нормализации, разные коды остаются разными", () => {
+  assert.equal(normalizeCriterionCode("К1"), normalizeCriterionCode("K1"));
+  assert.equal(normalizeCriterionCode("К2"), normalizeCriterionCode("K2"));
+  assert.notEqual(normalizeCriterionCode("К1"), normalizeCriterionCode("К2"));
+  assert.equal(normalizeCriterionCode(" к1 "), normalizeCriterionCode("K1")); // регистр и пробелы не важны
+  assert.equal(normalizeCriterionCode(null), "");
 });

@@ -299,6 +299,21 @@ export function cleanReferenceAnswer(raw) {
   return explicit ?? lines[0];
 }
 
+// Модель, оценивая сочинение (см. callClaudeEssayAssessor в server.js), периодически возвращает код критерия
+// латиницей («K1» вместо «К1» из БД) — визуально одна и та же буква, разные символы Unicode. Найдено 28.09.2026
+// живой проверкой с прикреплённой картинкой (задание с рисунком): 1 повтор из 3 вернул латинские коды —
+// сравнение "===" не находило критерий, эталонное название подменялось голым кодом, а максимум балла по этому
+// критерию тихо становился равен оценке самой модели (вместо реального максимума), то есть выглядел «всегда
+// набранным полностью». Сравниваем коды по буквам/цифрам без учёта алфавита конкретного символа —
+// https://en.wikipedia.org/wiki/Cyrillic_and_Latin_look-alike_characters.
+const CYRILLIC_TO_LATIN_LOOKALIKE = { А: "A", В: "B", Е: "E", К: "K", М: "M", Н: "H", О: "O", Р: "P", С: "C", Т: "T", Х: "X", У: "Y" };
+export function normalizeCriterionCode(code) {
+  return String(code ?? "")
+    .toUpperCase()
+    .replace(/[АВЕКМНОРСТХУ]/g, (ch) => CYRILLIC_TO_LATIN_LOOKALIKE[ch])
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 /** Допустимые варианты эталона: «размножение / репродукция», «346 // 78» (единицы вроде кВ/м не режем). */
 function referenceVariants(answer) {
   const parts = String(answer ?? "")

@@ -30,6 +30,7 @@ import {
   hasModelGlitch,
   describeUnseenMedia,
   isMultiItemStatement,
+  normalizeCriterionCode,
   DEFAULT_POLICY,
 } from "./prompt.js";
 import { callText, callTool } from "./providers.js";
@@ -1264,7 +1265,7 @@ async function callClaudeEssayAssessor(settings, policy, task, essayText) {
 
   const input = await callTool(settings, buildEssaySystemPrompt(policy), userContent, tool, 1500);
   const clipped = input.criteria.map((c) => {
-    const meta = criteria.find((k) => k.code === c.code);
+    const meta = criteria.find((k) => normalizeCriterionCode(k.code) === normalizeCriterionCode(c.code));
     const max = meta?.max ?? Math.round(c.score);
     return { code: c.code, name: meta?.name ?? c.code, max, score: Math.max(0, Math.min(max, Math.round(c.score))), comment: c.comment };
   });
