@@ -17,6 +17,7 @@ import AdminMailSettings from "./AdminMailSettings";
 import AdminWelcomeEmailSettings from "./AdminWelcomeEmailSettings";
 import AdminLifecycleEmails from "./AdminLifecycleEmails";
 import AdminCampaigns from "./AdminCampaigns";
+import AdminBlog from "./AdminBlog";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -75,7 +76,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail" | "campaigns">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail" | "campaigns" | "blog">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [legalEntity, setLegalEntity] = useState<LegalEntityInfo>(DEFAULT_LEGAL_ENTITY);
@@ -203,11 +204,23 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         >
           Рассылки
         </button>
+        <button
+          onClick={() => setTab("blog")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "blog" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          База знаний
+        </button>
       </div>
 
       {tab === "campaigns" && (
         <div className="mt-6">
           <AdminCampaigns />
+        </div>
+      )}
+
+      {tab === "blog" && (
+        <div className="mt-6">
+          <AdminBlog />
         </div>
       )}
 

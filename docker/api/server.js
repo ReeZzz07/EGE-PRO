@@ -423,7 +423,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 
 // authMiddleware — картинки должны открываться без входа) декодируется Express'ом в "../../etc"
 // ДО того, как попадает в path.join(STORAGE_ROOT, bucket, rel) — обходя проверку p и читая
 // произвольный файл с диска контейнера. Разрешаем только эти конкретные имена.
-const KNOWN_BUCKETS = new Set(["avatars", "task-media", "seo"]);
+const KNOWN_BUCKETS = new Set(["avatars", "task-media", "seo", "blog"]);
 
 function safeRelPath(bucket, p) {
   if (!KNOWN_BUCKETS.has(bucket)) throw new Error("неизвестный bucket");
@@ -705,11 +705,18 @@ app.get("/robots.txt", async (req, res) => {
   res.send(text && text.trim() ? text : defaultRobotsTxt());
 });
 
-app.get("/sitemap.xml", (req, res) => {
+app.get("/sitemap.xml", async (req, res) => {
   const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
   const entry = (path, freq, priority) => (domain ? `  <url>\n    <loc>${domain}${path}</loc>\n    <changefreq>${freq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n` : "");
+  let articleEntries = "";
+  try {
+    const { rows } = await pool.query("select slug from public.blog_articles where is_published = true");
+    articleEntries = rows.map((r) => entry(`/blog/${r.slug}`, "monthly", "0.6")).join("");
+  } catch (e) {
+    console.warn("не удалось прочитать blog_articles для sitemap.xml, отдаю без статей:", e?.message ?? e);
+  }
   res.setHeader("content-type", "application/xml; charset=utf-8");
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}</urlset>\n`);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}${entry("/blog", "weekly", "0.7")}${articleEntries}</urlset>\n`);
 });
 
 // ─────────────────────── SEO-заглушка для ботов соцсетей ───────────────────────

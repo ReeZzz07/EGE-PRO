@@ -39,6 +39,19 @@ describe("pathToView", () => {
     expect(pathToView("/tariffs/")).toBeNull(); // без нормализации трейлинг-слэша — точное совпадение
     expect(pathToView("/random-garbage")).toBeNull();
   });
+
+  it("/blog и /blog/:slug — база знаний, единственный роут здесь с переменным сегментом пути", () => {
+    expect(pathToView("/blog")).toEqual({ name: "blog" });
+    expect(pathToView("/blog/ii-repetitor-vs-zhivoi")).toEqual({ name: "blog-article", slug: "ii-repetitor-vs-zhivoi" });
+    // percent-encoded сегмент декодируется
+    expect(pathToView("/blog/%D1%82%D0%B5%D1%81%D1%82")).toEqual({ name: "blog-article", slug: "тест" });
+  });
+
+  it("/blog/ — пустой хвост, /blog/a/b — вложенный путь, битый %-escape — всё null, не мусорный slug", () => {
+    expect(pathToView("/blog/")).toBeNull();
+    expect(pathToView("/blog/a/b")).toBeNull();
+    expect(pathToView("/blog/%zz")).toBeNull();
+  });
 });
 
 describe("viewToPath", () => {
@@ -58,14 +71,25 @@ describe("viewToPath", () => {
     ];
     for (const v of internalViews) expect(viewToPath(v)).toBe("/");
   });
+
+  it("blog и blog-article — реальные URL, slug кодируется", () => {
+    expect(viewToPath({ name: "blog" })).toBe("/blog");
+    expect(viewToPath({ name: "blog-article", slug: "ii-repetitor" })).toBe("/blog/ii-repetitor");
+  });
 });
 
 describe("pathToView ⇄ viewToPath — согласованность для публичных роутов", () => {
   it("viewToPath(pathToView(p)) возвращает исходный путь для каждого известного публичного роута", () => {
-    for (const p of ["/tariffs", "/oferta", "/privacy"]) {
+    for (const p of ["/tariffs", "/oferta", "/privacy", "/blog"]) {
       const view = pathToView(p);
       expect(view).not.toBeNull();
       expect(viewToPath(view!)).toBe(p);
     }
+  });
+
+  it("то же для /blog/:slug — динамический сегмент отдельно, т.к. не входит в фиксированный список выше", () => {
+    const view = pathToView("/blog/some-article");
+    expect(view).not.toBeNull();
+    expect(viewToPath(view!)).toBe("/blog/some-article");
   });
 });

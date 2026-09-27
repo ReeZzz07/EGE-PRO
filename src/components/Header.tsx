@@ -24,6 +24,8 @@ export type View =
   | { name: "subjects" }
   | { name: "kim2027" }
   | { name: "legal"; doc: "offer" | "privacy" }
+  | { name: "blog" }
+  | { name: "blog-article"; slug: string }
   | { name: "payment-return"; paymentId: string }
   | { name: "renew" }
   | { name: "reset-password"; token: string }

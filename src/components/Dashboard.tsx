@@ -15,6 +15,7 @@ import WelcomeOfferBanner from "./WelcomeOfferBanner";
 import SubscriptionBanner from "./SubscriptionBanner";
 import PlanUpgradeBanner from "./PlanUpgradeBanner";
 import { useWelcomeOffer } from "../lib/offers";
+import BlogSection from "./BlogSection";
 
 /** «Мои предметы» — тарифы обещают "N предметов на выбор" (public.tariffs.subjectsCount), эта
  *  секция и есть то самое место, где предмет реально добавляется (см. lib/profileSubjects.ts).
@@ -669,7 +670,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
       </section>
 
       {/* ─── как это работает ─── */}
-      <section className="mt-16 pb-16">
+      <section className="mt-16">
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">раздел 04 · метод</p>
           <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Три шага до ста баллов</h2>
@@ -700,6 +701,10 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
           </p>
         </Reveal>
       </section>
+
+      <div className="pb-16">
+        <BlogSection onNav={onNav} />
+      </div>
     </div>
   );
 }

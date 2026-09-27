@@ -5,6 +5,8 @@ import { getAvailableSubjects, getEssayTaskTotal, getGlobalPointsTotal, getGloba
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
+import BlogSection from "./BlogSection";
+import type { View } from "./Header";
 
 /** Разбивает заголовок на части вокруг выделяемой подстроки и оборачивает её в hl-подсветку. */
 function HeroTitle({ title, highlight }: { title: string; highlight: string }) {
@@ -24,11 +26,13 @@ export default function Landing({
   onLogin,
   scrollTo,
   scrollNonce,
+  onNav,
 }: {
   onStart: (subject?: Subject) => void;
   onLogin: () => void;
   scrollTo?: string;
   scrollNonce?: number;
+  onNav: (v: View) => void;
 }) {
   const [content, setContent] = useState<LandingContent>(DEFAULT_CONTENT);
   const [seo, setSeo] = useState(DEFAULT_SEO);
@@ -286,6 +290,8 @@ export default function Landing({
           ))}
         </div>
       </section>
+
+      <BlogSection onNav={onNav} />
 
       {/* ─── Блок 6: финальный CTA ─── */}
       <section className="mt-14 pb-16 text-center">

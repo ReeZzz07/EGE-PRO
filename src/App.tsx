@@ -23,6 +23,8 @@ import SettingsView from "./components/SettingsView";
 import SubjectsView from "./components/SubjectsView";
 import Kim2027Changes from "./components/Kim2027Changes";
 import LegalDoc from "./components/LegalDoc";
+import BlogList from "./components/BlogList";
+import BlogArticle from "./components/BlogArticle";
 import PaymentReturnView from "./components/PaymentReturnView";
 import RenewView from "./components/RenewView";
 import ResetPasswordView from "./components/ResetPasswordView";
@@ -331,6 +333,7 @@ function AppShell() {
             onLogin={() => setView({ name: "auth", mode: "login" })}
             scrollTo={view.section}
             scrollNonce={view.nonce}
+            onNav={setView}
           />
         )}
 
@@ -366,7 +369,7 @@ function AppShell() {
         )}
 
         {view.name === "home" && (
-          profile ? <Dashboard onNav={setView} /> : <Landing onStart={(subject) => setView({ name: "onboarding", subject })} onLogin={() => setView({ name: "auth" })} />
+          profile ? <Dashboard onNav={setView} /> : <Landing onStart={(subject) => setView({ name: "onboarding", subject })} onLogin={() => setView({ name: "auth" })} onNav={setView} />
         )}
 
         {view.name === "bank" && <TaskBank onNav={setView} initialSubject={view.subject} />}
@@ -421,6 +424,8 @@ function AppShell() {
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
+        {view.name === "blog" && <BlogList onNav={setView} />}
+        {view.name === "blog-article" && <BlogArticle slug={view.slug} onNav={setView} />}
         {view.name === "renew" && profile && <RenewView onNav={setView} />}
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}

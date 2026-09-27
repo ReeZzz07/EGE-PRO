@@ -18,6 +18,8 @@ export function viewToPath(view: View): string {
   if (view.name === "subjects") return "/subjects";
   if (view.name === "plan") return "/plan";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
+  if (view.name === "blog") return "/blog";
+  if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
   // /payment/return не строится через setView() изнутри приложения — на него попадают только
   // редиректом от ЮKassa (см. PaymentReturnView.tsx) — но path нужен и для симметрии с
   // pathToView ниже, и на случай, если пользователь обновит эту страницу в браузере.
@@ -36,6 +38,19 @@ export function viewToPath(view: View): string {
  *  window.location.search (с "?" или без), нужен только для /payment/return: единственный
  *  роут здесь, у которого есть значимый параметр запроса, остальные — чистые пути. */
 export function pathToView(pathname: string, search = ""): View | null {
+  // /blog/:slug — единственный путь здесь с переменным сегментом, обрабатываем до switch ниже, не
+  // трогая его: точный "/blog" — список, "/blog/<slug>" — статья (ровно один плоский сегмент, без
+  // вложенных "/" — вложенный путь или пустой хвост не наш формат).
+  if (pathname === "/blog") return { name: "blog" };
+  if (pathname.startsWith("/blog/")) {
+    const rest = pathname.slice("/blog/".length);
+    if (!rest || rest.includes("/")) return null;
+    try {
+      return { name: "blog-article", slug: decodeURIComponent(rest) };
+    } catch {
+      return null; // битый %-escape
+    }
+  }
   switch (pathname) {
     case "/tariffs":
       return { name: "tariffs" };
