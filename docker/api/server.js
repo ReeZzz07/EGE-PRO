@@ -26,6 +26,7 @@ import {
   stripAnswerLeak,
   findAnswerLeakIndex,
   cleanReferenceAnswer,
+  checkStudentAnswer,
   hasModelGlitch,
   describeUnseenMedia,
   isMultiItemStatement,
@@ -1401,7 +1402,9 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     }
 
     const refAnswer = task && task.answerType !== "essay" ? await referenceAnswer(body.taskId) : null;
-    const promptCtx = { answer: refAnswer, unseenMedia: describeUnseenMedia(task, supportsVision(taskSettings)) };
+    // в чате вердикт сверки с эталоном (модель эталона не видит — только «верно/неверно» по ПОСЛЕДНЕМУ сообщению ученика)
+    const verdict = body.mode === "chat" && refAnswer ? checkStudentAnswer(body.message, refAnswer) : null;
+    const promptCtx = { answer: refAnswer, verdict, unseenMedia: describeUnseenMedia(task, supportsVision(taskSettings)) };
     const system =
       body.mode === "hint"
         ? buildHintPrompt(policy, task, body.hintLevel ?? 0, promptCtx)

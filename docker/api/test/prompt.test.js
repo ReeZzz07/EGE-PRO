@@ -17,6 +17,8 @@ import {
   stripAnswerLeak,
   findAnswerLeakIndex,
   cleanReferenceAnswer,
+  checkStudentAnswer,
+  verdictBlock,
   hasModelGlitch,
   describeUnseenMedia,
   isMultiItemStatement,
@@ -565,4 +567,53 @@ test("cleanReferenceAnswer: хвосты импорта отбрасываютс
   assert.equal(cleanReferenceAnswer("размножение / репродукция"), "размножение / репродукция");
   assert.equal(cleanReferenceAnswer(""), null);
   assert.equal(cleanReferenceAnswer(null), null);
+});
+
+// Жалоба 28.09.2026 (биология «Методы биологии», эталон «биохимический»): репетитор, не зная ответа, подтверждал неверные
+// («измерение», «биометрия») и отвергал верный («биохимическим методом»). Теперь сервер сверяет ответ ученика с эталоном
+// и передаёт модели только вердикт.
+test("checkStudentAnswer: верный ответ (в том числе с другим окончанием и внутри фразы) — correct", () => {
+  const A = "биохимический";
+  assert.equal(checkStudentAnswer("биохимический", A), "correct");
+  assert.equal(checkStudentAnswer("может определение количества сахара в крови производят биохимическим методом?", A), "correct");
+  assert.equal(checkStudentAnswer("размножение?", "размножение / воспроизведение / репродукция"), "correct");
+  assert.equal(checkStudentAnswer("Репродукция", "размножение / воспроизведение / репродукция"), "correct");
+});
+
+test("checkStudentAnswer: неверная попытка — wrong; просьба о помощи и вопросы — null", () => {
+  const A = "биохимический";
+  for (const m of ["биометрия", "измерение?", "Биохимия", "метрический?"]) assert.equal(checkStudentAnswer(m, A), "wrong", m);
+  for (const m of ["объясни решение", "подсказка", "почему не измерение?", "не понимаю, с чего начать"]) assert.equal(checkStudentAnswer(m, A), null, m);
+});
+
+test("checkStudentAnswer: числа — по границам числа, знак и запятая/точка учитываются, набор цифр — с разделителями", () => {
+  assert.equal(checkStudentAnswer("Я получил ответ 24. Это верно?", "24"), "correct");
+  assert.equal(checkStudentAnswer("получилось 25", "24"), "wrong");
+  assert.equal(checkStudentAnswer("240", "24"), "wrong");
+  assert.equal(checkStudentAnswer("2,7", "-2,7"), "wrong");
+  assert.equal(checkStudentAnswer("-2,7", "-2,7"), "correct");
+  assert.equal(checkStudentAnswer("0.35", "0,35"), "correct");
+  assert.equal(checkStudentAnswer("2, 3, 6", "236"), "correct");
+});
+
+test("checkStudentAnswer: эталона нет или сообщение пустое — null", () => {
+  assert.equal(checkStudentAnswer("биохимический", null), null);
+  assert.equal(checkStudentAnswer("   ", "24"), null);
+});
+
+test("verdictBlock + buildChatPrompt: вердикт попадает в промпт чата, эталон — никогда", () => {
+  const t = { topic: "Методы биологии", egeNumber: 1, statement: ["Заполните пустую ячейку."] };
+  const wrong = buildChatPrompt("policy", t, { verdict: "wrong", answer: "биохимический" });
+  assert.match(wrong, /НЕ совпадает с эталоном/);
+  assert.match(wrong, /не называй и не подсказывай/);
+  assert.doesNotMatch(wrong, /биохимический/);
+  const ok = buildChatPrompt("policy", t, { verdict: "correct", answer: "биохимический" });
+  assert.match(ok, /ВЕРНЫЙ/);
+  assert.doesNotMatch(ok, /биохимический/);
+  assert.equal(verdictBlock(null), "");
+  assert.doesNotMatch(buildChatPrompt("policy", t, {}), /СЕРВЕРНОЙ СВЕРКИ/);
+});
+
+test("правила достоверности: не начинать каждый ответ с приветствия", () => {
+  assert.match(buildChatPrompt("policy", { topic: "т", egeNumber: 1, statement: ["у"] }), /Не начинай каждый ответ с приветствия/);
 });
