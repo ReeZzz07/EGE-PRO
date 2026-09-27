@@ -462,6 +462,15 @@ test("hasModelGlitch: иероглифы и служебные токены мо
   assert.equal(hasModelGlitch("Тема: electrolysis (электролиз), формула CuCl₂ → Cu + Cl₂"), false);
 });
 
+test("hasModelGlitch: задвоенное 'Да'/'Ты' без пробела в открывающей фразе — сбой; физические единицы и обычный текст — нет", () => {
+  assert.equal(hasModelGlitch("Да, всёДаличная работа."), true);
+  assert.equal(hasModelGlitch("Да, твой ответ абсолютноДа, твой ответ абсолютно верный!"), true);
+  assert.equal(hasModelGlitch("Да, твой ответ верДаТы правильно учёл направление силы."), true);
+  assert.equal(hasModelGlitch("Да, всё верно! Отличная работа."), false);
+  assert.equal(hasModelGlitch("Мощность катушки — 5 кДж, а сопротивление — 2 кОм."), false);
+  assert.equal(hasModelGlitch("Ты молодец, давай разберём следующий шаг."), false);
+});
+
 test("isMultiItemStatement: список пунктов — да, обычная задача — нет", () => {
   assert.equal(isMultiItemStatement(MC), true);
   assert.equal(isMultiItemStatement(["Решите уравнение log2(x-1)=3"]), false);
