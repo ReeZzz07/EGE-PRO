@@ -16,6 +16,7 @@ import {
   type BlogArticleInput,
 } from "../lib/blog";
 import { Icon, useToast } from "./ui";
+import { SITE_URL } from "../lib/seo";
 
 const EMPTY_FORM: BlogArticleInput = { title: "", slug: "", excerpt: "", content: "", coverImage: null, isPinned: false, visibleToGuests: true };
 
@@ -234,6 +235,12 @@ export default function AdminBlog() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
+                {/* Открывает /blog/:slug как реальную страницу — черновик по прямому URL видит только
+                    админ (RLS), гость там же в этот момент получит "не найдена"; тот же адрес после
+                    публикации станет публичной ссылкой на статью, см. supabase/migrations/0032. */}
+                <a href={`${SITE_URL}/blog/${a.slug}`} target="_blank" rel="noreferrer" className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                  <Icon name="eye" size={13} /> Предпросмотр
+                </a>
                 <button onClick={() => togglePublish(a)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
                   <Icon name={a.isPublished ? "eyeOff" : "check"} size={13} /> {a.isPublished ? "Снять с публикации" : "Опубликовать"}
                 </button>
