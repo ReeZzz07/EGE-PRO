@@ -2,7 +2,7 @@
 // черновики от не-админа (см. supabase/migrations/0032_blog_articles.sql) — несуществующий или
 // неопубликованный slug здесь неотличимы, оба дают "статья не найдена".
 import { useEffect, useState } from "react";
-import { loadArticleBySlug, type BlogArticle as BlogArticleData } from "../lib/blog";
+import { loadArticleBySlug, sanitizeArticleHtml, type BlogArticle as BlogArticleData } from "../lib/blog";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon } from "./ui";
 import type { View } from "./Header";
@@ -55,7 +55,7 @@ export default function BlogArticle({ slug, onNav }: { slug: string; onNav: (v: 
         <div className="p-6 sm:p-8">
           <h1 className="font-display text-xl font-bold sm:text-2xl">{data.title}</h1>
           {data.publishedAt && <p className="mt-1.5 font-mono text-[11.5px] text-ink2">{new Date(data.publishedAt).toLocaleDateString("ru-RU")}</p>}
-          <div className="mt-6 whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink/90">{data.content}</div>
+          <div className="article-content mt-6 text-[13.5px]" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(data.content) }} />
         </div>
       </div>
     </div>

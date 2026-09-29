@@ -12,6 +12,13 @@
   },
   "dependencies": {
     "@supabase/postgrest-js": "^1.16.3",
+    "@tiptap/extension-link": "^3.31.3",
+    "@tiptap/extension-placeholder": "^3.31.3",
+    "@tiptap/extension-underline": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
+    "dompurify": "^3.4.16",
     "jspdf": "^4.2.1",
     "katex": "^0.18.7",
     "react": "^18.2.0",

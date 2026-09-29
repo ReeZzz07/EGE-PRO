@@ -2,6 +2,7 @@
 // чтение только опубликованных статей доступно всем (в т.ч. гостям) — фильтр по is_published задаёт
 // сама RLS-политика, а не запрос здесь (см. миграцию), так что черновик не прочитать даже зная slug.
 // Запись — только администраторам. Тот же прямой Supabase-shim паттерн, что и tariffs.ts.
+import DOMPurify from "dompurify";
 import { supabase, isSupabaseConfigured } from "./supabase";
 
 export interface BlogArticle {
@@ -50,6 +51,18 @@ export function slugify(title: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+// Разрешённые теги/атрибуты — ровно то, что реально может произвести RichTextEditor.tsx (StarterKit +
+// Link + Underline): текстовое форматирование, заголовки 2-3 уровня, списки, цитата, ссылка, разрыв
+// строки/абзаца. Раздел "content" пишет только админ (см. AdminBlog.tsx), но dangerouslySetInnerHTML
+// на публичной странице (BlogArticle.tsx) всё равно санитизируем — админ-аккаунт может быть скомпрометирован
+// или получить вставленный откуда-то извне HTML, доверять содержимому поля вслепую нельзя.
+export function sanitizeArticleHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["p", "h2", "h3", "ul", "ol", "li", "blockquote", "strong", "em", "u", "s", "code", "pre", "hr", "br", "a"],
+    ALLOWED_ATTR: ["href", "target", "rel"],
+  });
 }
 
 function fromRow(row: Record<string, unknown>): BlogArticle {

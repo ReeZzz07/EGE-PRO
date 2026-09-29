@@ -2,7 +2,7 @@
 // ошибиться. CRUD-обёртки вокруг supabase.from() здесь не тестируем отдельно — как и в tariffs.ts,
 // исключение — маппинг ошибки конфликта slug на понятный текст (friendlyWriteError).
 import { describe, expect, it, vi } from "vitest";
-import { createArticle, slugify } from "./blog";
+import { createArticle, sanitizeArticleHtml, slugify } from "./blog";
 import { supabase } from "./supabase";
 
 vi.mock("./supabase", () => ({
@@ -29,6 +29,28 @@ describe("slugify", () => {
 
   it("строка без букв/цифр — пустая строка, не исключение", () => {
     expect(slugify("...")).toBe("");
+  });
+});
+
+describe("sanitizeArticleHtml", () => {
+  it("вырезает script и обработчики on* — XSS через content не проходит", () => {
+    const dirty = '<p>Текст</p><script>alert(1)</script><p onclick="alert(2)">клик</p>';
+    const clean = sanitizeArticleHtml(dirty);
+    expect(clean).not.toContain("<script");
+    expect(clean).not.toContain("onclick");
+    expect(clean).toContain("Текст");
+    expect(clean).toContain("клик");
+  });
+
+  it("пропускает реальный набор тегов редактора (заголовки, списки, цитата, ссылка, форматирование)", () => {
+    const html = '<h2>Заголовок</h2><p><strong>жирный</strong> <em>курсив</em> <u>подчёркнутый</u></p><ul><li>пункт</li></ul><blockquote>цитата</blockquote><p><a href="https://ege-tutor.ru">ссылка</a></p>';
+    expect(sanitizeArticleHtml(html)).toBe(html);
+  });
+
+  it("вырезает недопустимые атрибуты у ссылки (например, javascript: или обработчик), но саму ссылку оставляет", () => {
+    const dirty = '<p><a href="https://x.ru" onmouseover="alert(1)">x</a></p>';
+    const clean = sanitizeArticleHtml(dirty);
+    expect(clean).toBe('<p><a href="https://x.ru">x</a></p>');
   });
 });
 

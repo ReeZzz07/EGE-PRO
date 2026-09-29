@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import Header, { ADMIN_ONLY_VIEWS, PROTECTED_VIEWS, landingSection, type View } from "./components/Header";
-import AdminContent from "./components/AdminContent";
+// Ленивая загрузка — админка тянет за собой RichTextEditor.tsx (TipTap/ProseMirror, ~430 КБ), а её
+// видят только админы; без lazy() этот вес получал бы каждый гость на лендинге/статьях блога.
+const AdminContent = lazy(() => import("./components/AdminContent"));
 import Dashboard from "./components/Dashboard";
 import TaskBank from "./components/TaskBank";
 import SolveView from "./components/SolveView";
@@ -429,7 +431,11 @@ function AppShell() {
         {view.name === "renew" && profile && <RenewView onNav={setView} />}
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
-        {view.name === "admin" && profile?.isAdmin && <AdminContent onNav={setView} />}
+        {view.name === "admin" && profile?.isAdmin && (
+          <Suspense fallback={<p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>}>
+            <AdminContent onNav={setView} />
+          </Suspense>
+        )}
       </main>
       <Footer onNav={setView} />
       <CookieBanner onNav={setView} />

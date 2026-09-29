@@ -17,6 +17,7 @@ import {
 } from "../lib/blog";
 import { Icon, useToast } from "./ui";
 import { SITE_URL } from "../lib/seo";
+import RichTextEditor from "./RichTextEditor";
 
 const EMPTY_FORM: BlogArticleInput = { title: "", slug: "", excerpt: "", content: "", coverImage: null, isPinned: false, visibleToGuests: true };
 
@@ -85,15 +86,12 @@ function ArticleForm({
             className="input-blank mt-1.5 w-full resize-y rounded-sm px-3 py-2 text-[13px]"
           />
         </label>
-        <label className="block sm:col-span-2">
-          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Текст статьи (обычный текст, абзацы — пустой строкой)</span>
-          <textarea
-            value={form.content}
-            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-            rows={10}
-            className="input-blank mt-1.5 w-full resize-y rounded-sm px-3 py-2 text-[13.5px]"
-          />
-        </label>
+        <div className="sm:col-span-2">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Текст статьи</span>
+          <div className="mt-1.5">
+            <RichTextEditor initialValue={form.content} onChange={(html) => setForm((f) => ({ ...f, content: html }))} />
+          </div>
+        </div>
         <div className="sm:col-span-2">
           <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Обложка (необязательно)</span>
           <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
@@ -134,7 +132,7 @@ function ArticleForm({
       <div className="mt-4 flex gap-2">
         <button
           onClick={() => onSave(form)}
-          disabled={saving || !form.title.trim() || !form.slug.trim() || !form.excerpt.trim() || !form.content.trim()}
+          disabled={saving || !form.title.trim() || !form.slug.trim() || !form.excerpt.trim() || !form.content.replace(/<[^>]*>/g, "").trim()}
           className="btn btn-blue px-4 py-2 text-[12.5px] disabled:opacity-50"
         >
           <Icon name="check" size={13} /> {saving ? "Сохраняем…" : "Сохранить"}
