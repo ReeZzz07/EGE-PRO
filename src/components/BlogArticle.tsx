@@ -58,7 +58,9 @@ export default function BlogArticle({ slug, onNav }: { slug: string; onNav: (v: 
       </button>
 
       <div className="sheet mt-5 overflow-hidden p-0">
-        {data.coverImage && <img src={data.coverImage} alt="" className="h-56 w-full border-b-2 border-ink object-cover sm:h-72" />}
+        {/* aspect-[40/21] = пропорция обложек (1200×630) вместо фиксированной высоты — на узком
+            экране высота сама пропорционально уменьшается, без лишней обрезки по бокам */}
+        {data.coverImage && <img src={data.coverImage} alt="" className="aspect-[40/21] w-full border-b-2 border-ink object-cover" />}
         <div className="p-6 sm:p-8">
           <h1 className="font-display text-xl font-bold sm:text-2xl">{data.title}</h1>
           {data.publishedAt && <p className="mt-1.5 font-mono text-[11.5px] text-ink2">{new Date(data.publishedAt).toLocaleDateString("ru-RU")}</p>}

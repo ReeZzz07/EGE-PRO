@@ -44,7 +44,16 @@ export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
             <Reveal key={a.id} delay={i * 60}>
               <button onClick={() => onNav({ name: "blog-article", slug: a.slug })} className="sheet card-lift group flex h-full w-full flex-col overflow-hidden text-left">
                 {a.coverImage && (
-                  <img src={a.coverImage} alt="" loading="lazy" className="h-36 w-full border-b-2 border-ink object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+                  <img
+                    src={a.coverImage}
+                    alt=""
+                    loading="lazy"
+                    // aspect-[40/21] — ровно пропорция обложек (1200×630), а не фиксированная высота:
+                    // на узком экране карточка становится уже, и object-cover с фиксированным h-*
+                    // обрезал верх/низ куда сильнее, чем на десктопе, где соотношение сторон другое.
+                    className="aspect-[40/21] w-full border-b-2 border-ink object-cover"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                  />
                 )}
                 <div className="flex flex-1 flex-col p-4">
                   {a.isPinned && <span className="mb-1.5 w-fit font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-blue">📌 закреплено</span>}
