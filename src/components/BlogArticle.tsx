@@ -2,24 +2,31 @@
 // черновики от не-админа (см. supabase/migrations/0032_blog_articles.sql) — несуществующий или
 // неопубликованный slug здесь неотличимы, оба дают "статья не найдена".
 import { useEffect, useState } from "react";
-import { loadArticleBySlug, sanitizeArticleHtml, type BlogArticle as BlogArticleData } from "../lib/blog";
+import { loadArticleBySlug, markArticleRead, sanitizeArticleHtml, type BlogArticle as BlogArticleData } from "../lib/blog";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { useAuth } from "../lib/auth";
 import { Icon } from "./ui";
 import type { View } from "./Header";
 
 export default function BlogArticle({ slug, onNav }: { slug: string; onNav: (v: View) => void }) {
+  const { profile } = useAuth();
   const [data, setData] = useState<BlogArticleData | null | "not-found">(null);
 
   useEffect(() => {
     setData(null);
     let cancelled = false;
     loadArticleBySlug(slug).then((a) => {
-      if (!cancelled) setData(a ?? "not-found");
+      if (cancelled) return;
+      setData(a ?? "not-found");
+      // Счётчик в Header.tsx считает только опубликованные — отмечать черновик-предпросмотр
+      // прочитанным незачем, он и так не входит в подсчёт.
+      if (a?.isPublished && profile) markArticleRead(a.id, profile.id);
     });
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, profile?.id]);
 
   useDocumentHead({
     title: data && data !== "not-found" ? data.title : "База знаний — ЕГЭ·ПРО",

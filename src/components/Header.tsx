@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
+import { useUnreadBlogCount } from "../lib/blog";
 import { Icon } from "./ui";
 
 export type View =
@@ -52,6 +53,7 @@ const NAV: { id: string; label: string; icon: string }[] = [
   { id: "bank", label: "Банк заданий", icon: "list" },
   { id: "tutor", label: "ИИ-репетитор", icon: "chat" },
   { id: "tariffs", label: "Тариф", icon: "spark" },
+  { id: "blog", label: "База знаний", icon: "book" },
 ];
 
 /** Пункты выпадающего меню аккаунта (открывается наведением на кнопку с именем, см. ниже) —
@@ -73,13 +75,15 @@ const GUEST_NAV: { section?: string; view?: View; label: string; icon: string }[
   { section: "features", label: "Возможности", icon: "chat" },
   { section: "principle", label: "Принцип", icon: "target" },
   { view: { name: "tariffs" }, label: "Тарифы", icon: "spark" },
+  { view: { name: "blog" }, label: "База знаний", icon: "book" },
 ];
 
 export default function Header({ view, onNav }: { view: View; onNav: (v: View) => void }) {
   const { derived } = useProgress();
   const { profile, signOut } = useAuth();
+  const unreadBlog = useUnreadBlogCount(profile?.id);
   const [menuOpen, setMenuOpen] = useState(false);
-  const active = view.name === "task" ? "bank" : view.name;
+  const active = view.name === "task" ? "bank" : view.name === "blog-article" ? "blog" : view.name;
 
   const goTo = (name: string) => {
     onNav({ name } as View);
@@ -110,12 +114,22 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                     key={n.id}
                     onClick={() => onNav({ name: n.id } as View)}
                     title={n.label}
-                    aria-label={n.label}
+                    aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.label}
                     className={`relative flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold transition-colors sm:px-2 lg:px-1.5 lg:text-[13px] ${
                       isActive ? "text-blue" : "text-ink2 hover:bg-ink/5 hover:text-ink"
                     }`}
                   >
-                    <Icon name={n.icon} size={15} />
+                    <span className="relative flex shrink-0">
+                      <Icon name={n.icon} size={15} />
+                      {n.id === "blog" && !!unreadBlog && (
+                        <span
+                          className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue px-0.5 font-mono text-[9px] font-bold leading-none text-white"
+                          aria-hidden
+                        >
+                          {unreadBlog > 9 ? "9+" : unreadBlog}
+                        </span>
+                      )}
+                    </span>
                     <span className="hidden whitespace-nowrap lg:inline">{n.label}</span>
                     {isActive && <span className="absolute inset-x-1.5 bottom-0.5 h-[2.5px] rounded-full bg-blue" aria-hidden />}
                   </button>

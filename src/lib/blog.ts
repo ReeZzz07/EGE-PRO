@@ -2,6 +2,7 @@
 // чтение только опубликованных статей доступно всем (в т.ч. гостям) — фильтр по is_published задаёт
 // сама RLS-политика, а не запрос здесь (см. миграцию), так что черновик не прочитать даже зная slug.
 // Запись — только администраторам. Тот же прямой Supabase-shim паттерн, что и tariffs.ts.
+import { useEffect, useState, useSyncExternalStore } from "react";
 import DOMPurify from "dompurify";
 import { supabase, isSupabaseConfigured } from "./supabase";
 
@@ -201,4 +202,66 @@ export async function uploadBlogCoverImage(file: File): Promise<{ url?: string; 
   const { data, error } = await supabase.storage.from("blog").upload(path, file, { contentType: file.type, upsert: true });
   if (error) return { error: (error as { message?: string; error?: string }).message ?? (error as { error?: string }).error ?? "Не удалось загрузить файл" };
   return { url: supabase.storage.from("blog").getPublicUrl(data?.path ?? path).data.publicUrl };
+}
+
+// ─────────────────────── счётчик новых статей (пункт меню "База знаний") ───────────────────────
+// Отметка прочтения — своя таблица (public.blog_article_reads, supabase/migrations/0034), а не
+// один общий "последний визит": именно поэтому счётчик уменьшается по одной статье за раз, а не
+// обнуляется целиком при заходе в раздел — так и просил пользователь. Только для авторизованных,
+// гостям функции здесь не вызываются вовсе (см. Header.tsx/BlogArticle.tsx).
+let blogReadsVersion = 0;
+const blogReadsListeners = new Set<() => void>();
+function bumpBlogReadsVersion() {
+  blogReadsVersion++;
+  for (const l of blogReadsListeners) l();
+}
+function subscribeBlogReads(l: () => void) {
+  blogReadsListeners.add(l);
+  return () => blogReadsListeners.delete(l);
+}
+function getBlogReadsVersion() {
+  return blogReadsVersion;
+}
+/** Форсирует пересчёт useUnreadBlogCount во всех смонтированных компонентах (Header.tsx) сразу
+ *  после markArticleRead — без этого счётчик обновился бы только при следующем их ремонте. */
+function useBlogReadsVersion(): number {
+  return useSyncExternalStore(subscribeBlogReads, getBlogReadsVersion, getBlogReadsVersion);
+}
+
+/** Отмечает статью прочитанной текущим пользователем — вызывается из BlogArticle.tsx при успешной
+ *  загрузке статьи залогиненным пользователем. Повторная отметка той же статьи — не ошибка
+ *  (primary key (user_id, article_id) в таблице), просто игнорируется. */
+export async function markArticleRead(articleId: string, userId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  await supabase.from("blog_article_reads").insert({ user_id: userId, article_id: articleId });
+  bumpBlogReadsVersion();
+}
+
+/** Сколько опубликованных статей пользователь ещё не открывал — null, пока не гость и не загрузилось
+ *  (Header.tsx не показывает бейдж вовсе в обоих случаях, разница ему не важна). */
+export function useUnreadBlogCount(userId: string | undefined): number | null {
+  const version = useBlogReadsVersion();
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || !supabase) {
+      setCount(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      supabase.from("blog_articles").select("id").eq("is_published", true),
+      supabase.from("blog_article_reads").select("article_id").eq("user_id", userId),
+    ]).then(([articlesRes, readsRes]) => {
+      if (cancelled) return;
+      const readIds = new Set((readsRes.data ?? []).map((r: { article_id: string }) => r.article_id));
+      const unread = (articlesRes.data ?? []).filter((a: { id: string }) => !readIds.has(a.id)).length;
+      setCount(unread);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, version]);
+
+  return count;
 }

@@ -1,8 +1,9 @@
 // slugify — единственная реально новая чистая логика в blog.ts (транслитерация кириллицы), легко
 // ошибиться. CRUD-обёртки вокруг supabase.from() здесь не тестируем отдельно — как и в tariffs.ts,
 // исключение — маппинг ошибки конфликта slug на понятный текст (friendlyWriteError).
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createArticle, sanitizeArticleHtml, slugify } from "./blog";
+import { createArticle, markArticleRead, sanitizeArticleHtml, slugify, useUnreadBlogCount } from "./blog";
 import { supabase } from "./supabase";
 
 vi.mock("./supabase", () => ({
@@ -69,5 +70,45 @@ describe("createArticle", () => {
     } as never);
     const res = await createArticle({ title: "t", slug: "s", excerpt: "e", content: "c", coverImage: null, isPinned: false, visibleToGuests: true }, "user-1");
     expect(res.error).toBe("connection refused");
+  });
+});
+
+describe("useUnreadBlogCount", () => {
+  it("гость (userId не задан) — null сразу, без запроса к supabase", () => {
+    vi.mocked(supabase!.from).mockClear();
+    const { result } = renderHook(() => useUnreadBlogCount(undefined));
+    expect(result.current).toBeNull();
+    expect(supabase!.from).not.toHaveBeenCalled();
+  });
+
+  it("считает опубликованные статьи минус уже прочитанные этим пользователем", async () => {
+    vi.mocked(supabase!.from).mockImplementation((table: string) => {
+      if (table === "blog_articles") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: "a1" }, { id: "a2" }, { id: "a3" }] }) }) } as never;
+      }
+      return { select: () => ({ eq: () => Promise.resolve({ data: [{ article_id: "a1" }] }) }) } as never;
+    });
+    const { result } = renderHook(() => useUnreadBlogCount("user-1"));
+    await waitFor(() => expect(result.current).toBe(2));
+  });
+
+  it("всё прочитано — 0, не null (Header.tsx прячет бейдж именно по 0, а не по null)", async () => {
+    vi.mocked(supabase!.from).mockImplementation((table: string) => {
+      if (table === "blog_articles") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: "a1" }] }) }) } as never;
+      }
+      return { select: () => ({ eq: () => Promise.resolve({ data: [{ article_id: "a1" }] }) }) } as never;
+    });
+    const { result } = renderHook(() => useUnreadBlogCount("user-1"));
+    await waitFor(() => expect(result.current).toBe(0));
+  });
+});
+
+describe("markArticleRead", () => {
+  it("пишет отметку прочтения с нужными user_id/article_id", async () => {
+    const insert = vi.fn(() => Promise.resolve({ error: null }));
+    vi.mocked(supabase!.from).mockReturnValue({ insert } as never);
+    await markArticleRead("article-1", "user-1");
+    expect(insert).toHaveBeenCalledWith({ user_id: "user-1", article_id: "article-1" });
   });
 });
