@@ -341,10 +341,10 @@ function AppShell() {
   }
 
   return (
-    // pb-16 — место под нижнюю мобильную навигацию (см. Header.tsx), которая fixed и иначе
-    // перекрывала бы футер/конец страницы при прокрутке до конца; на десктопе и у гостей
-    // (без панели) отступ не нужен.
-    <div className={`flex min-h-screen flex-col ${profile ? "pb-16 lg:pb-0" : ""}`}>
+    // pb-16 — место под нижнюю мобильную навигацию (см. Header.tsx, теперь общую и для гостей),
+    // которая fixed и иначе перекрывала бы футер/конец страницы при прокрутке до конца; на
+    // десктопе (lg+) панели нет, отступ не нужен.
+    <div className="flex min-h-screen flex-col pb-16 lg:pb-0">
       <div className="noise-layer" aria-hidden />
       <Header view={view} onNav={setView} />
       <main className="flex-1">

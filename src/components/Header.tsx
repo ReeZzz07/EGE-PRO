@@ -63,6 +63,7 @@ const BOTTOM_NAV_LABELS: Record<string, string> = {
   bank: "Задания",
   tutor: "Репетитор",
   blog: "Знания",
+  features: "Функции",
 };
 
 /** Пункты выпадающего меню аккаунта (открывается наведением на кнопку с именем, см. ниже) —
@@ -78,13 +79,13 @@ const ACCOUNT_MENU: { id: string; label: string; icon: string }[] = [
 ];
 const ACCOUNT_VIEWS: View["name"][] = ACCOUNT_MENU.map((n) => n.id) as View["name"][];
 
-const GUEST_NAV: { section?: string; view?: View; label: string; icon: string }[] = [
-  { label: "Главная", icon: "home" },
-  { section: "subjects", label: "Предметы", icon: "list" },
-  { section: "features", label: "Возможности", icon: "chat" },
-  { section: "principle", label: "Принцип", icon: "target" },
-  { view: { name: "tariffs" }, label: "Тарифы", icon: "spark" },
-  { view: { name: "blog" }, label: "База знаний", icon: "book" },
+const GUEST_NAV: { id: string; section?: string; view?: View; label: string; icon: string }[] = [
+  { id: "home", label: "Главная", icon: "home" },
+  { id: "subjects", section: "subjects", label: "Предметы", icon: "list" },
+  { id: "features", section: "features", label: "Возможности", icon: "chat" },
+  { id: "principle", section: "principle", label: "Принцип", icon: "target" },
+  { id: "tariffs", view: { name: "tariffs" }, label: "Тарифы", icon: "spark" },
+  { id: "blog", view: { name: "blog" }, label: "База знаний", icon: "book" },
 ];
 
 export default function Header({ view, onNav }: { view: View; onNav: (v: View) => void }) {
@@ -103,6 +104,12 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
   // мобильной навигации (см. ниже), чтобы оба списка не могли разъехаться.
   const authNav = profile?.isAdmin ? [...NAV, { id: "admin", label: "Админка", icon: "sigma" }] : NAV;
 
+  // Нижняя мобильная панель (см. под </header>) — общая для авторизованных и гостей, только источник
+  // пунктов и обработчик клика разные; сама разметка и активное состояние ниже не знают о профиле.
+  const bottomItems: { id: string; label: string; icon: string; onClick: () => void }[] = profile
+    ? authNav.map((n) => ({ id: n.id, label: n.label, icon: n.icon, onClick: () => onNav({ name: n.id } as View) }))
+    : GUEST_NAV.map((n) => ({ id: n.id, label: n.label, icon: n.icon, onClick: () => onNav(n.view ?? landingSection(n.section)) }));
+
   return (
     <>
     <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
@@ -119,11 +126,10 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           </span>
         </button>
 
-        {/* На мобильном (<lg) у авторизованных эти же пункты переезжают в нижнюю панель (см. под
-            </header>) — горизонтальный скролл иконок в шапке был неудобен и не оставлял места для
-            будущих элементов; у гостей пункты — это якоря на секции лендинга, а не разделы
-            приложения, там прежнее поведение сохраняем. */}
-        <nav className={`no-scrollbar ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden sm:gap-1 lg:justify-start lg:gap-1 ${profile ? "hidden lg:flex" : ""}`}>
+        {/* На мобильном (<lg) эти же пункты (и у авторизованных, и у гостей) переезжают в нижнюю
+            панель (см. под </header>) — горизонтальный скролл иконок в шапке был неудобен и не
+            оставлял места для будущих элементов. */}
+        <nav className="no-scrollbar ml-1 hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden sm:gap-1 lg:flex lg:justify-start lg:gap-1">
           {profile
             ? authNav.map((n) => {
                 const isActive = active === n.id;
@@ -155,7 +161,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
               })
             : GUEST_NAV.map((n) => (
                 <button
-                  key={n.label}
+                  key={n.id}
                   onClick={() => onNav(n.view ?? landingSection(n.section))}
                   title={n.label}
                   aria-label={n.label}
@@ -253,46 +259,44 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
       </div>
     </header>
 
-    {/* Нижняя навигация — только авторизованным и только <lg (там же, где верхняя прячется). Те же
-        пункты и активное состояние, что и в шапке; fixed — App.tsx резервирует под неё отступ снизу
-        у страницы (см. AppShell), иначе футер/контент в конце страницы уезжали бы под панель. */}
-    {profile && (
-      <nav
-        aria-label="Основная навигация"
-        className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
-      >
-        <div className="mx-auto flex max-w-[1600px] items-stretch justify-around">
-          {authNav.map((n) => {
-            const isActive = active === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => onNav({ name: n.id } as View)}
-                aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.label}
-                aria-current={isActive ? "page" : undefined}
-                className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-bold transition-colors ${
-                  isActive ? "text-blue" : "text-ink2"
-                }`}
-              >
-                {isActive && <span className="absolute inset-x-3 top-0 h-[2.5px] rounded-full bg-blue" aria-hidden />}
-                <span className="relative flex shrink-0">
-                  <Icon name={n.icon} size={20} />
-                  {n.id === "blog" && !!unreadBlog && (
-                    <span
-                      className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue px-0.5 font-mono text-[9px] font-bold leading-none text-white"
-                      aria-hidden
-                    >
-                      {unreadBlog > 9 ? "9+" : unreadBlog}
-                    </span>
-                  )}
-                </span>
-                <span className="whitespace-nowrap leading-none">{BOTTOM_NAV_LABELS[n.id] ?? n.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-    )}
+    {/* Нижняя навигация — общая для авторизованных и гостей, только <lg (там же, где верхняя
+        прячется, см. bottomItems выше). fixed — App.tsx резервирует под неё отступ снизу у страницы
+        (см. AppShell), иначе футер/контент в конце страницы уезжали бы под панель. */}
+    <nav
+      aria-label="Основная навигация"
+      className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
+    >
+      <div className="mx-auto flex max-w-[1600px] items-stretch justify-around">
+        {bottomItems.map((n) => {
+          const isActive = active === n.id;
+          return (
+            <button
+              key={n.id}
+              onClick={n.onClick}
+              aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.label}
+              aria-current={isActive ? "page" : undefined}
+              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-bold transition-colors ${
+                isActive ? "text-blue" : "text-ink2"
+              }`}
+            >
+              {isActive && <span className="absolute inset-x-3 top-0 h-[2.5px] rounded-full bg-blue" aria-hidden />}
+              <span className="relative flex shrink-0">
+                <Icon name={n.icon} size={20} />
+                {n.id === "blog" && !!unreadBlog && (
+                  <span
+                    className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue px-0.5 font-mono text-[9px] font-bold leading-none text-white"
+                    aria-hidden
+                  >
+                    {unreadBlog > 9 ? "9+" : unreadBlog}
+                  </span>
+                )}
+              </span>
+              <span className="whitespace-nowrap leading-none">{BOTTOM_NAV_LABELS[n.id] ?? n.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
     </>
   );
 }
