@@ -46,7 +46,11 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
   return (
     <footer className="border-t-2 border-ink bg-night text-paper">
       <div className="mx-auto grid max-w-[1600px] gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
-        <div>
+        {/* На мобильном (одна колонка) блок с лого/реквизитами уходит вниз, а Предметы/Инструменты —
+            наверх: так посетитель сразу видит полезные ссылки, а не реквизиты ИП. На десктопе (grid
+            из 3 колонок) order игнорируется относительным CSS-каскадом sm:order-* — три колонки
+            остаются в исходном порядке слева направо. */}
+        <div className="order-3 sm:order-1">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center border-2 border-hl text-hl">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -68,7 +72,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
             <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>          </div>
         </div>
-        <div>
+        <div className="order-1 sm:order-2">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Предметы</p>
           <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
             {getAvailableSubjects().map((id) => {
@@ -86,7 +90,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             })}
           </ul>
         </div>
-        <div>
+        <div className="order-2 sm:order-3">
           {profile ? (
             <>
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Инструменты</p>
