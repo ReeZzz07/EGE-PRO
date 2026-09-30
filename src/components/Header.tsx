@@ -158,11 +158,14 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
               ))}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {/* ml-auto — раньше правый блок прижимала к краю только соседняя nav с flex-1, но теперь
+            для авторизованных на <lg она скрыта (см. нижнюю навигацию ниже) и без ml-auto блок
+            съезжал бы влево, к лого. */}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           {profile && (
             <>
               <span
-                className={`hidden items-center gap-1 rounded-sm border-2 px-1.5 py-1 font-mono text-[11px] font-bold sm:flex lg:hidden lg:px-2 xl:flex ${
+                className={`flex items-center gap-1 rounded-sm border-2 px-1.5 py-1 font-mono text-[11px] font-bold sm:px-2 ${
                   derived.streak > 0 ? "border-amber text-amber" : "border-line text-ink2"
                 }`}
                 title="Серия дней с верными решениями"
