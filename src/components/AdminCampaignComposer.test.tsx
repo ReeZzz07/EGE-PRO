@@ -202,6 +202,18 @@ describe("AdminCampaignComposer", () => {
     await waitFor(() => expect(sendCampaignTest).toHaveBeenCalledWith("verify_link", expect.anything()));
   });
 
+  it("заготовка «Напоминание про диагностику»: кнопка ведёт на /diagnostic, а не на главную", async () => {
+    setup();
+    await screen.findByText("Анна Иванова");
+    fireEvent.click(screen.getByRole("tab", { name: "Напоминание про диагностику" }));
+    expect(screen.getByRole("option", { name: "Диагностика" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Куда ведёт кнопка/)).toHaveValue("/diagnostic");
+    fireEvent.click(ackBox());
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(createCampaign).mock.calls[0][0].content.ctaPath).toBe("/diagnostic");
+  });
+
   it("заготовка «Скидка ещё действует»: чекбокс блока скидки включён по умолчанию и уходит в письмо", async () => {
     setup();
     await screen.findByText("Анна Иванова");

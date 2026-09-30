@@ -158,12 +158,13 @@ const AFTER_LOGIN_KEY = "ege-pro.after-login.v1";
 
 /** Куда вернуть после входа, если человека сюда привела ссылка из письма (/renew — продление,
  *  /onboarding — анкета подготовки из письма-напоминания, /subjects — докупка предметов из письма
- *  о незавершённой оплате, /plan — письмо-напоминание про план после диагностики). */
+ *  о незавершённой оплате, /plan — письмо-напоминание про план после диагностики, /diagnostic —
+ *  письмо-напоминание пройти диагностику). */
 function takeAfterLoginView(): View | null {
   try {
     const v = sessionStorage.getItem(AFTER_LOGIN_KEY);
     sessionStorage.removeItem(AFTER_LOGIN_KEY);
-    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : v === "plan" ? { name: "plan" } : null;
+    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : v === "plan" ? { name: "plan" } : v === "diagnostic" ? { name: "diagnostic" } : null;
   } catch {
     return null;
   }
@@ -306,6 +307,17 @@ function AppShell() {
       setView({ name: "auth", mode: "login" });
       return;
     }
+    // ссылка на диагностику из письма-напоминания («Напоминание про диагностику», рассылка по
+    // фильтру, см. AdminCampaignComposer.tsx) — та же схема
+    if (!loading && !profile && view.name === "diagnostic") {
+      try {
+        sessionStorage.setItem(AFTER_LOGIN_KEY, "diagnostic");
+      } catch {
+        /* ignore */
+      }
+      setView({ name: "auth", mode: "login" });
+      return;
+    }
     if (!loading && !profile && PROTECTED_VIEWS.includes(view.name)) setView({ name: "landing" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile, view.name]);
@@ -380,9 +392,18 @@ function AppShell() {
         {view.name === "mistakes" && <MistakesView onNav={setView} />}
         {view.name === "stats" && <StatsView onNav={setView} />}
 
-        {view.name === "diagnostic" && (
-          <DiagnosticView subject={view.subject} onFinish={() => setView({ name: "plan", subject: view.subject })} onSkip={() => setView({ name: "bank" })} />
-        )}
+        {view.name === "diagnostic" && (() => {
+          const subject = view.subject ?? effectivePrimarySubject(profile);
+          return subject ? (
+            <DiagnosticView subject={subject} onFinish={() => setView({ name: "plan", subject })} onSkip={() => setView({ name: "bank" })} />
+          ) : (
+            <div className="mx-auto max-w-xl px-4 py-16 text-center">
+              <p className="font-display text-xl font-bold">Сначала выбери предмет</p>
+              <p className="mt-2 text-[13.5px] text-ink2">Короткий онбординг подберёт предмет — и сразу после него можно будет пройти диагностику.</p>
+              <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать</button>
+            </div>
+          );
+        })()}
 
         {view.name === "plan" && (() => {
           const subject = view.subject ?? effectivePrimarySubject(profile);

@@ -20,7 +20,7 @@ export const TEMPLATES = {
     when: "Через ~сутки после подтверждения почты тем, кто не решил ни одного задания и не делал диагностику. Один раз.",
     eyebrow: "быстрый старт",
     cta: "Пройти диагностику →",
-    ctaPath: "",
+    ctaPath: "/diagnostic",
     rich: true,
     placeholders: ["имя"],
     footer: FOOTER_ONCE,

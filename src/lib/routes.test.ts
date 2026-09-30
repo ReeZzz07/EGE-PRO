@@ -33,6 +33,14 @@ describe("pathToView", () => {
     expect(viewToPath({ name: "plan" })).toBe("/plan");
   });
 
+  it("/diagnostic — адрес из письма-напоминания «пройди диагностику» (рассылка по фильтру); subject не в пути", () => {
+    expect(pathToView("/diagnostic")).toEqual({ name: "diagnostic" });
+    expect(viewToPath({ name: "diagnostic" })).toBe("/diagnostic");
+    // внутренняя навигация с конкретным предметом (клик по карточке на дашборде) — тот же путь,
+    // как и у /plan: subject в адресную строку не попадает, восстанавливается через effectivePrimarySubject
+    expect(viewToPath({ name: "diagnostic", subject: "math" })).toBe("/diagnostic");
+  });
+
   it("неизвестный путь — null (AppShell выправляет адресную строку на /, не рендерит несуществующую страницу)", () => {
     expect(pathToView("/bank")).toBeNull();
     expect(pathToView("/admin")).toBeNull();

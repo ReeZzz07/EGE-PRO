@@ -12,7 +12,7 @@ export interface CampaignContent {
   eyebrow: string;
   ctaLabel: string;
   /** куда ведёт кнопка: "" — главная платформы */
-  ctaPath: "" | "/tariffs" | "/renew" | "/onboarding";
+  ctaPath: "" | "/tariffs" | "/renew" | "/onboarding" | "/diagnostic";
   footer: string;
   /** показать ли в письме блок с текущей персональной скидкой получателя (тот же жёлтый блок, что
    *  в письмах жизненного цикла) — считается по каждому получателю отдельно на сервере (getWelcomeOffer),
@@ -26,6 +26,7 @@ export const CTA_OPTIONS: { value: CampaignContent["ctaPath"]; label: string }[]
   { value: "/tariffs", label: "Тарифы" },
   { value: "/renew", label: "Продление тарифа" },
   { value: "/onboarding", label: "Онбординг (анкета подготовки)" },
+  { value: "/diagnostic", label: "Диагностика" },
 ];
 
 export interface CampaignPreview {
@@ -201,7 +202,7 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
 
 По результату сразу увидишь свой уровень, сильные и слабые темы и получишь личный план: что повторить сегодня, а что подождёт. Это бесплатно.`,
       ctaLabel: "Пройти диагностику →",
-      ctaPath: "",
+      ctaPath: "/diagnostic",
       footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
       includeOffer: false,
     },

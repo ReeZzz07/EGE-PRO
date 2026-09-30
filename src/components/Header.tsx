@@ -15,7 +15,7 @@ export type View =
   | { name: "mistakes" }
   | { name: "stats" }
   | { name: "task"; id: string }
-  | { name: "diagnostic"; subject: Subject }
+  | { name: "diagnostic"; subject?: Subject }
   | { name: "plan"; subject?: Subject }
   | { name: "mock-exam"; subject?: Subject; retryAttemptId?: number }
   | { name: "session-summary" }

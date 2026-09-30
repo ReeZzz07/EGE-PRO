@@ -17,6 +17,7 @@ export function viewToPath(view: View): string {
   // /subjects, /plan — см. pathToView ниже
   if (view.name === "subjects") return "/subjects";
   if (view.name === "plan") return "/plan";
+  if (view.name === "diagnostic") return "/diagnostic";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
   if (view.name === "blog") return "/blog";
   if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
@@ -66,6 +67,11 @@ export function pathToView(pathname: string, search = ""): View | null {
     // PlanView сама берёт effectivePrimarySubject(profile), как и обычная внутренняя навигация на план
     case "/plan":
       return { name: "plan" };
+    // /diagnostic — ссылка из письма-напоминания «пройди диагностику» (рассылка по фильтру, см.
+    // AdminCampaignComposer.tsx); subject не в пути — App.tsx сам берёт effectivePrimarySubject(profile),
+    // как и /plan выше
+    case "/diagnostic":
+      return { name: "diagnostic" };
     case "/oferta":
       return { name: "legal", doc: "offer" };
     case "/privacy":
