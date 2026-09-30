@@ -256,7 +256,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-5 right-5 z-[70] flex flex-col gap-2 items-end">
+      {/* bottom-20 на мобильном — клиренс над нижней навигацией авторизованных (см. Header.tsx,
+          fixed внизу экрана), на lg+ панели нет, возвращаемся к обычному отступу. */}
+      <div className="fixed bottom-20 right-5 z-[70] flex flex-col gap-2 items-end lg:bottom-5">
         {toasts.map((t) => (
           <div
             key={t.id}

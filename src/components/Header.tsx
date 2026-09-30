@@ -90,7 +90,12 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
     setMenuOpen(false);
   };
 
+  // Те же пункты, что и в верхнем меню авторизованного пользователя — переиспользуются и в нижней
+  // мобильной навигации (см. ниже), чтобы оба списка не могли разъехаться.
+  const authNav = profile?.isAdmin ? [...NAV, { id: "admin", label: "Админка", icon: "sigma" }] : NAV;
+
   return (
+    <>
     <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
         <button onClick={() => onNav({ name: "home" })} className="group flex shrink-0 items-center gap-2.5" aria-label="На главную">
@@ -105,9 +110,13 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
           </span>
         </button>
 
-        <nav className="no-scrollbar ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden sm:gap-1 lg:justify-start lg:gap-1">
+        {/* На мобильном (<lg) у авторизованных эти же пункты переезжают в нижнюю панель (см. под
+            </header>) — горизонтальный скролл иконок в шапке был неудобен и не оставлял места для
+            будущих элементов; у гостей пункты — это якоря на секции лендинга, а не разделы
+            приложения, там прежнее поведение сохраняем. */}
+        <nav className={`no-scrollbar ml-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden sm:gap-1 lg:justify-start lg:gap-1 ${profile ? "hidden lg:flex" : ""}`}>
           {profile
-            ? (profile.isAdmin ? [...NAV, { id: "admin", label: "Админка", icon: "sigma" }] : NAV).map((n) => {
+            ? authNav.map((n) => {
                 const isActive = active === n.id;
                 return (
                   <button
@@ -231,5 +240,47 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
         </div>
       </div>
     </header>
+
+    {/* Нижняя навигация — только авторизованным и только <lg (там же, где верхняя прячется). Те же
+        пункты и активное состояние, что и в шапке; fixed — App.tsx резервирует под неё отступ снизу
+        у страницы (см. AppShell), иначе футер/контент в конце страницы уезжали бы под панель. */}
+    {profile && (
+      <nav
+        aria-label="Основная навигация"
+        className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
+      >
+        <div className="mx-auto flex max-w-[1600px] items-stretch justify-around">
+          {authNav.map((n) => {
+            const isActive = active === n.id;
+            return (
+              <button
+                key={n.id}
+                onClick={() => onNav({ name: n.id } as View)}
+                aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.label}
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-bold transition-colors ${
+                  isActive ? "text-blue" : "text-ink2"
+                }`}
+              >
+                {isActive && <span className="absolute inset-x-3 top-0 h-[2.5px] rounded-full bg-blue" aria-hidden />}
+                <span className="relative flex shrink-0">
+                  <Icon name={n.icon} size={20} />
+                  {n.id === "blog" && !!unreadBlog && (
+                    <span
+                      className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue px-0.5 font-mono text-[9px] font-bold leading-none text-white"
+                      aria-hidden
+                    >
+                      {unreadBlog > 9 ? "9+" : unreadBlog}
+                    </span>
+                  )}
+                </span>
+                <span className="leading-none">{n.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    )}
+    </>
   );
 }

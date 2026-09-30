@@ -10,7 +10,11 @@ export default function CookieBanner({ onNav }: { onNav: (v: View) => void }) {
   if (!visible) return null;
 
   return (
-    <div role="region" aria-label="Уведомление об использовании cookie" className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4">
+    // bottom-16 на мобильном — клиренс над нижней навигацией авторизованных (см. Header.tsx); у
+    // гостей панели нет, но лишний отступ снизу безвреден, а разветвлять по auth-статусу здесь
+    // ради этого не стоит.
+    <div role="region" aria-label="Уведомление об использовании cookie" className="fixed inset-x-0 bottom-16 z-50 p-3 sm:p-4 lg:bottom-0">
+
       <div className="sheet mx-auto flex max-w-3xl flex-col gap-3 border-2 border-ink p-4 shadow-lift sm:flex-row sm:items-center sm:gap-5">
         <p className="flex-1 text-[12.5px] leading-relaxed text-ink2">
           Сайт использует файлы cookie и локальное хранилище браузера (вход в аккаунт, настройки), а также сервис «Яндекс.Метрика» для статистики
