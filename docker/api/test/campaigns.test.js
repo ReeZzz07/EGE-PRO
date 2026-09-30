@@ -210,6 +210,26 @@ test("письмо: подстановка имени, приветствие, �
   assert.ok(!bare.html.includes("Разовое письмо."));
 });
 
+test("блок скидки: появляется только если передан активный offer, молчит без offer или с истёкшим", () => {
+  const активный = { active: true, percent: 30, expiresAt: new Date(Date.now() + 3600_000).toISOString() };
+  const withOffer = buildCampaignEmail(content(), { name: "Аня", url: "https://x.test", offer: активный });
+  assert.ok(withOffer.text.includes("−30%"));
+  assert.ok(withOffer.html.includes("−30%"));
+
+  const noOffer = buildCampaignEmail(content(), { name: "Аня", url: "https://x.test" });
+  assert.ok(!noOffer.text.includes("−") && !noOffer.html.includes("скидка"));
+
+  const истёкший = buildCampaignEmail(content(), { name: "Аня", url: "https://x.test", offer: { active: false } });
+  assert.ok(!истёкший.text.includes("−") && !истёкший.html.includes("скидка"));
+});
+
+test("предпросмотр своего письма показывает образец скидки, только если includeOffer включён у самой рассылки", () => {
+  const withOffer = renderCampaignSample("custom", content({ includeOffer: true }));
+  assert.ok(withOffer.html.includes("скидка"), "includeOffer:true — образец скидки в предпросмотре виден");
+  const without = renderCampaignSample("custom", content({ includeOffer: false }));
+  assert.ok(!without.html.includes("скидка"), "includeOffer не включён — блока скидки нет, даже в предпросмотре");
+});
+
 test("валидация содержимого: границы длины и белый список ссылок кнопки", () => {
   assert.equal(validateCampaignContent("custom", content()), null);
   assert.equal(validateCampaignContent("verify_link", {}), null);

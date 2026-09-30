@@ -38,6 +38,17 @@ const BOOL_EXPR = {
   // начал оплату (платёж создан, но не оплачен/отменён) и ни разу не заплатил
   abandoned:
     "(exists (select 1 from public.payments pa where pa.user_id = u.id and pa.status in ('pending', 'canceled')) and not exists (select 1 from public.payments pb where pb.user_id = u.id and pb.status = 'succeeded'))",
+  // повторяет логику getWelcomeOffer (offers.js) в SQL — держать в одном месте нельзя (та функция
+  // читает app_settings и diagnostics асинхронно, для списочного фильтра нужно именно SQL-выражение).
+  // Если поменяешь условие в getWelcomeOffer — поменяй и здесь.
+  offer_active:
+    `(not p.is_admin
+      and u.email_confirmed_at is not null
+      and not exists (select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded')
+      and coalesce((select (value->>'enabled')::boolean from public.app_settings where key = 'welcome_offer'), true)
+      and greatest(u.email_confirmed_at, coalesce((select min(d.finished_at) from public.diagnostics d where d.user_id = u.id), u.email_confirmed_at))
+          + make_interval(hours => coalesce((select (value->>'hours')::int from public.app_settings where key = 'welcome_offer'), 72))
+        > now())`,
 };
 export const USER_BOOL_FILTERS = Object.keys(BOOL_EXPR);
 

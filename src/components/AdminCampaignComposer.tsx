@@ -363,6 +363,13 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
                     </span>
                     <textarea value={content.footer} onChange={(e) => setContent({ footer: e.target.value })} rows={2} maxLength={400} className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2 text-[13px]" />
                   </label>
+                  <label className="flex items-start gap-2 border-2 border-dashed border-ink/20 p-3">
+                    <input type="checkbox" checked={content.includeOffer} onChange={(e) => setContent({ includeOffer: e.target.checked })} className="mt-0.5 h-4 w-4" />
+                    <span className="text-[12.5px] leading-relaxed text-ink2">
+                      <strong className="text-ink">Показать блок с текущей приветственной скидкой получателя</strong> — процент и точный срок истечения подставятся у каждого свои. Тем, у кого скидка уже не
+                      активна, блок просто не появится — письмо всё равно уйдёт, без упоминания скидки.
+                    </span>
+                  </label>
                 </div>
 
                 <div>

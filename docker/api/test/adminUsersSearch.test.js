@@ -74,6 +74,9 @@ test("фильтры воронки выбирают ожидаемых поль
   eq(await found({ filters: { ai_request: "yes" } }), [A, D]);
   eq(await found({ filters: { paid: "yes" } }), [A]);
   eq(await found({ filters: { abandoned: "yes" } }), [B]);
+  // A уже заплатил (оффер только на первую оплату), C — не подтвердил почту (таймер офера не тикает,
+  // см. offers.js): у обоих скидка неактивна. У B и D почта только что подтверждена в setup() — окно ещё открыто.
+  eq(await found({ filters: { offer_active: "yes" } }), [B, D]);
 });
 
 test("комбинация фильтров работает как И; инверсия внутри комбинации", async () => {
@@ -137,7 +140,7 @@ test("строки списка несут флаги воронки, регио
   const a = rows.find((r) => r.id === A);
   assert.deepEqual(
     USER_BOOL_FILTERS.map((k) => [k, a[k]]),
-    [["confirmed", true], ["onboarded", true], ["diagnostic", true], ["first_task", true], ["ai_request", true], ["paid", true], ["abandoned", false]]
+    [["confirmed", true], ["onboarded", true], ["diagnostic", true], ["first_task", true], ["ai_request", true], ["paid", true], ["abandoned", false], ["offer_active", false]]
   );
   assert.equal(a.region, "Москва");
   assert.equal(a.city, "Москва");

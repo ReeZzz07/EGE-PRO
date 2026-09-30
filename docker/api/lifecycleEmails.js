@@ -176,7 +176,7 @@ export function fillLine(text, vars) {
 
 const rubles = (n) => `${Number(n).toLocaleString("ru-RU")} ₽`;
 
-function offerBlock(offer) {
+export function offerBlock(offer) {
   if (!offer?.active) return { text: "", html: "" };
   const until = new Date(offer.expiresAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   const text = `На первую оплату тарифа действует скидка −${offer.percent}% — до ${until} (МСК). Применится сама при оплате.`;

@@ -43,6 +43,7 @@ const detail = (over: Partial<CampaignDetail> = {}): CampaignDetail => ({
   filters: {},
   q: null,
   exclude_recent: true,
+  include_offer: false,
   created_by_email: "admin@x.test",
   sent: 4,
   failed: 1,
@@ -199,6 +200,23 @@ describe("AdminCampaignComposer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Тестовое на admin@x\.test/ }));
     await waitFor(() => expect(sendCampaignTest).toHaveBeenCalledWith("verify_link", expect.anything()));
+  });
+
+  it("заготовка «Скидка ещё действует»: чекбокс блока скидки включён по умолчанию и уходит в письмо", async () => {
+    setup();
+    await screen.findByText("Анна Иванова");
+    fireEvent.click(screen.getByRole("tab", { name: "Скидка ещё действует" }));
+    const offerBox = await screen.findByRole("checkbox", { name: /блок с текущей приветственной скидкой/i });
+    expect(offerBox).toBeChecked();
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Я проверил/ }));
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(createCampaign).mock.calls[0][0].content.includeOffer).toBe(true);
+
+    // снять галочку — для ЭТОЙ рассылки блок скидки можно и не показывать
+    fireEvent.click(offerBox);
+    expect(offerBox).not.toBeChecked();
   });
 
   it("опция «не писать недавно получавшим» уходит на сервер", async () => {

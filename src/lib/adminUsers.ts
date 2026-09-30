@@ -26,6 +26,7 @@ export interface AdminUserListItem {
   ai_request: boolean;
   paid: boolean;
   abandoned: boolean;
+  offer_active: boolean;
 }
 
 /** Булевы фильтры воронки: ключ совпадает с параметром запроса и с полем строки списка. Для каждого
@@ -38,6 +39,7 @@ export const USER_FUNNEL_FILTERS = [
   { key: "ai_request", label: "Отправил запрос ИИ-репетитору", short: "ИИ", hint: "отправил хотя бы одно сообщение ИИ-репетитору" },
   { key: "paid", label: "Совершил платёж", short: "Оплата", hint: "есть хотя бы один успешный платёж" },
   { key: "abandoned", label: "Начал, но не завершил платёж", short: "Не доплатил", hint: "создавал платёж, но не оплатил (и ни разу не платил успешно)" },
+  { key: "offer_active", label: "Скидка ещё активна", short: "Скидка активна", hint: "приветственная скидка на первую оплату ещё не истекла и ни разу не платил" },
 ] as const;
 
 export type UserFunnelKey = (typeof USER_FUNNEL_FILTERS)[number]["key"];
@@ -56,7 +58,7 @@ export interface AdminUserFilters {
 
 export const EMPTY_USER_FILTERS: AdminUserFilters = {
   q: "",
-  funnel: { confirmed: "any", onboarded: "any", diagnostic: "any", first_task: "any", ai_request: "any", paid: "any", abandoned: "any" },
+  funnel: { confirmed: "any", onboarded: "any", diagnostic: "any", first_task: "any", ai_request: "any", paid: "any", abandoned: "any", offer_active: "any" },
   region: "",
   regionNot: false,
   city: "",

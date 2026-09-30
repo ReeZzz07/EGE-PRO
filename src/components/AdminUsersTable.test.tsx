@@ -35,6 +35,7 @@ const row = (over: Partial<AdminUserListItem>): AdminUserListItem => ({
   ai_request: false,
   paid: false,
   abandoned: false,
+  offer_active: false,
   ...over,
 });
 

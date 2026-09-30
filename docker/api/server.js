@@ -1055,6 +1055,7 @@ app.post("/admin/campaigns", authMiddleware, requireAdmin, async (req, res) => {
       ctaLabel: b.ctaLabel,
       ctaPath: b.ctaPath,
       footer: b.footer,
+      includeOffer: b.includeOffer === true,
       filters: b.filters,
       q: b.q,
       excludeRecent: b.excludeRecent !== false,

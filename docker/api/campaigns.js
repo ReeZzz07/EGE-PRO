@@ -15,7 +15,8 @@ import { pool } from "./db.js";
 import { buildUserWhere } from "./adminUsers.js";
 import { createActionToken } from "./authTokens.js";
 import { buildVerifyEmail, escapeHtml, paragraphHtml, sendMail, sendVerifyEmail, wrapBrandedHtml } from "./mailer.js";
-import { fillBody, fillLine } from "./lifecycleEmails.js";
+import { fillBody, fillLine, offerBlock } from "./lifecycleEmails.js";
+import { getWelcomeOffer } from "./offers.js";
 
 export const MAX_RECIPIENTS = 500;
 export const SEND_DELAY_MS = 1200;
@@ -33,7 +34,7 @@ const RECENT_EXPR = `not exists (select 1 from public.email_campaign_recipients 
 export function sanitizeFilters(raw) {
   const f = {};
   const src = raw && typeof raw === "object" ? raw : {};
-  for (const key of ["confirmed", "onboarded", "diagnostic", "first_task", "ai_request", "paid", "abandoned"]) {
+  for (const key of ["confirmed", "onboarded", "diagnostic", "first_task", "ai_request", "paid", "abandoned", "offer_active"]) {
     if (src[key] === "yes" || src[key] === "no") f[key] = src[key];
   }
   for (const key of ["region", "city"]) {
@@ -89,8 +90,11 @@ export function validateCampaignContent(kind, c) {
   return null;
 }
 
-/** Письмо-напоминание в оформлении приветственного: метка, приветствие по имени, абзацы, кнопка. */
-export function buildCampaignEmail(c, { name = "", url = siteUrl() } = {}) {
+/** Письмо-напоминание в оформлении приветственного: метка, приветствие по имени, абзацы, кнопка,
+ *  и опционально — тот же жёлтый блок скидки, что и в письмах жизненного цикла (offer из
+ *  getWelcomeOffer конкретного получателя; если оффер уже не активен, offerBlock молча ничего не
+ *  добавляет — см. lifecycleEmails.js). */
+export function buildCampaignEmail(c, { name = "", url = siteUrl(), offer = null } = {}) {
   const vars = { имя: String(name ?? "").trim() };
   const greeting = vars.имя ? `${vars.имя}, привет!` : "Привет!";
   const paragraphs = fillBody(c.bodyText, vars);
@@ -98,14 +102,16 @@ export function buildCampaignEmail(c, { name = "", url = siteUrl() } = {}) {
   const link = `${url}${c.ctaPath ?? ""}`;
   const footer = String(c.footer ?? "").trim();
   const eyebrow = String(c.eyebrow ?? "").trim();
+  const offerHtml = offerBlock(offer);
   return {
     subject: fillLine(c.subject, vars),
-    text: `${greeting}\n\n${paragraphs.join("\n\n")}\n\n${ctaLabel.replace(/\s*→$/, "")}: ${link}${footer ? `\n\n${footer}` : ""}`,
+    text: `${greeting}\n\n${paragraphs.join("\n\n")}${offerHtml.text}\n\n${ctaLabel.replace(/\s*→$/, "")}: ${link}${footer ? `\n\n${footer}` : ""}`,
     html: wrapBrandedHtml(
       `
 ${eyebrow ? `<p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">${escapeHtml(eyebrow)}</p>` : ""}
 <h2 style="margin:0 0 18px;font-size:21px;">${escapeHtml(greeting)}</h2>
 ${paragraphs.map((p) => `<div style="margin:0 0 14px;">${paragraphHtml(p)}</div>`).join("\n")}
+${offerHtml.html}
 <p style="margin:26px 0 4px;"><a href="${escapeHtml(link)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">${escapeHtml(ctaLabel)}</a></p>
 `,
       url,
@@ -114,11 +120,13 @@ ${paragraphs.map((p) => `<div style="margin:0 0 14px;">${paragraphHtml(p)}</div>
   };
 }
 
-/** Предпросмотр / тест: образцовое имя. Для повторной ссылки подтверждения — то же стандартное письмо, что
- *  реально уйдёт, с образцовой (нерабочей) ссылкой. */
+const SAMPLE_OFFER = { active: true, percent: 30, expiresAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString() };
+
+/** Предпросмотр / тест: образцовое имя (и образцовая скидка, если включена). Для повторной ссылки
+ *  подтверждения — то же стандартное письмо, что реально уйдёт, с образцовой (нерабочей) ссылкой. */
 export function renderCampaignSample(kind, c = {}) {
   if (kind === "verify_link") return buildVerifyEmail(`${siteUrl()}/verify-email?token=ОБРАЗЕЦ-ССЫЛКИ`);
-  return buildCampaignEmail(c, { name: "Аня" });
+  return buildCampaignEmail(c, { name: "Аня", offer: c.includeOffer ? SAMPLE_OFFER : null });
 }
 
 async function defaultSend(campaign, user) {
@@ -127,9 +135,13 @@ async function defaultSend(campaign, user) {
     await sendVerifyEmail(user.email, `${siteUrl()}/verify-email?token=${encodeURIComponent(token)}`);
     return;
   }
+  // Оффер считается заново прямо перед отправкой (не при создании рассылки) — рассылка на сотни
+  // получателей растягивается по времени (пауза между письмами), у части оффер мог истечь как раз
+  // за это время; offerBlock для них тогда просто ничего не добавит, а не соврёт про истёкший срок.
+  const offer = campaign.include_offer ? await getWelcomeOffer(user.id) : null;
   const m = buildCampaignEmail(
     { subject: campaign.subject, bodyText: campaign.body_text, eyebrow: campaign.eyebrow, ctaLabel: campaign.cta_label, ctaPath: campaign.cta_path, footer: campaign.footer },
-    { name: user.full_name }
+    { name: user.full_name, offer }
   );
   await sendMail({ to: user.email, ...m });
 }
@@ -146,7 +158,7 @@ export class CampaignError extends Error {
 
 /** Создаёт рассылку и запускает отправку в фоне. confirmCount — число получателей, которое админ видел и
  *  подтвердил; если сервер насчитал другое, рассылка не создаётся (COUNT_MISMATCH). */
-export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, filters, q, excludeRecent = true, confirmCount }, opts = {}) {
+export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, includeOffer = false, filters, q, excludeRecent = true, confirmCount }, opts = {}) {
   const invalid = validateCampaignContent(kind, { subject, bodyText, eyebrow, ctaLabel, ctaPath, footer });
   if (invalid) throw new CampaignError(invalid, "INVALID");
   const f = sanitizeFilters(filters);
@@ -163,8 +175,8 @@ export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow
   try {
     await client.query("begin");
     const ins = await client.query(
-      `insert into public.email_campaigns (created_by, kind, subject, body_text, eyebrow, cta_label, cta_path, footer, filters, q, exclude_recent, total)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id`,
+      `insert into public.email_campaigns (created_by, kind, subject, body_text, eyebrow, cta_label, cta_path, footer, include_offer, filters, q, exclude_recent, total)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning id`,
       [
         adminId,
         kind,
@@ -174,6 +186,7 @@ export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow
         kind === "custom" ? String(ctaLabel ?? "").trim() : null,
         kind === "custom" ? String(ctaPath ?? "") : null,
         kind === "custom" ? String(footer ?? "").trim() : null,
+        kind === "custom" && !!includeOffer,
         JSON.stringify(f),
         term || null,
         !!excludeRecent,

@@ -14,6 +14,11 @@ export interface CampaignContent {
   /** куда ведёт кнопка: "" — главная платформы */
   ctaPath: "" | "/tariffs" | "/renew" | "/onboarding";
   footer: string;
+  /** показать ли в письме блок с текущей персональной скидкой получателя (тот же жёлтый блок, что
+   *  в письмах жизненного цикла) — считается по каждому получателю отдельно на сервере (getWelcomeOffer),
+   *  здесь только "показывать ли вообще для этой рассылки"; если у конкретного человека скидка уже
+   *  не активна, блок для него молча не появится. */
+  includeOffer: boolean;
 }
 
 export const CTA_OPTIONS: { value: CampaignContent["ctaPath"]; label: string }[] = [
@@ -42,6 +47,7 @@ export interface CampaignSummary {
   filters: Record<string, unknown>;
   q: string | null;
   exclude_recent: boolean;
+  include_offer: boolean;
   created_by_email: string | null;
   sent: number;
   failed: number;
@@ -145,7 +151,7 @@ export async function cancelCampaign(id: string): Promise<{ error?: string }> {
 // ─────────────── шаблоны-заготовки ───────────────
 
 export interface CampaignPreset {
-  id: "verify" | "onboarding" | "diagnostic" | "custom";
+  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "custom";
   title: string;
   hint: string;
   kind: CampaignKind;
@@ -154,7 +160,7 @@ export interface CampaignPreset {
   suggested?: { funnel: Partial<Record<UserFunnelKey, TriState>>; label: string };
 }
 
-const blankContent: CampaignContent = { subject: "", bodyText: "", eyebrow: "напоминание", ctaLabel: "Открыть платформу →", ctaPath: "", footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем." };
+const blankContent: CampaignContent = { subject: "", bodyText: "", eyebrow: "напоминание", ctaLabel: "Открыть платформу →", ctaPath: "", footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.", includeOffer: false };
 
 export const CAMPAIGN_PRESETS: CampaignPreset[] = [
   {
@@ -179,6 +185,7 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
       ctaLabel: "Заполнить анкету →",
       ctaPath: "/onboarding",
       footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
+      includeOffer: false,
     },
     suggested: { funnel: { confirmed: "yes", onboarded: "no" }, label: "Подтвердил аккаунт — Да, Прошёл онбординг — Нет" },
   },
@@ -196,8 +203,27 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
       ctaLabel: "Пройти диагностику →",
       ctaPath: "",
       footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
+      includeOffer: false,
     },
     suggested: { funnel: { confirmed: "yes", diagnostic: "no" }, label: "Подтвердил аккаунт — Да, Прошёл диагностику — Нет" },
+  },
+  {
+    id: "discount_abandoned",
+    title: "Скидка ещё действует",
+    hint: "Тем, кто начал оплату тарифа, но не завершил её, — пока их приветственная скидка ещё активна. Точный срок истечения подставится персонально каждому.",
+    kind: "custom",
+    content: {
+      subject: "Твоя скидка ещё активна — успей оплатить",
+      eyebrow: "скидка сгорает",
+      bodyText: `Ты начал(а) оформлять тариф на ЕГЭ·ПРО, но платёж не дошёл до конца.
+
+Хорошая новость — твоя персональная скидка на первую оплату ещё действует (срок — ниже). Она не появится снова, если сейчас истечёт: вернись на страницу тарифов и заверши оплату в пару кликов, тариф включится сразу.`,
+      ctaLabel: "Оплатить со скидкой →",
+      ctaPath: "/tariffs",
+      footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
+      includeOffer: true,
+    },
+    suggested: { funnel: { abandoned: "yes", offer_active: "yes" }, label: "Начал, но не завершил платёж — Да, Скидка ещё активна — Да" },
   },
   {
     id: "custom",
