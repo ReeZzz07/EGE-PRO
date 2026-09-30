@@ -3,6 +3,7 @@
 // нового пароля, сама проверка токена происходит на сервере при отправке формы, не заранее.
 import { useState } from "react";
 import { useAuth } from "../lib/auth";
+import { MIN_PASSWORD_LENGTH } from "../lib/validation";
 import { Icon } from "./ui";
 import type { View } from "./Header";
 
@@ -17,7 +18,7 @@ export default function ResetPasswordView({ token, onNav }: { token: string; onN
 
   const submit = async () => {
     setError(null);
-    if (password.length < 6) return setError("Пароль должен быть не короче 6 символов.");
+    if (password.length < MIN_PASSWORD_LENGTH) return setError(`Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.`);
     if (password !== confirmPassword) return setError("Пароли не совпадают.");
     setBusy(true);
     const res = await resetPassword(token, password);

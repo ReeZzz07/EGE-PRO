@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth, type Gender, type Goal, type Grade } from "../lib/auth";
 import { ChoiceRow, GOAL_OPTS, GRADE_OPTS, TIME_OPTS } from "./OnboardingFlow";
 import { RUSSIAN_REGIONS, CITIES_BY_REGION } from "../data/geo";
+import { isValidAge, MIN_PASSWORD_LENGTH } from "../lib/validation";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
 
@@ -49,6 +50,7 @@ export default function SettingsView({
   const [age, setAge] = useState(profile?.age != null ? String(profile.age) : "");
   const [gender, setGender] = useState<Gender | null>(profile?.gender ?? null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Подсветка блока "О себе" — пришли сюда по кнопке "Заполнить" из напоминалки для уже
   // зарегистрированных пользователей (см. Dashboard.tsx → ProfileCompletionNudge,
@@ -109,6 +111,11 @@ export default function SettingsView({
     gender !== (profile.gender ?? null);
 
   const saveProfile = async () => {
+    // age here шёл прямо в public.profiles без единой проверки на фронте — за пределами 5..100 его
+    // и сейчас остановит CHECK-constraint из 0027_profile_location_demographics.sql, но человек
+    // увидел бы сырую ошибку Postgres вместо понятного сообщения.
+    if (ageNum !== null && !isValidAge(ageNum)) return setProfileError("Возраст должен быть от 5 до 100 лет.");
+    setProfileError(null);
     setSavingProfile(true);
     await updateProfile({
       region: region ?? undefined,
@@ -124,7 +131,7 @@ export default function SettingsView({
 
   const savePassword = async () => {
     if (!currentPassword.trim() || !newPassword.trim()) return setPwError("Заполни оба поля пароля.");
-    if (newPassword.length < 6) return setPwError("Новый пароль должен быть не короче 6 символов.");
+    if (newPassword.length < MIN_PASSWORD_LENGTH) return setPwError(`Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.`);
     if (newPassword !== confirmPassword) return setPwError("Пароли не совпадают.");
     setPwSaving(true);
     setPwError(null);
@@ -254,6 +261,11 @@ export default function SettingsView({
             ))}
           </div>
         </div>
+        {profileError && (
+          <p className="anim-rise flex items-center gap-2 text-[13px] font-bold text-red">
+            <Icon name="alert" size={15} /> {profileError}
+          </p>
+        )}
         <button onClick={saveProfile} disabled={!dirtyProfile || savingProfile} className="btn btn-blue px-5 py-2.5 text-sm">
           {savingProfile ? "Сохраняем…" : "Сохранить изменения"}
         </button>

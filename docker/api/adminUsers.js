@@ -5,6 +5,7 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { pool } from "./db.js";
+import { normalizeEmail, EMAIL_RE } from "./validators.js";
 
 /** Таблицы с прямым user_id, которые нужно включить в выгрузку персональных данных пользователя
  * (см. exportUserData). essay_assessments сюда не входит — она ссылается на essay_submissions
@@ -175,12 +176,22 @@ export async function updateUser(id, patch) {
   try {
     await client.query("begin");
     if (patch.email !== undefined) {
-      const dup = await client.query("select id from auth.users where email = $1 and id <> $2", [patch.email, id]);
+      // Раньше здесь вообще не проверялся формат — админ мог сохранить опечатку в email (например,
+      // поправляя её вручную), и с этого момента человеку переставали доходить любые письма, включая
+      // подтверждение регистрации, без единого сообщения об ошибке. lower(email) в поиске дубликата —
+      // как в /auth/signup и /auth/change-email (server.js), иначе регистр не совпал бы со старыми
+      // аккаунтами.
+      const email = normalizeEmail(patch.email);
+      if (!EMAIL_RE.test(email)) {
+        await client.query("rollback");
+        return { error: "Проверь email — похоже, в адресе опечатка" };
+      }
+      const dup = await client.query("select id from auth.users where lower(email) = $1 and id <> $2", [email, id]);
       if (dup.rows.length) {
         await client.query("rollback");
         return { error: "Этот email уже занят другим аккаунтом" };
       }
-      await client.query("update auth.users set email = $2 where id = $1", [id, patch.email]);
+      await client.query("update auth.users set email = $2 where id = $1", [id, email]);
     }
 
     const sets = [];

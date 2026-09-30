@@ -47,6 +47,7 @@ import {
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
+import { normalizeEmail, EMAIL_RE, MIN_PASSWORD_LENGTH } from "./validators.js";
 import { getWelcomeOffer } from "./offers.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
@@ -152,18 +153,17 @@ async function requireAdmin(req, res, next) {
 
 // ─────────────────────── auth ───────────────────────
 
-// Регистр и пробелы по краям — частая причина «потерянных» аккаунтов: "Ivan@Mail.ru " ≠ "ivan@mail.ru"
-// при входе, а пробельный email вообще давал "No recipients defined" при отправке письма. Все
-// сравнения ниже идут по lower(email), так что старые аккаунты с заглавными буквами продолжают
-// работать.
-const normalizeEmail = (raw) => String(raw ?? "").trim().toLowerCase();
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Все сравнения ниже идут по lower(email) (см. normalizeEmail в validators.js), так что старые
+// аккаунты с заглавными буквами продолжают работать.
 
 app.post("/auth/signup", authLimiter, async (req, res) => {
   const { password, full_name, age, gender } = req.body ?? {};
   const email = normalizeEmail(req.body?.email);
   if (!email || !password) return res.status(400).json({ error: { message: "email и password обязательны" } });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: { message: "Проверь email — похоже, в адресе опечатка" } });
+  // Раньше пароль при регистрации не проверялся вообще (в отличие от смены/сброса пароля ниже,
+  // которые оба требуют 6+ символов) — можно было завести аккаунт с паролем из одного символа.
+  if (password.length < MIN_PASSWORD_LENGTH) return res.status(400).json({ error: { message: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` } });
   // Возраст/пол — обязательны в форме регистрации (см. AuthScreen.tsx), но проверяем и здесь: это
   // единственный момент, когда их вообще можно задать (handle_new_user в 0027_..._demographics.sql
   // забирает их из raw_user_meta_data только при INSERT, а не позже) — некорректные значения молча
@@ -252,7 +252,7 @@ app.delete("/auth/account", authMiddleware, async (req, res) => {
 // не полагаемся на один факт владения токеном).
 app.post("/auth/change-password", authMiddleware, async (req, res) => {
   const { currentPassword, newPassword } = req.body ?? {};
-  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: { message: "Новый пароль должен быть не короче 6 символов" } });
+  if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) return res.status(400).json({ error: { message: `Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` } });
   try {
     const { rows } = await pool.query("select encrypted_password from auth.users where id = $1", [req.user.sub]);
     const row = rows[0];
@@ -389,8 +389,8 @@ app.post("/auth/forgot-password", authLimiter, async (req, res) => {
 
 app.post("/auth/reset-password", authLimiter, async (req, res) => {
   const { token, newPassword } = req.body ?? {};
-  if (!token || !newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: { message: "Новый пароль должен быть не короче 6 символов" } });
+  if (!token || !newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: { message: `Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` } });
   }
   try {
     const userId = await consumeActionToken(token, "reset_password");

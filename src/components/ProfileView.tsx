@@ -10,6 +10,7 @@ import { GOAL_OPTS, GRADE_OPTS } from "./OnboardingFlow";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { getGlobalPointsTotal, getSubjectsPointsTotal } from "../lib/dbTasks";
 import { AVATAR_PRESETS, photoUrlFromAvatarUrl, presetFromAvatarUrl, removeUploadedAvatar, uploadAvatar } from "../lib/avatar";
+import { isValidEmail } from "../lib/validation";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
 
@@ -115,6 +116,7 @@ export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
 
   const saveEmail = async () => {
     if (!newEmail.trim() || !emailPassword.trim()) return setEmailError("Заполни новый email и текущий пароль.");
+    if (!isValidEmail(newEmail)) return setEmailError("Проверь email — похоже, в адресе опечатка.");
     setEmailSaving(true);
     setEmailError(null);
     const res = await changeEmail(emailPassword, newEmail.trim());

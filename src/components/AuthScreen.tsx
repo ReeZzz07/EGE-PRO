@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth, type Gender } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
+import { isValidAge, isValidEmail, MIN_PASSWORD_LENGTH } from "../lib/validation";
 import { Icon } from "./ui";
 import type { View } from "./Header";
 
@@ -55,6 +56,7 @@ export default function AuthScreen({
     setResendSent(false);
     if (mode === "forgot") {
       if (!email.trim()) return setError("Введи email.");
+      if (!isValidEmail(email)) return setError("Проверь email — похоже, в адресе опечатка.");
       setBusy(true);
       const result = await forgotPassword(email.trim());
       setBusy(false);
@@ -64,9 +66,11 @@ export default function AuthScreen({
     }
     if (mode === "signup" && !name.trim()) return setError("Укажи имя — так к тебе будет обращаться репетитор.");
     const ageNum = Number(age);
-    if (mode === "signup" && (!age.trim() || !Number.isInteger(ageNum) || ageNum < 5 || ageNum > 100)) return setError("Укажи возраст (от 5 до 100 лет).");
+    if (mode === "signup" && (!age.trim() || !isValidAge(ageNum))) return setError("Укажи возраст (от 5 до 100 лет).");
     if (mode === "signup" && !gender) return setError("Укажи пол.");
     if (!email.trim() || !password.trim()) return setError("Заполни email и пароль.");
+    if (!isValidEmail(email)) return setError("Проверь email — похоже, в адресе опечатка.");
+    if (mode === "signup" && password.length < MIN_PASSWORD_LENGTH) return setError(`Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.`);
     if (mode === "signup" && password !== confirmPassword) return setError("Пароли не совпадают.");
     setBusy(true);
     const result = mode === "signup" ? await signUp(email.trim(), password, name.trim(), ageNum, gender!) : await signIn(email.trim(), password);

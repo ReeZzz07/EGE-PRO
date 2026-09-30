@@ -17,6 +17,7 @@ import {
   type AdminUserDetail,
 } from "../lib/adminUsers";
 import { ActivitySection, FunnelSteps, fmtDate } from "./AdminUserCard";
+import { isValidEmail } from "../lib/validation";
 import { Icon, useToast } from "./ui";
 
 /** Код → подпись для полей анкеты онбординга (см. OnboardingFlow.tsx) — та же анкета, что видит
@@ -97,6 +98,10 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
   const anonymized = !!detail.anonymized_at;
 
   const save = async () => {
+    // Раньше это поле вообще не проверялось — правка email здесь напрямую пишет в auth.users, и
+    // опечатка молча ломала все будущие письма пользователю (включая подтверждение регистрации),
+    // без единого сообщения об ошибке ни админу, ни человеку.
+    if (!email.trim() || !isValidEmail(email)) return push("Проверь email — похоже, в адресе опечатка.", "err");
     setSaving(true);
     const res = await updateAdminUser(id, {
       fullName: fullName.trim(),
@@ -209,7 +214,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
           </label>
           <label className="block">
             <span className="text-[11.5px] font-bold text-ink2">Email</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} disabled={anonymized} className="input-blank mt-1 w-full rounded-sm px-3 py-2 text-[13px] disabled:opacity-50" />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} disabled={anonymized} type="email" className="input-blank mt-1 w-full rounded-sm px-3 py-2 text-[13px] disabled:opacity-50" />
           </label>
 
           <p className="pt-2 font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Предметы ({detail.subjects.length})</p>

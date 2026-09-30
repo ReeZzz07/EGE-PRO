@@ -270,6 +270,15 @@ test("/auth/signup: явно некорректный email отклоняетс
   }
 });
 
+test("/auth/signup: пароль короче 6 символов отклоняется, ничего не создаёт", async () => {
+  const email = testEmail();
+  const r = await signup({ email, password: "abc12" });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error.message, /не короче 6 символов/);
+  const { rows } = await pool.query("select id from auth.users where lower(email) = $1", [email]);
+  assert.equal(rows.length, 0);
+});
+
 test("/auth/signup: новому ученику автоматически подключаются русский и математика (база) — регресс 0027", async () => {
   const email = testEmail();
   const r = await signup({ email, password: "testpass123", age: 16, gender: "f" });

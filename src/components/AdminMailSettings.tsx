@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { DEFAULT_SMTP_SETTINGS, loadSmtpSettings, saveSmtpSettings, type SmtpSettings } from "../lib/mailSettings";
+import { isValidEmail } from "../lib/validation";
 import { Icon, useToast } from "./ui";
 
 export default function AdminMailSettings() {
@@ -23,6 +24,11 @@ export default function AdminMailSettings() {
 
   const save = async () => {
     if (!profile) return;
+    // Битый логин/адрес отправителя здесь ломает ВСЮ исходящую почту сайта разом (подтверждение
+    // email, сброс пароля, чеки) — не только письма конкретному человеку, поэтому эта форма даже
+    // важнее остальных для валидации.
+    if (settings.user && !isValidEmail(settings.user)) return push("Проверь логин — это должен быть полный email-адрес ящика.", "err");
+    if (settings.fromAddress && !isValidEmail(settings.fromAddress)) return push("Проверь email отправителя — похоже, в адресе опечатка.", "err");
     setSaving(true);
     const res = await saveSmtpSettings(settings, profile.id);
     setSaving(false);
@@ -73,6 +79,7 @@ export default function AdminMailSettings() {
           <input
             value={settings.user}
             onChange={(e) => setSettings((s) => ({ ...s, user: e.target.value.trim() }))}
+            type="email"
             placeholder="noreply@ege-tutor.ru"
             className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 font-mono text-[13px]"
             autoComplete="off"
@@ -108,6 +115,7 @@ export default function AdminMailSettings() {
           <input
             value={settings.fromAddress}
             onChange={(e) => setSettings((s) => ({ ...s, fromAddress: e.target.value.trim() }))}
+            type="email"
             placeholder={settings.user || "noreply@ege-tutor.ru"}
             className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 font-mono text-[13px]"
           />
