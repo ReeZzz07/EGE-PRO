@@ -4,10 +4,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
 import {
+  cancelSchedule,
   createArticle,
   deleteArticle,
   loadAllArticlesAdmin,
   publishArticle,
+  scheduleArticle,
   slugify,
   unpublishArticle,
   updateArticle,
@@ -20,6 +22,19 @@ import { SITE_URL } from "../lib/seo";
 import RichTextEditor from "./RichTextEditor";
 
 const EMPTY_FORM: BlogArticleInput = { title: "", slug: "", excerpt: "", content: "", coverImage: null, isPinned: false, visibleToGuests: true };
+
+// <input type="datetime-local"> хранит и отдаёт "локальное" время без таймзоны — так же, как new
+// Date(value) его и парсит (в таймзоне браузера). Ровно то, что нужно: админ выбирает время по
+// своим часам (аудитория и так вся в MSK), а в БД идёт корректный ISO с таймзоной.
+function msToDatetimeLocal(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatScheduledAt(ms: number): string {
+  return new Date(ms).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 function ArticleForm({
   initial,
@@ -153,6 +168,10 @@ export default function AdminBlog() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  // id статьи, для которой сейчас открыт инлайн-пикер даты/времени публикации (и его значение) —
+  // не часть формы редактирования: планирование доступно и без входа в "Редактировать".
+  const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [scheduleValue, setScheduleValue] = useState("");
 
   const refresh = () => loadAllArticlesAdmin().then((a) => { setArticles(a); setLoading(false); });
   useEffect(() => { refresh(); }, []);
@@ -192,6 +211,28 @@ export default function AdminBlog() {
     refresh();
   };
 
+  const openScheduler = (a: BlogArticle) => {
+    setSchedulingId(a.id);
+    setScheduleValue(msToDatetimeLocal(a.scheduledAt ?? Date.now() + 60 * 60 * 1000));
+  };
+
+  const confirmSchedule = async (id: string) => {
+    const ms = new Date(scheduleValue).getTime();
+    if (!scheduleValue || Number.isNaN(ms)) { push("Укажи дату и время публикации", "err"); return; }
+    const res = await scheduleArticle(id, ms);
+    if (res.error) { push(res.error, "err"); return; }
+    push("Публикация запланирована", "ok");
+    setSchedulingId(null);
+    refresh();
+  };
+
+  const removeSchedule = async (id: string) => {
+    const res = await cancelSchedule(id);
+    if (res.error) { push(res.error, "err"); return; }
+    push("Планирование отменено", "ok");
+    refresh();
+  };
+
   if (loading) {
     return <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
   }
@@ -220,9 +261,15 @@ export default function AdminBlog() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-display text-[15px] font-bold">{a.title}</span>
-                  <span className={`rounded-sm border-2 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide ${a.isPublished ? "border-green/40 bg-green/10 text-green" : "border-ink/20 text-ink2"}`}>
-                    {a.isPublished ? "опубликовано" : "черновик"}
-                  </span>
+                  {a.isPublished ? (
+                    <span className="rounded-sm border-2 border-green/40 bg-green/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-green">опубликовано</span>
+                  ) : a.scheduledAt ? (
+                    <span className="rounded-sm border-2 border-blue/40 bg-blue/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-blue">
+                      <Icon name="timer" size={11} className="mr-0.5 inline align-[-1px]" /> запланировано на {formatScheduledAt(a.scheduledAt)}
+                    </span>
+                  ) : (
+                    <span className="rounded-sm border-2 border-ink/20 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-ink2">черновик</span>
+                  )}
                   {a.isPinned && <span className="font-mono text-[11px]">📌</span>}
                   {!a.visibleToGuests && (
                     <span className="rounded-sm border-2 border-ink/20 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-ink2">только для вошедших</span>
@@ -231,6 +278,23 @@ export default function AdminBlog() {
                 <p className="mt-1 truncate font-mono text-[11.5px] text-ink2">
                   /blog/{a.slug} {a.publishedAt && `· ${new Date(a.publishedAt).toLocaleDateString("ru-RU")}`}
                 </p>
+                {schedulingId === a.id && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduleValue}
+                      min={msToDatetimeLocal(Date.now())}
+                      onChange={(e) => setScheduleValue(e.target.value)}
+                      className="input-blank rounded-sm px-2.5 py-1.5 text-[12.5px]"
+                    />
+                    <button onClick={() => confirmSchedule(a.id)} className="btn btn-blue px-3 py-1.5 text-[12px]">
+                      <Icon name="check" size={13} /> Подтвердить
+                    </button>
+                    <button onClick={() => setSchedulingId(null)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                      Отмена
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {/* Открывает /blog/:slug как реальную страницу — черновик по прямому URL видит только
@@ -239,9 +303,31 @@ export default function AdminBlog() {
                 <a href={`${SITE_URL}/blog/${a.slug}`} target="_blank" rel="noreferrer" className="btn btn-ghost px-3 py-1.5 text-[12px]">
                   <Icon name="eye" size={13} /> Предпросмотр
                 </a>
-                <button onClick={() => togglePublish(a)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
-                  <Icon name={a.isPublished ? "eyeOff" : "check"} size={13} /> {a.isPublished ? "Снять с публикации" : "Опубликовать"}
-                </button>
+                {a.isPublished ? (
+                  <button onClick={() => togglePublish(a)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                    <Icon name="eyeOff" size={13} /> Снять с публикации
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => togglePublish(a)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                      <Icon name="check" size={13} /> {a.scheduledAt ? "Опубликовать сейчас" : "Опубликовать"}
+                    </button>
+                    {a.scheduledAt ? (
+                      <>
+                        <button onClick={() => openScheduler(a)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                          <Icon name="timer" size={13} /> Изменить время
+                        </button>
+                        <button onClick={() => removeSchedule(a.id)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                          <Icon name="x" size={13} /> Отменить план
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => openScheduler(a)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
+                        <Icon name="timer" size={13} /> Запланировать
+                      </button>
+                    )}
+                  </>
+                )}
                 <button onClick={() => setEditingId(a.id)} className="btn btn-ghost px-3 py-1.5 text-[12px]">
                   <Icon name="refresh" size={13} /> Редактировать
                 </button>

@@ -49,6 +49,7 @@ import {
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { getWelcomeOffer } from "./offers.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
+import { startBlogScheduler } from "./blogScheduler.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
@@ -1538,6 +1539,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const server = app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
 startLifecycleScheduler();
+startBlogScheduler();
 resumeCampaigns().catch((e) => console.warn("[campaigns] не удалось возобновить рассылки:", e?.message ?? e));
 
 // раньше необработанное исключение/rejection (например, в неawait'нутом .catch() пула — см.

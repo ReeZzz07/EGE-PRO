@@ -20,6 +20,10 @@ export interface BlogArticle {
   visibleToGuests: boolean;
   /** мс от эпохи, как profile.tariffExpiresAt — null, пока статья ни разу не публиковалась. */
   publishedAt: number | null;
+  /** Время автопубликации, выбранное админом (docker/api/blogScheduler.js) — null, если не
+   *  запланирована. Имеет смысл только пока isPublished === false; после публикации (ручной или по
+   *  расписанию) всегда сбрасывается в null, см. publishArticle/blogScheduler.js. */
+  scheduledAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -78,6 +82,7 @@ function fromRow(row: Record<string, unknown>): BlogArticle {
     isPinned: row.is_pinned as boolean,
     visibleToGuests: row.visible_to_guests as boolean,
     publishedAt: row.published_at ? new Date(row.published_at as string).getTime() : null,
+    scheduledAt: row.scheduled_at ? new Date(row.scheduled_at as string).getTime() : null,
     createdAt: new Date(row.created_at as string).getTime(),
     updatedAt: new Date(row.updated_at as string).getTime(),
   };
@@ -164,10 +169,12 @@ export async function updateArticle(id: string, patch: Partial<BlogArticleInput>
 }
 
 /** currentPublishedAt — publishedAt статьи ДО вызова: published_at ставится в now() только если
- *  статья ещё ни разу не публиковалась, иначе дата первой публикации не съезжает при переиздании. */
+ *  статья ещё ни разу не публиковалась, иначе дата первой публикации не съезжает при переиздании.
+ *  Публикация вручную (в т.ч. "опубликовать сейчас" у запланированной статьи) всегда снимает
+ *  scheduled_at — иначе он остался бы висеть на уже опубликованной статье без всякого смысла. */
 export async function publishArticle(id: string, currentPublishedAt: number | null): Promise<{ error?: string }> {
   if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
-  const row: Record<string, unknown> = { is_published: true };
+  const row: Record<string, unknown> = { is_published: true, scheduled_at: null };
   if (currentPublishedAt === null) row.published_at = new Date().toISOString();
   const { error } = await supabase.from("blog_articles").update(row).eq("id", id);
   return error ? { error: error.message } : {};
@@ -176,6 +183,22 @@ export async function publishArticle(id: string, currentPublishedAt: number | nu
 export async function unpublishArticle(id: string): Promise<{ error?: string }> {
   if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
   const { error } = await supabase.from("blog_articles").update({ is_published: false }).eq("id", id);
+  return error ? { error: error.message } : {};
+}
+
+/** Ставит время автопубликации — фактическую публикацию делает docker/api/blogScheduler.js, не
+ *  Supabase-shim/RLS (запись сюда доступна только админу по существующей политике blog_articles_admin_write,
+ *  сама by-schedule публикация выполняется от имени сервера напрямую через pool). whenMs в прошлом не
+ *  запрещаем — тикер просто опубликует статью на ближайшем тике, это по сути "опубликовать почти сейчас". */
+export async function scheduleArticle(id: string, whenMs: number): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
+  const { error } = await supabase.from("blog_articles").update({ scheduled_at: new Date(whenMs).toISOString() }).eq("id", id);
+  return error ? { error: error.message } : {};
+}
+
+export async function cancelSchedule(id: string): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { error: "Бэкенд не подключён." };
+  const { error } = await supabase.from("blog_articles").update({ scheduled_at: null }).eq("id", id);
   return error ? { error: error.message } : {};
 }
 
