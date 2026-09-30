@@ -93,7 +93,12 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
   const { profile, signOut } = useAuth();
   const unreadBlog = useUnreadBlogCount(profile?.id);
   const [menuOpen, setMenuOpen] = useState(false);
-  const active = view.name === "task" ? "bank" : view.name === "blog-article" ? "blog" : view.name;
+  // "landing" -> "home": у гостя главная страница называется view.name "landing" (с необязательным
+  // section при клике по якорю), а не "home" как в NAV/GUEST_NAV, — без этой нормализации пункт
+  // "Главная" никогда не подсвечивался бы активным. Прокрутку до конкретной секции ("Предметы",
+  // "Возможности"...) не отслеживаем (нет scroll-spy) — подсвечиваем только "Главная" целиком, это
+  // не хуже, чем не подсвечивать ничего, и не мешает "Тарифы"/"База знаний" подсвечиваться отдельно.
+  const active = view.name === "task" ? "bank" : view.name === "blog-article" ? "blog" : view.name === "landing" ? "home" : view.name;
 
   const goTo = (name: string) => {
     onNav({ name } as View);
