@@ -7,6 +7,7 @@ import { useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal } from "./ui";
 import AuthScreen from "./AuthScreen";
 import type { View } from "./Header";
+import { OfferStepHint } from "./WelcomeOfferBanner";
 
 type Step = "location" | "subject" | "quiz" | "auth" | "explainer";
 const STEPS: Step[] = ["location", "subject", "quiz", "auth", "explainer"];
@@ -171,6 +172,7 @@ export default function OnboardingFlow({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
+      <OfferStepHint step="onboarding" />
       {/* прогресс шагов */}
       <div className="mb-8 flex items-center gap-1.5">
         {STEPS.map((s, i) => (

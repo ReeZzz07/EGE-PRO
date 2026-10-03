@@ -8,7 +8,7 @@
 import { useState } from "react";
 import type { WelcomeOffer } from "../lib/offers";
 import { Icon } from "./ui";
-import { OfferClock } from "./WelcomeOfferBanner";
+import { OfferClock, pendingStepsText } from "./WelcomeOfferBanner";
 import type { View } from "./Header";
 
 export const PLAN_UPGRADE_DISMISSED_KEY = "ege-pro.plan-upgrade-dismissed.v1";
@@ -58,7 +58,7 @@ export default function PlanUpgradeBanner({
           )}
           {offer && (
             <span data-testid="plan-upgrade-offer" className="mt-1.5 block font-bold">
-              −{offer.percent}% на первую оплату · осталось <OfferClock expiresAt={offer.expiresAt} />
+              −{offer.percent}% на первую оплату{offer.maxPercent > offer.percent && pendingStepsText(offer) ? ` (до −${offer.maxPercent}%: пройди ${pendingStepsText(offer)})` : ""} · осталось <OfferClock expiresAt={offer.expiresAt} />
             </span>
           )}
         </div>

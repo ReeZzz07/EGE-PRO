@@ -5,7 +5,7 @@ import { useProgress } from "../lib/store";
 import { callAiTutor, loadAiQuota, type AiMode, type AiQuota } from "../lib/aiTutor";
 import { loadWelcomeOffer, type WelcomeOffer } from "../lib/offers";
 import { TutorText } from "./ui";
-import { OfferClock } from "./WelcomeOfferBanner";
+import { OfferClock, pendingStepsText } from "./WelcomeOfferBanner";
 
 const HINT_RE = /(подсказ|намек|намеёк|помоги решить|направь)/i;
 const EXPLAIN_RE = /(объясн|решени|разбор|разбери|как решить|полное реш|ответ задания)/i;
@@ -296,7 +296,7 @@ export default function TutorChat({
             <p className="mt-1 text-paper/80">Завтра лимит обновится. Чтобы продолжить разбор прямо сейчас — открой безлимитного ИИ-репетитора: подсказки по уровням, разбор ошибок по шагам, без дневного лимита.</p>
             {offer && (
               <p className="mt-2 text-[12.5px]">
-                <strong className="text-hl">−{offer.percent}% на первую оплату</strong> · осталось <OfferClock expiresAt={offer.expiresAt} />
+                <strong className="text-hl">−{offer.percent}% на первую оплату</strong>{offer.maxPercent > offer.percent && pendingStepsText(offer) ? ` (до −${offer.maxPercent}%: пройди ${pendingStepsText(offer)})` : ""} · осталось <OfferClock expiresAt={offer.expiresAt} />
               </p>
             )}
             <button onClick={() => onNavigate?.("tariffs")} className="mt-2.5 rounded-sm bg-hl px-3.5 py-2 text-[12.5px] font-bold text-night transition hover:brightness-110">

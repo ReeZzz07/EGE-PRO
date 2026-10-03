@@ -52,7 +52,7 @@ import { getWelcomeOffer } from "./offers.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
-import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail } from "./lifecycleEmails.js";
+import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
 import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
 import { createActionToken, consumeActionToken, inspectActionToken } from "./authTokens.js";
@@ -336,7 +336,7 @@ app.post("/auth/verify-email", authLimiter, async (req, res) => {
       // сделает через минуту, не страшно. Реальная цель — те, кто вышел из мастера регистрации на
       // середине и вернулся позже уже по ссылке из письма (см. Dashboard.tsx → OnboardingNudge,
       // тот же случай).
-      await sendWelcomeEmail(user.email, { fullName: p.rows[0]?.full_name, siteUrl, onboarded: !!p.rows[0]?.onboarded_at });
+      await sendWelcomeEmail(user.email, { fullName: p.rows[0]?.full_name, siteUrl, onboarded: !!p.rows[0]?.onboarded_at, offerBlock: offerBlock(await getWelcomeOffer(userId)) });
     })().catch((e) => console.warn("не удалось отправить приветственное письмо:", e?.message ?? e));
   } catch (e) {
     res.status(500).json({ error: { message: String(e?.message ?? e) } });

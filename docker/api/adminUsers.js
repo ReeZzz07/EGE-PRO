@@ -47,9 +47,12 @@ const BOOL_EXPR = {
       and u.email_confirmed_at is not null
       and not exists (select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded')
       and coalesce((select (value->>'enabled')::boolean from public.app_settings where key = 'welcome_offer'), true)
-      and greatest(u.email_confirmed_at, coalesce((select min(d.finished_at) from public.diagnostics d where d.user_id = u.id), u.email_confirmed_at))
-          + make_interval(hours => coalesce((select (value->>'hours')::int from public.app_settings where key = 'welcome_offer'), 72))
-        > now())`,
+      and greatest(u.email_confirmed_at, coalesce(p.onboarded_at, u.email_confirmed_at), coalesce((select min(d.finished_at) from public.diagnostics d where d.user_id = u.id), u.email_confirmed_at))
+          + make_interval(hours => coalesce((select (value->>'hours')::int from public.app_settings where key = 'welcome_offer'), 120))
+        > now()
+      and (coalesce((select (value->>'confirmPercent')::int from public.app_settings where key = 'welcome_offer'), 10)
+           + case when p.onboarded_at is not null then coalesce((select (value->>'onboardingPercent')::int from public.app_settings where key = 'welcome_offer'), 10) else 0 end
+           + case when exists (select 1 from public.diagnostics dd where dd.user_id = u.id) then coalesce((select (value->>'diagnosticPercent')::int from public.app_settings where key = 'welcome_offer'), 10) else 0 end) > 0)`,
 };
 export const USER_BOOL_FILTERS = Object.keys(BOOL_EXPR);
 

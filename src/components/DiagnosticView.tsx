@@ -8,6 +8,7 @@ import { saveDiagnosticResult, mirrorDiagnosticToSupabase } from "../lib/planSto
 import { useAuth } from "../lib/auth";
 import { getDiagnosticPick, hydrateDiagnosticTasks, isDiagnosticLoading, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal, TaskStatement } from "./ui";
+import { OfferStepHint } from "./WelcomeOfferBanner";
 
 type Phase = "setup" | "running" | "result";
 
@@ -55,6 +56,7 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
   if (phase === "setup") {
     return (
       <div className="mx-auto max-w-xl px-4 py-16">
+        <OfferStepHint step="diagnostic" />
         <Reveal>
           <span className={`font-display inline-block border-2 border-ink px-2.5 py-1 text-[12px] font-black ${meta.color}`}>{meta.name}</span>
           <h1 className="font-display mt-4 text-2xl font-black">Диагностика по предмету</h1>

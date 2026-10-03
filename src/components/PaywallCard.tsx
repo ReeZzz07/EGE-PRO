@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useWelcomeOffer } from "../lib/offers";
 import { reachGoalOnce } from "../lib/metrika";
 import { Icon } from "./ui";
-import { OfferClock } from "./WelcomeOfferBanner";
+import { OfferClock, pendingStepsText } from "./WelcomeOfferBanner";
 import type { View } from "./Header";
 
 export default function PaywallCard({
@@ -35,7 +35,7 @@ export default function PaywallCard({
       {offer && (
         <p className="mt-3 inline-flex flex-wrap items-center gap-x-2 gap-y-1 border-2 border-ink bg-hl px-3 py-1.5 text-[12.5px] text-ink">
           <Icon name="spark" size={14} />
-          <strong>−{offer.percent}% на первую оплату</strong> · осталось <OfferClock expiresAt={offer.expiresAt} />
+          <strong>−{offer.percent}% на первую оплату</strong>{offer.maxPercent > offer.percent && pendingStepsText(offer) ? ` (до −${offer.maxPercent}%: пройди ${pendingStepsText(offer)})` : ""} · осталось <OfferClock expiresAt={offer.expiresAt} />
         </p>
       )}
       <div>

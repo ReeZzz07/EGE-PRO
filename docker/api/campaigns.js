@@ -120,7 +120,17 @@ ${offerHtml.html}
   };
 }
 
-const SAMPLE_OFFER = { active: true, percent: 30, expiresAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString() };
+const SAMPLE_OFFER = {
+  active: true,
+  percent: 20,
+  maxPercent: 30,
+  expiresAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+  steps: [
+    { key: "confirm", percent: 10, earned: true },
+    { key: "onboarding", percent: 10, earned: true },
+    { key: "diagnostic", percent: 10, earned: false },
+  ],
+};
 
 /** Предпросмотр / тест: образцовое имя (и образцовая скидка, если включена). Для повторной ссылки
  *  подтверждения — то же стандартное письмо, что реально уйдёт, с образцовой (нерабочей) ссылкой. */

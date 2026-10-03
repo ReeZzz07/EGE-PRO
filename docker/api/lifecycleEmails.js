@@ -121,7 +121,17 @@ export const SAMPLE_VARS = {
   приостановлено: "3",
 };
 const SAMPLE_SUMMARY = { tariffName: "ВУЗ", extraSubjects: 1, amountRub: 4280 };
-const SAMPLE_OFFER = { active: true, percent: 30, expiresAt: new Date(Date.now() + 50 * 3600 * 1000).toISOString() };
+const SAMPLE_OFFER = {
+  active: true,
+  percent: 10,
+  maxPercent: 30,
+  expiresAt: new Date(Date.now() + 50 * 3600 * 1000).toISOString(),
+  steps: [
+    { key: "confirm", percent: 10, earned: true },
+    { key: "onboarding", percent: 10, earned: false },
+    { key: "diagnostic", percent: 10, earned: false },
+  ],
+};
 
 /** Текст из админки: непустые тема/текст перекрывают дефолт, остальное — по умолчанию. */
 export async function resolveLifecycleTemplates() {
@@ -176,12 +186,23 @@ export function fillLine(text, vars) {
 
 const rubles = (n) => `${Number(n).toLocaleString("ru-RU")} ₽`;
 
+/** Что ещё осталось сделать, чтобы скидка выросла: «онбординг (+10%) и диагностику (+10%)». */
+function pendingStepsText(offer) {
+  const names = { onboarding: "онбординг", diagnostic: "диагностику" };
+  const pending = (offer.steps ?? []).filter((s) => !s.earned && s.percent > 0 && names[s.key]);
+  return pending.map((s) => `${names[s.key]} (+${s.percent}%)`).join(" и ");
+}
+
 export function offerBlock(offer) {
   if (!offer?.active) return { text: "", html: "" };
   const until = new Date(offer.expiresAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-  const text = `На первую оплату тарифа действует скидка −${offer.percent}% — до ${until} (МСК). Применится сама при оплате.`;
+  const pending = pendingStepsText(offer);
+  const grow = pending && offer.maxPercent > offer.percent ? ` Пройди ${pending} — и скидка вырастет до −${offer.maxPercent}%.` : "";
+  const text = `На первую оплату тарифа действует скидка −${offer.percent}% — до ${until} (МСК).${grow} Применится сама при оплате.`;
   return {
-    text: `\n\n${text}`,
+    text: `
+
+${text}`,
     html: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;background:#ffe45e;border:2px solid #15172e;"><tr><td style="padding:11px 14px;font-size:14px;font-weight:700;">${escapeHtml(text)}</td></tr></table>`,
   };
 }

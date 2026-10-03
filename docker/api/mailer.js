@@ -307,6 +307,9 @@ export function wrapBrandedHtml(innerHtml, siteUrl, footerNote = "Это раз�
  *  заполнено при регистрации), тогда приветствие обезличенное. siteUrl — для логотипа-ссылки в
  *  шапке и кнопки "Открыть тренажёр", тот же process.env.CORS_ORIGIN, что и в остальных письмах.
  *  onboarded — прошёл ли ученик анкету подготовки (profiles.onboarded_at) НА МОМЕНТ отправки:
+ *  offerBlock — готовый { text, html } блока скидки (offerBlock из lifecycleEmails.js; здесь не
+ *  импортируем сами — lifecycleEmails.js импортирует mailer.js, цикл не нужен): сервер передаёт его
+ *  в момент подтверждения почты, чтобы сразу показать, что скидка уже началась и вырастет за шаги.
  *  false добавляет блок-напоминание (см. renderReminderCallout) — актуально в первую очередь для
  *  тех, кто вышел из мастера регистрации на середине (см. Dashboard.tsx → OnboardingNudge, тот же
  *  сценарий); по умолчанию true — не показываем напоминание, если статус неизвестен, а не наоборот.
@@ -317,7 +320,7 @@ export function wrapBrandedHtml(innerHtml, siteUrl, footerNote = "Это раз�
  *  комментарий у sendMail выше). */
 export async function sendWelcomeEmail(
   to,
-  { fullName, siteUrl, onboarded = true, subject: subjectOverride, bodyText: bodyOverride, onboardingReminderText: reminderOverride } = {}
+  { fullName, siteUrl, onboarded = true, offerBlock = null, subject: subjectOverride, bodyText: bodyOverride, onboardingReminderText: reminderOverride } = {}
 ) {
   const resolved =
     subjectOverride && bodyOverride
@@ -330,13 +333,14 @@ export async function sendWelcomeEmail(
   await sendMail({
     to,
     subject,
-    text: `${greeting}\n\n${bodyText}${reminderText}\n\nОткрыть тренажёр: ${url}`,
+    text: `${greeting}\n\n${bodyText}${reminderText}${offerBlock?.text ?? ""}\n\nОткрыть тренажёр: ${url}`,
     html: wrapBrandedHtml(
       `
 <p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">почта подтверждена</p>
 <h2 style="margin:0 0 18px;font-size:21px;">${escapeHtml(greeting)}</h2>
 ${renderBodyRich(bodyText)}
 ${onboarded ? "" : renderReminderCallout(onboardingReminderText)}
+${offerBlock?.html ?? ""}
 <p style="margin:26px 0 4px;"><a href="${escapeHtml(url)}" style="background:#2447e9;color:#f4f6ff;padding:12px 22px;text-decoration:none;font-weight:700;font-size:14px;border:2px solid #101b5e;display:inline-block;">Открыть тренажёр →</a></p>
 `,
       url

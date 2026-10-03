@@ -5,6 +5,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { applySucceededPayment, effectiveDiscountPercent, getPaymentSummary, priceWithDiscount } from "../payments.js";
+import { getWelcomeOffer } from "../offers.js";
 import { createTestUser, deleteTestUser, createTestPayment, pool } from "./helpers.js";
 
 after(() => pool.end());
@@ -138,4 +139,19 @@ test("getPaymentSummary: возвращает сумму числом и тар�
 
 test("getPaymentSummary: несуществующий платёж — null", async () => {
   assert.equal(await getPaymentSummary("00000000-0000-0000-0000-000000000000"), null);
+});
+
+test("цена к оплате берёт только заработанные части приветственной скидки: почта — 10%, +онбординг — 20%, +диагностика — 30%", async () => {
+  await pool.query("delete from public.app_settings where key = 'welcome_offer'");
+  const userId = await createTestUser();
+  try {
+    const price = async () => priceWithDiscount(1990, effectiveDiscountPercent(null, await getWelcomeOffer(userId)));
+    assert.equal(await price(), 1791); // только подтверждённая почта: −10%
+    await pool.query("update public.profiles set onboarded_at = now() where id = $1", [userId]);
+    assert.equal(await price(), 1592); // + онбординг: −20%
+    await pool.query("insert into public.diagnostics (user_id, subject) values ($1, 'math')", [userId]);
+    assert.equal(await price(), 1393); // + диагностика: −30%
+  } finally {
+    await deleteTestUser(userId);
+  }
 });

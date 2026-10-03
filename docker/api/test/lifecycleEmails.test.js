@@ -2,7 +2,7 @@
 // переопределение из админки, оформление. SMTP не трогаем — только сборка письма.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { KINDS, TEMPLATES, SAMPLE_VARS, buildLifecycleEmail, buildSampleEmail, fillBody, fillLine, resolveLifecycleTemplates, ABANDONED_CTA_BY_KIND } from "../lifecycleEmails.js";
+import { KINDS, TEMPLATES, SAMPLE_VARS, buildLifecycleEmail, buildSampleEmail, fillBody, fillLine, resolveLifecycleTemplates, ABANDONED_CTA_BY_KIND, offerBlock } from "../lifecycleEmails.js";
 import { pool } from "./helpers.js";
 
 after(async () => {
@@ -133,4 +133,24 @@ test("plan: {темы} пусто (диагностика без слабых т
 test("plan: кнопка ведёт на /plan", async () => {
   const m = await buildLifecycleEmail("plan", SAMPLE_VARS, { siteUrl: "https://x.test" });
   assert.match(m.text, /https:\/\/x\.test\/plan/);
+});
+
+test("блок скидки: заработана только часть — показывает текущий процент и что ещё пройти, чтобы дорасти до максимума", () => {
+  const steps = (e1, e2, e3) => [
+    { key: "confirm", percent: 10, earned: e1 },
+    { key: "onboarding", percent: 10, earned: e2 },
+    { key: "diagnostic", percent: 10, earned: e3 },
+  ];
+  const expiresAt = new Date(Date.now() + 3600_000).toISOString();
+
+  const first = offerBlock({ active: true, percent: 10, maxPercent: 30, expiresAt, steps: steps(true, false, false) });
+  assert.ok(first.text.includes("скидка −10%"));
+  assert.ok(first.text.includes("онбординг (+10%) и диагностику (+10%)"));
+  assert.ok(first.text.includes("вырастет до −30%"));
+
+  const second = offerBlock({ active: true, percent: 20, maxPercent: 30, expiresAt, steps: steps(true, true, false) });
+  assert.ok(second.text.includes("диагностику (+10%)") && !second.text.includes("онбординг"));
+
+  const full = offerBlock({ active: true, percent: 30, maxPercent: 30, expiresAt, steps: steps(true, true, true) });
+  assert.ok(full.text.includes("скидка −30%") && !full.text.includes("вырастет"));
 });

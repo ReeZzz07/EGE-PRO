@@ -16,7 +16,7 @@ import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
 import { useWelcomeOffer } from "../lib/offers";
 import { Icon, useToast } from "./ui";
-import WelcomeOfferBanner from "./WelcomeOfferBanner";
+import WelcomeOfferBanner, { pendingStepsText } from "./WelcomeOfferBanner";
 import SubscriptionBanner from "./SubscriptionBanner";
 import type { View } from "./Header";
 
@@ -92,7 +92,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
 
       {profile && profile.subscription && <SubscriptionBanner sub={profile.subscription} onNav={onNav} />}
 
-      {offer && <WelcomeOfferBanner offer={offer} />}
+      {offer && <WelcomeOfferBanner offer={offer} onNav={onNav} onTariffsPage />}
 
       {profile?.isAdmin && (
         <p className="mt-6 border-l-4 border-blue bg-blue/8 px-4 py-3 text-[13px] leading-relaxed text-ink2">
@@ -132,6 +132,11 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
               {t.priceRub > 0 && discountedPrice(t.salePriceRub ?? t.priceRub) != null && (
                 <p className="mt-1 font-mono text-[12px] font-bold text-teal">
                   К оплате со скидкой −{effectiveDiscount}%: {money(discountedPrice(t.salePriceRub ?? t.priceRub)!)}
+                </p>
+              )}
+              {t.priceRub > 0 && offer && offer.maxPercent > effectiveDiscount && pendingStepsText(offer) && (
+                <p className="mt-0.5 font-mono text-[11.5px] text-ink2">
+                  Пройди {pendingStepsText(offer)} — будет −{offer.maxPercent}%: {money(Math.round((t.salePriceRub ?? t.priceRub) * (1 - offer.maxPercent / 100) * 100) / 100)}
                 </p>
               )}
               <ul className="mt-4 flex-1 space-y-2 text-[13px] text-ink2">

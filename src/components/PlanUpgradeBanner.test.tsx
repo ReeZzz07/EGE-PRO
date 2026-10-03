@@ -3,7 +3,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PlanUpgradeBanner, { PLAN_UPGRADE_DISMISSED_KEY } from "./PlanUpgradeBanner";
 
-const offer = { percent: 30, expiresAt: new Date(Date.now() + 50 * 3600 * 1000).toISOString() };
+const offer = {
+  percent: 30,
+  maxPercent: 30,
+  expiresAt: new Date(Date.now() + 50 * 3600 * 1000).toISOString(),
+  steps: [
+    { key: "confirm" as const, percent: 10, earned: true },
+    { key: "onboarding" as const, percent: 10, earned: true },
+    { key: "diagnostic" as const, percent: 10, earned: true },
+  ],
+};
 
 describe("PlanUpgradeBanner", () => {
   beforeEach(() => sessionStorage.clear());
