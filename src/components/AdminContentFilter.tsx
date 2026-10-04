@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import {
   FILTER_KIND_LABEL, FILTER_RULE_LABEL, FILTER_TARGET_LABEL,
-  loadContentFilter, saveContentFilter, testContentFilter,
+  clearContentFilterLog, loadContentFilter, saveContentFilter, testContentFilter,
   type FilterConfig, type FilterLogItem, type FilterRuleKey, type FilterTarget, type FilterViolation,
 } from "../lib/feedback";
 import { useToast } from "./ui";
@@ -51,6 +51,16 @@ export default function AdminContentFilter() {
     setCfg(r.config!);
     setSaved(JSON.stringify(r.config));
     push("Правила фильтра сохранены", "ok");
+  };
+
+  const clearLog = async () => {
+    if (!window.confirm(`Очистить журнал срабатываний (записей: ${log.length})? Правила фильтра останутся. Это нельзя отменить.`)) return;
+    setBusy(true);
+    const r = await clearContentFilterLog();
+    setBusy(false);
+    if (r.error) return push(r.error, "err");
+    setLog([]);
+    push(`Журнал очищен (удалено записей: ${r.deleted})`, "ok");
   };
 
   const runTest = async () => {
@@ -199,9 +209,14 @@ export default function AdminContentFilter() {
           <h3 id="cf-log-title" className="font-display text-[15px] font-black">
             Журнал срабатываний
           </h3>
-          <button onClick={() => void load()} className="link-slide text-[12.5px] font-bold text-ink2 hover:text-ink">
-            Обновить
-          </button>
+          <div className="flex items-center gap-4">
+            <button onClick={() => void load()} className="link-slide text-[12.5px] font-bold text-ink2 hover:text-ink">
+              Обновить
+            </button>
+            <button onClick={clearLog} disabled={busy || log.length === 0} className="btn btn-ghost px-3 py-1.5 text-[12px] text-red disabled:opacity-40">
+              Очистить журнал
+            </button>
+          </div>
         </div>
         <p className="mt-1 text-[12.5px] text-ink2">Последние 100 отклонённых текстов (хранятся 90 дней, только короткий фрагмент). Если здесь обычный текст — добавьте слово в исключения.</p>
         {log.length === 0 ? (

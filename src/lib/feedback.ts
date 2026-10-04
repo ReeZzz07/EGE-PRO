@@ -354,6 +354,15 @@ export async function saveContentFilter(config: FilterConfig): Promise<{ config?
   }
 }
 
+export async function clearContentFilterLog(): Promise<{ deleted?: number; error?: string }> {
+  try {
+    const resp = await apiFetch("/admin/content-filter/log", { method: "DELETE" });
+    return resp.ok ? { deleted: ((await resp.json()) as { deleted: number }).deleted } : { error: await errorOf(resp, "Не удалось очистить журнал.") };
+  } catch {
+    return { error: NET_ERROR };
+  }
+}
+
 /** Проверка текста по правилам из формы (даже несохранённым). */
 export async function testContentFilter(text: string, target: FilterTarget, config: FilterConfig): Promise<{ ok?: boolean; violations?: FilterViolation[]; message?: string; error?: string }> {
   try {

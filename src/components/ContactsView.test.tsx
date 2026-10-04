@@ -27,6 +27,7 @@ vi.mock("../lib/feedback", async (orig) => ({
   saveSupportSender: vi.fn(),
   sendSupportSenderTest: vi.fn(),
   loadContentFilter: vi.fn(),
+  clearContentFilterLog: vi.fn(),
   saveContentFilter: vi.fn(),
   testContentFilter: vi.fn(),
 }));
@@ -266,5 +267,36 @@ describe("AdminFeedback", () => {
     // возврат к стандартному списку
     fireEvent.click(screen.getByRole("button", { name: "Вернуть стандартный список" }));
     expect(screen.getByLabelText(/^Запрещённые слова \(\d+\)/)).toHaveValue("хуй\n");
+  });
+
+  it("фильтр текста: «Очистить журнал» спрашивает подтверждение, чистит только журнал и не трогает правила", async () => {
+    vi.mocked(fb.loadAdminFeedback).mockResolvedValue(list([]));
+    const on = { words: true, phones: true, emails: true, links: true, handles: true };
+    vi.mocked(fb.loadContentFilter).mockResolvedValue({
+      config: { enabled: true, words: "хуй\n", allow: "", allowedDomains: "ege-tutor.ru", targets: { feedback: { ...on }, reviews: { ...on } } },
+      defaults: { words: "хуй\n", allow: "", allowedDomains: "ege-tutor.ru" },
+      log: [
+        { id: 2, createdAt: new Date().toISOString(), target: "feedback", field: "message", reasons: ["phones"], snippet: "Звоните мне срочно" },
+        { id: 1, createdAt: new Date().toISOString(), target: "feedback", field: "message", reasons: ["handles"], snippet: "Пишите в телеграм" },
+      ],
+    });
+    vi.mocked(fb.clearContentFilterLog).mockResolvedValue({ deleted: 2 });
+    const confirm = vi.spyOn(window, "confirm");
+    render(<AdminFeedback />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Фильтр текста" }));
+    expect(await screen.findByText("Звоните мне срочно")).toBeInTheDocument();
+
+    confirm.mockReturnValueOnce(false);
+    fireEvent.click(screen.getByRole("button", { name: "Очистить журнал" }));
+    expect(fb.clearContentFilterLog).not.toHaveBeenCalled();
+    expect(screen.getByText("Звоните мне срочно")).toBeInTheDocument();
+
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole("button", { name: "Очистить журнал" }));
+    await waitFor(() => expect(fb.clearContentFilterLog).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Пока ничего не блокировалось.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Очистить журнал" })).toBeDisabled();
+    expect(fb.saveContentFilter).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });

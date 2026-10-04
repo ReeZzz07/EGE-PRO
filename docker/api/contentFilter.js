@@ -477,6 +477,12 @@ export async function listFilterLog(limit = 100) {
   return rows.map((r) => ({ id: r.id, createdAt: r.created_at, target: r.target, field: r.field, reasons: r.reasons, snippet: r.snippet }));
 }
 
+/** Полная очистка журнала срабатываний (кнопка в админке). Возвращает, сколько записей удалено. */
+export async function clearFilterLog() {
+  const { rowCount } = await pool.query("delete from public.content_filter_log");
+  return rowCount ?? 0;
+}
+
 /**
  * Проверяет поля формы и бросает ContentFilterError (422) с понятным сообщением, если что-то не так.
  * fields: { имя_поля: текст }; срабатывание пишется в журнал.

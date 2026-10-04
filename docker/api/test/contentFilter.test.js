@@ -4,7 +4,7 @@ import { test, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkText, sanitizeConfig, tokenize, parseWordRules, parseAllowRules, userMessage, parseDomains, ContentFilterError,
-  saveFilterConfig, loadFilterConfig, listFilterLog, assertCleanText, DEFAULT_CONFIG,
+  saveFilterConfig, loadFilterConfig, listFilterLog, clearFilterLog, assertCleanText, DEFAULT_CONFIG,
 } from "../contentFilter.js";
 import { createFeedback, setMailSenderForTests } from "../feedback.js";
 import { saveMyReview } from "../reviews.js";
@@ -225,4 +225,15 @@ test("журнал: записи старше 90 дней удаляются п�
   assert.equal(log[0].target, "reviews");
   const row = (await pool.query("select ip_hash from public.content_filter_log limit 1")).rows[0];
   assert.match(row.ip_hash, /^[0-9a-f]{32}$/);
+});
+
+test("очистка журнала: удаляет все записи и возвращает их число; правила остаются", async () => {
+  await saveFilterConfig({ ...DEFAULT_CONFIG, words: "тролль" }, null);
+  await assertCleanText({ message: "заходи на http://bad.example.com" }, "feedback").catch(() => {});
+  await assertCleanText({ message: "ты тролль" }, "reviews").catch(() => {});
+  assert.equal((await listFilterLog()).length, 2);
+  assert.equal(await clearFilterLog(), 2);
+  assert.equal((await listFilterLog()).length, 0);
+  assert.equal(await clearFilterLog(), 0);
+  assert.equal((await loadFilterConfig()).words, "тролль", "очистка журнала правила не трогает");
 });

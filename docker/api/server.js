@@ -54,7 +54,7 @@ import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, list
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
 import { getAdminBadges, startAdminDigestScheduler } from "./adminNotify.js";
-import { ContentFilterError, sanitizeConfig as sanitizeFilterConfig, loadFilterConfig, saveFilterConfig, listFilterLog, checkText, userMessage, DEFAULT_CONFIG as FILTER_DEFAULTS, TARGETS as FILTER_TARGETS } from "./contentFilter.js";
+import { ContentFilterError, sanitizeConfig as sanitizeFilterConfig, loadFilterConfig, saveFilterConfig, listFilterLog, clearFilterLog, checkText, userMessage, DEFAULT_CONFIG as FILTER_DEFAULTS, TARGETS as FILTER_TARGETS } from "./contentFilter.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
@@ -852,6 +852,15 @@ app.get("/admin/content-filter", authMiddleware, requireAdmin, async (_req, res)
       defaults: { words: FILTER_DEFAULTS.words, allow: FILTER_DEFAULTS.allow, allowedDomains: FILTER_DEFAULTS.allowedDomains },
       log: await listFilterLog(100),
     });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+// Очистка журнала срабатываний (сами правила не трогает)
+app.delete("/admin/content-filter/log", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json({ deleted: await clearFilterLog() });
   } catch (e) {
     feedbackFail(res, e);
   }
