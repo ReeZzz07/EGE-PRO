@@ -54,6 +54,7 @@ import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, list
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
 import { getAdminBadges, startAdminDigestScheduler } from "./adminNotify.js";
+import { ContentFilterError, sanitizeConfig as sanitizeFilterConfig, loadFilterConfig, saveFilterConfig, listFilterLog, checkText, userMessage, DEFAULT_CONFIG as FILTER_DEFAULTS, TARGETS as FILTER_TARGETS } from "./contentFilter.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
@@ -788,7 +789,7 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 });
 
 // ─────────────────────── обратная связь (см. feedback.js, миграция 0038) ───────────────────────
-const feedbackFail = (res, e) => res.status(e instanceof FeedbackError ? e.status : 500).json({ error: String(e?.message ?? e) });
+const feedbackFail = (res, e) => res.status(e instanceof FeedbackError || e instanceof ContentFilterError ? e.status : 500).json({ error: String(e?.message ?? e) });
 
 /** Вошедший пользователь, если токен есть и годен; иначе гость. Битый токен не ошибка: форма открыта всем. */
 async function optionalUserId(req) {
@@ -838,6 +839,40 @@ app.get("/feedback/mine", authMiddleware, reviewsLimiter, async (req, res) => {
 app.get("/admin/feedback", authMiddleware, requireAdmin, async (req, res) => {
   try {
     res.json(await listFeedback(req.query));
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+// Фильтр запрещённых слов и контактов для форм обращений и отзывов (contentFilter.js): правила, проверка текста, журнал
+app.get("/admin/content-filter", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json({
+      config: await loadFilterConfig(),
+      defaults: { words: FILTER_DEFAULTS.words, allow: FILTER_DEFAULTS.allow, allowedDomains: FILTER_DEFAULTS.allowedDomains },
+      log: await listFilterLog(100),
+    });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.put("/admin/content-filter", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json({ config: await saveFilterConfig(req.body ?? {}, req.user.sub) });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+// Проверка произвольного текста по ТЕКУЩИМ сохранённым правилам (или по присланным в теле, ещё не сохранённым)
+app.post("/admin/content-filter/test", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const target = FILTER_TARGETS.includes(req.body?.target) ? req.body.target : "feedback";
+    const saved = await loadFilterConfig();
+    const config = req.body?.config ? sanitizeFilterConfig({ ...saved, ...req.body.config }) : saved;
+    const violations = checkText(String(req.body?.text ?? "").slice(0, 5000), target, config);
+    res.json({ ok: violations.length === 0, violations, message: violations.length ? userMessage(violations, target) : "" });
   } catch (e) {
     feedbackFail(res, e);
   }
@@ -917,7 +952,7 @@ app.post("/admin/feedback/:id/reply", authMiddleware, requireAdmin, async (req, 
 });
 
 // ─────────────────────── отзывы (см. reviews.js, миграция 0037) ───────────────────────
-const reviewFail = (res, e) => res.status(e instanceof ReviewError ? e.status : 500).json({ error: String(e?.message ?? e) });
+const reviewFail = (res, e) => res.status(e instanceof ReviewError || e instanceof ContentFilterError ? e.status : 500).json({ error: String(e?.message ?? e) });
 
 // Публичная лента одобренных отзывов — без авторизации (лендинг, страница тарифов)
 app.get("/reviews/public", reviewsLimiter, async (req, res) => {

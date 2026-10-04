@@ -9,6 +9,7 @@ import {
   type AdminFeedbackDetail, type AdminFeedbackItem, type AdminFeedbackList, type ChannelId, type ChannelMeta, type ContactSettings, type FeedbackEventType, type FeedbackFilters, type FeedbackStatus, type SupportSender,
 } from "../lib/feedback";
 import { useAuth } from "../lib/auth";
+import AdminContentFilter from "./AdminContentFilter";
 import { refreshAdminBadges } from "../lib/adminBadges";
 import { useToast } from "./ui";
 
@@ -509,17 +510,17 @@ function ChannelsSettings() {
 }
 
 export default function AdminFeedback() {
-  const [tab, setTab] = useState<"journal" | "channels">("journal");
+  const [tab, setTab] = useState<"journal" | "channels" | "filter">("journal");
   return (
     <div>
       <div className="flex gap-1 border-b-2 border-ink/10" role="tablist">
-        {([["journal", "Обращения"], ["channels", "Контакты и каналы"]] as const).map(([id, label]) => (
+        {([["journal", "Обращения"], ["channels", "Контакты и каналы"], ["filter", "Фильтр текста"]] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-4 py-2 text-[13px] font-bold ${tab === id ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}>
             {label}
           </button>
         ))}
       </div>
-      <div className="mt-5">{tab === "journal" ? <Journal /> : <ChannelsSettings />}</div>
+      <div className="mt-5">{tab === "journal" ? <Journal /> : tab === "channels" ? <ChannelsSettings /> : <AdminContentFilter />}</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@
 // (status 'private': видны только команде), публично показывается только status 'approved'.
 import { pool } from "./db.js";
 import { fireAndForget, notifyReviewSubmitted } from "./adminNotify.js";
+import { assertCleanText } from "./contentFilter.js";
 
 export const REQUIRED_AI_REQUESTS = 5;
 export const MIN_BODY = 30;
@@ -98,6 +99,9 @@ export async function saveMyReview(userId, input) {
     const own = await pool.query("select 1 from public.profile_subjects where user_id = $1 and subject = $2", [userId, subject]);
     if (own.rowCount === 0) throw new ReviewError("Выбери один из своих предметов.");
   }
+
+  // запрещённые слова и контакты в отзыве и в подписи (она публикуется) — правила в админке, см. contentFilter.js
+  await assertCleanText({ body, displayName }, "reviews", { userId });
 
   const status = statusFor({ rating, consentPublic });
   const prev = (await pool.query("select rating, body, subject, display_name, consent_public from public.reviews where user_id = $1", [userId])).rows[0];

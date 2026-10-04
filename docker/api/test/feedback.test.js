@@ -176,7 +176,7 @@ test("ответ из админки: письмо автору с Reply-To, с�
 });
 
 test("список: фильтры по статусу/теме/поиску/датам, сортировка, пагинация, просрочка", async () => {
-  const marker = `маркер${Date.now()}`;
+  const marker = `маркер${Date.now().toString(36)}`;
   const a = await createFeedback(base({ topic: "bug", message: `Не открывается страница ${marker}` }), { ip: ip() });
   const b = await createFeedback(base({ topic: "suggestion", message: `Добавьте тёмную тему ${marker}` }), { ip: ip() });
   const c = await createFeedback(base({ topic: "bug", message: `Ошибка в задании ${marker}` }), { ip: ip() });

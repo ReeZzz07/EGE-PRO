@@ -7,6 +7,7 @@
 import { createHash } from "node:crypto";
 import { pool } from "./db.js";
 import { EMAIL_RE, emailProblem, normalizeEmail } from "./validators.js";
+import { assertCleanText } from "./contentFilter.js";
 import { escapeHtml, sendMail, wrapBrandedHtml, resolveSupportSmtpSettings } from "./mailer.js";
 
 // Тесты подменяют отправку, чтобы не слать настоящие письма (см. test/feedback.test.js)
@@ -166,6 +167,9 @@ export async function createFeedback(input, ctx = {}) {
     }
   }
   if (!EMAIL_RE.test(email)) throw new FeedbackError(emailProblem(email)?.startsWith("Email нужно") ? emailProblem(email) : "Укажи корректную почту — на неё придёт ответ.");
+
+  // запрещённые слова и контакты в тексте и в имени (правила — в админке, см. contentFilter.js)
+  await assertCleanText({ message, name }, "feedback", { userId: ctx.userId, ip: ctx.ip });
 
   const ipHash = hashIp(ctx.ip);
   const { rows: recent } = await pool.query(

@@ -294,3 +294,72 @@ export async function sendSupportSenderTest(to: string): Promise<{ from?: string
     return { error: NET_ERROR };
   }
 }
+
+// ───────────── фильтр запрещённых слов и контактов ─────────────
+
+export type FilterTarget = "feedback" | "reviews";
+export type FilterRuleKey = "words" | "phones" | "emails" | "links" | "handles";
+
+export interface FilterConfig {
+  enabled: boolean;
+  /** строки: «слово» — основа с производными, «=слово» — только целиком, «~фраза» — фраза; «#…» — комментарий */
+  words: string;
+  /** слова-исключения: «слово» — точно, «слово*» — с любым окончанием */
+  allow: string;
+  /** домены, ссылки на которые разрешены (через запятую) */
+  allowedDomains: string;
+  targets: Record<FilterTarget, Record<FilterRuleKey, boolean>>;
+}
+
+export interface FilterLogItem {
+  id: number;
+  createdAt: string;
+  target: FilterTarget;
+  field: string;
+  reasons: string[];
+  snippet: string;
+}
+
+export interface FilterViolation {
+  kind: "word" | "phones" | "emails" | "links" | "handles";
+  match: string;
+  rule?: string;
+}
+
+export const FILTER_RULE_LABEL: Record<FilterRuleKey, string> = {
+  words: "Запрещённые слова и производные",
+  phones: "Телефоны",
+  emails: "Почта",
+  links: "Ссылки",
+  handles: "@-ники и приглашения в мессенджеры",
+};
+export const FILTER_TARGET_LABEL: Record<FilterTarget, string> = { feedback: "Обращения", reviews: "Отзывы" };
+export const FILTER_KIND_LABEL: Record<FilterViolation["kind"], string> = { word: "слово", phones: "телефон", emails: "почта", links: "ссылка", handles: "ник / мессенджер" };
+
+export async function loadContentFilter(): Promise<{ config: FilterConfig; defaults: { words: string; allow: string; allowedDomains: string }; log: FilterLogItem[] } | null> {
+  try {
+    const resp = await apiFetch("/admin/content-filter");
+    return resp.ok ? await resp.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveContentFilter(config: FilterConfig): Promise<{ config?: FilterConfig; error?: string }> {
+  try {
+    const resp = await apiFetch("/admin/content-filter", json("PUT", config));
+    return resp.ok ? { config: ((await resp.json()) as { config: FilterConfig }).config } : { error: await errorOf(resp, "Не удалось сохранить.") };
+  } catch {
+    return { error: NET_ERROR };
+  }
+}
+
+/** Проверка текста по правилам из формы (даже несохранённым). */
+export async function testContentFilter(text: string, target: FilterTarget, config: FilterConfig): Promise<{ ok?: boolean; violations?: FilterViolation[]; message?: string; error?: string }> {
+  try {
+    const resp = await apiFetch("/admin/content-filter/test", json("POST", { text, target, config }));
+    return resp.ok ? await resp.json() : { error: await errorOf(resp, "Не удалось проверить.") };
+  } catch {
+    return { error: NET_ERROR };
+  }
+}

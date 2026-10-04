@@ -26,6 +26,9 @@ vi.mock("../lib/feedback", async (orig) => ({
   loadSupportSender: vi.fn(),
   saveSupportSender: vi.fn(),
   sendSupportSenderTest: vi.fn(),
+  loadContentFilter: vi.fn(),
+  saveContentFilter: vi.fn(),
+  testContentFilter: vi.fn(),
 }));
 
 const info = (channels: fb.ContactInfo["channels"] = []): fb.ContactInfo => ({ supportEmail: "support@ege-tutor.ru", replyWithinHours: 24, channels });
@@ -211,5 +214,57 @@ describe("AdminFeedback", () => {
     fireEvent.change(screen.getByLabelText("Отправить тестовое письмо на"), { target: { value: "me@mail.ru" } });
     fireEvent.click(screen.getByRole("button", { name: "Проверить отправку" }));
     await waitFor(() => expect(fb.sendSupportSenderTest).toHaveBeenCalledWith("me@mail.ru"));
+  });
+
+  it("фильтр текста: правила по формам, список слов, исключения; сохранение уходит на сервер; журнал и проверка текста", async () => {
+    vi.mocked(fb.loadAdminFeedback).mockResolvedValue(list([]));
+    const on = { words: true, phones: true, emails: true, links: true, handles: true };
+    const config: fb.FilterConfig = {
+      enabled: true,
+      words: "# комментарий\nхуй\n=хер\n",
+      allow: "себастьян*\n",
+      allowedDomains: "ege-tutor.ru",
+      targets: { feedback: { ...on }, reviews: { ...on } },
+    };
+    vi.mocked(fb.loadContentFilter).mockResolvedValue({
+      config,
+      defaults: { words: "хуй\n", allow: "", allowedDomains: "ege-tutor.ru" },
+      log: [{ id: 1, createdAt: new Date().toISOString(), target: "feedback", field: "message", reasons: ["links", "word"], snippet: "заходи на http://bad.example.com" }],
+    });
+    vi.mocked(fb.saveContentFilter).mockImplementation(async (c) => ({ config: c }));
+    vi.mocked(fb.testContentFilter).mockResolvedValue({
+      ok: false,
+      violations: [{ kind: "links", match: "http://bad.example.com" }, { kind: "word", match: "хуй", rule: "хуй" }],
+      message: "В сообщении нельзя оставлять контакты и ссылки.",
+    });
+    render(<AdminFeedback />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Фильтр текста" }));
+
+    expect(await screen.findByLabelText(/^Запрещённые слова \(2\)/)).toHaveValue(config.words);
+    expect(screen.getByText(/поле «message» · ссылка, слово/)).toBeInTheDocument();
+    expect(screen.getByText(/заходи на http:\/\/bad.example.com/)).toBeInTheDocument();
+
+    // выключаем проверку ссылок только в отзывах и дописываем слово
+    fireEvent.click(screen.getByLabelText("Ссылки — Отзывы"));
+    fireEvent.change(screen.getByLabelText(/^Запрещённые слова \(\d+\)/), { target: { value: config.words + "тролль\n" } });
+    expect(screen.getByText("есть несохранённые изменения")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить правила" }));
+    await waitFor(() => expect(fb.saveContentFilter).toHaveBeenCalled());
+    const sent = vi.mocked(fb.saveContentFilter).mock.calls[0]![0];
+    expect(sent.targets.reviews.links).toBe(false);
+    expect(sent.targets.feedback.links).toBe(true);
+    expect(sent.words).toContain("тролль");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить правила" })).toBeDisabled());
+
+    // проверка текста по текущим правилам формы (в том числе несохранённым)
+    fireEvent.change(screen.getByLabelText("Текст для проверки"), { target: { value: "хуй http://bad.example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Проверить" }));
+    await waitFor(() => expect(fb.testContentFilter).toHaveBeenCalledWith("хуй http://bad.example.com", "feedback", expect.objectContaining({ allowedDomains: "ege-tutor.ru" })));
+    expect(await screen.findByText("Текст будет отклонён. Найдено:")).toBeInTheDocument();
+    expect(screen.getByText(/ссылка:/)).toBeInTheDocument();
+
+    // возврат к стандартному списку
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть стандартный список" }));
+    expect(screen.getByLabelText(/^Запрещённые слова \(\d+\)/)).toHaveValue("хуй\n");
   });
 });
