@@ -110,11 +110,41 @@ function transportFor(settings) {
   return cachedTransport;
 }
 
+/** Отдельный отправитель для писем поддержки (подтверждение обращения, ответы, уведомления команды): свой
+ *  SMTP-ящик support@…, ключ 'smtp_support' (правится в /admin → Обращения → Контакты и каналы). Не задан —
+ *  письма уходят через основной SMTP (dedicated: false), с его адресом отправителя. */
+export async function resolveSupportSmtpSettings() {
+  try {
+    const { rows } = await pool.query("select value from public.app_settings where key = 'smtp_support'");
+    const v = rows[0]?.value;
+    if (v?.host && v?.user && v?.password) {
+      return {
+        dedicated: true,
+        settings: {
+          host: v.host,
+          port: Number(v.port) || 465,
+          secure: v.secure !== false,
+          user: v.user,
+          password: v.password,
+          fromName: v.fromName || "ЕГЭ·ПРО — поддержка",
+          fromAddress: v.fromAddress || v.user,
+        },
+      };
+    }
+  } catch (e) {
+    console.warn("не удалось прочитать smtp_support из app_settings, использую основной SMTP:", e?.message ?? e);
+  }
+  const main = await resolveSmtpSettings();
+  return main ? { dedicated: false, settings: main } : null;
+}
+
 /** Отправка — best-effort везде, где письмо не является сутью запроса (регистрация, оплата не
  * должны падать из-за временной проблемы с почтой): вызывающий код сам решает, ловить ли ошибку
  * или дать ей всплыть, эта функция не глотает исключения молча. */
-export async function sendMail({ to, subject, text, html, replyTo }) {
-  const settings = await resolveSmtpSettings();
+export async function sendMail({ to, subject, text, html, replyTo, via }) {
+  // via: "support" — от имени поддержки (см. resolveSupportSmtpSettings); иначе основной SMTP
+  const resolved = via === "support" ? await resolveSupportSmtpSettings() : null;
+  const settings = resolved ? resolved.settings : await resolveSmtpSettings();
   if (!settings) throw new Error("SMTP не настроен — задай его в /admin → Почта");
   const transport = transportFor(settings);
   await transport.sendMail({
@@ -125,6 +155,7 @@ export async function sendMail({ to, subject, text, html, replyTo }) {
     html,
     ...(replyTo ? { replyTo } : {}),
   });
+  return { from: settings.fromAddress, dedicated: resolved ? resolved.dedicated : true };
 }
 
 export function escapeHtml(s) {

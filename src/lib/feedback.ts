@@ -238,3 +238,57 @@ export async function saveContactSettings(s: ContactSettings): Promise<{ setting
     return { error: NET_ERROR };
   }
 }
+
+// ───────────── отправитель писем поддержки ─────────────
+
+export interface SupportSender {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  fromName: string;
+  fromAddress: string;
+  /** пароль наружу не отдаётся — только факт, что он задан */
+  hasPassword: boolean;
+  /** с какого адреса письма поддержки уходят сейчас (null — SMTP вообще не настроен) */
+  effectiveFrom: string | null;
+  /** true — отдельный ящик поддержки; false — запасной вариант: основной SMTP (обычно noreply@) */
+  dedicated: boolean;
+}
+
+export interface SupportSenderInput {
+  host: string;
+  port: number;
+  user: string;
+  /** пустой — оставить прежний */
+  password: string;
+  fromName: string;
+  fromAddress: string;
+}
+
+export async function loadSupportSender(): Promise<SupportSender | null> {
+  try {
+    const resp = await apiFetch("/admin/feedback/sender");
+    return resp.ok ? ((await resp.json()) as SupportSender) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSupportSender(input: SupportSenderInput): Promise<{ sender?: SupportSender; error?: string }> {
+  try {
+    const resp = await apiFetch("/admin/feedback/sender", json("PUT", input));
+    return resp.ok ? { sender: (await resp.json()) as SupportSender } : { error: await errorOf(resp, "Не удалось сохранить.") };
+  } catch {
+    return { error: NET_ERROR };
+  }
+}
+
+export async function sendSupportSenderTest(to: string): Promise<{ from?: string | null; error?: string }> {
+  try {
+    const resp = await apiFetch("/admin/feedback/sender/test", json("POST", { to }));
+    return resp.ok ? { from: ((await resp.json()) as { from: string | null }).from } : { error: await errorOf(resp, "Не удалось отправить.") };
+  } catch {
+    return { error: NET_ERROR };
+  }
+}

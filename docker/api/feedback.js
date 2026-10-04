@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import { pool } from "./db.js";
 import { EMAIL_RE, normalizeEmail } from "./validators.js";
-import { escapeHtml, sendMail, wrapBrandedHtml } from "./mailer.js";
+import { escapeHtml, sendMail, wrapBrandedHtml, resolveSupportSmtpSettings } from "./mailer.js";
 
 // Тесты подменяют отправку, чтобы не слать настоящие письма (см. test/feedback.test.js)
 let send = sendMail;
@@ -45,6 +45,10 @@ export const CHANNELS = [
   { id: "telegram", label: "Telegram", hosts: ["t.me", "telegram.me"] },
   { id: "vk", label: "ВКонтакте", hosts: ["vk.com", "m.vk.com", "vk.me", "vk.ru"] },
 ];
+
+/** Тема во ВСЕХ письмах по обращению (команде, подтверждение автору, ответы, ответ из почтового клиента) —
+ *  одна и та же, поэтому у автора и у поддержки они складываются в одну цепочку. Ответ — «Re: » + эта тема. */
+export const subjectFor = (m) => `[Обращение №${m.id}] ${TOPICS[m.topic] ?? m.topic}`;
 
 export class FeedbackError extends Error {
   constructor(message, status = 400) {
@@ -199,17 +203,18 @@ export async function dispatchFeedbackEmails(id, { siteUrl = "" } = {}) {
 
   try {
     const lines = infoRows(m).map(([k, v]) => `${k}: ${v}`).join("\n");
-    await send({
+    const sentTeam = await send({
+      via: "support",
       to: settings.supportEmail,
       replyTo: m.email,
-      subject: `[Обращение №${m.id}] ${TOPICS[m.topic] ?? m.topic}`,
+      subject: subjectFor(m),
       text: `${lines}\n\n${m.message}\n\nОтветить можно прямо на это письмо — ответ уйдёт автору. Статус и история — в админке (Обращения → №${m.id}).`,
       html: `<!doctype html><html lang="ru"><body style="font-family:sans-serif;color:#15172e;max-width:560px;margin:0 auto;padding:20px 16px;"><table cellpadding="4" style="font-size:14px;">${infoRows(m)
         .map(([k, v]) => `<tr><td style="color:#8a8d9a;">${escapeHtml(k)}</td><td><b>${escapeHtml(v)}</b></td></tr>`)
         .join("")}</table><p style="white-space:pre-wrap;font-size:15px;border-left:4px solid #2447e9;padding:6px 12px;margin:16px 0;">${escapeHtml(m.message)}</p><p style="font-size:12px;color:#8a8d9a;">Ответить можно прямо на это письмо — ответ уйдёт автору. Статус и история — в админке (Обращения → №${m.id}).</p></body></html>`,
     });
     await pool.query("update public.feedback_messages set team_notified_at = now(), team_notify_error = null where id = $1", [id]);
-    await addEvent(id, "team_notified", { to: settings.supportEmail });
+    await addEvent(id, "team_notified", { to: settings.supportEmail, from: sentTeam?.from });
   } catch (e) {
     const msg = String(e?.message ?? e).slice(0, 300);
     await pool.query("update public.feedback_messages set team_notify_error = $2 where id = $1", [id, msg]).catch(() => {});
@@ -220,10 +225,11 @@ export async function dispatchFeedbackEmails(id, { siteUrl = "" } = {}) {
   try {
     const days = REPLY_WITHIN_HOURS === 24 ? "в течение одного дня" : `в течение ${REPLY_WITHIN_HOURS} часов`;
     const intro = `Мы получили твоё обращение №${m.id} («${TOPICS[m.topic] ?? m.topic}») и ответим ${days} на этот адрес.`;
-    await send({
+    const sentAck = await send({
+      via: "support",
       to: m.email,
       replyTo: settings.supportEmail,
-      subject: `Обращение №${m.id} получено — ЕГЭ·ПРО`,
+      subject: subjectFor(m),
       text: `${intro}\n\nТвоё сообщение:\n${m.message}\n\nЕсли хочешь что-то добавить — просто ответь на это письмо.`,
       html: wrapBrandedHtml(
         `<p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">обращение №${m.id}</p>
@@ -236,7 +242,7 @@ export async function dispatchFeedbackEmails(id, { siteUrl = "" } = {}) {
       ),
     });
     await pool.query("update public.feedback_messages set ack_sent_at = now(), ack_error = null where id = $1", [id]);
-    await addEvent(id, "ack_sent", { to: m.email });
+    await addEvent(id, "ack_sent", { to: m.email, from: sentAck?.from });
   } catch (e) {
     const msg = String(e?.message ?? e).slice(0, 300);
     await pool.query("update public.feedback_messages set ack_error = $2 where id = $1", [id, msg]).catch(() => {});
@@ -385,11 +391,13 @@ export async function replyFeedback(id, adminId, text) {
   if (!EMAIL_RE.test(m.email)) throw new FeedbackError("Адрес автора удалён (аккаунт удалён) — отвечать некуда.", 409);
 
   const settings = await resolveContactSettings();
+  let sentReply;
   try {
-    await send({
+    sentReply = await send({
+      via: "support",
       to: m.email,
       replyTo: settings.supportEmail,
-      subject: `Ответ на обращение №${m.id} — ЕГЭ·ПРО`,
+      subject: `Re: ${subjectFor(m)}`,
       text: `${body}\n\n— — —\nТвоё обращение №${m.id}:\n${m.message}`,
       html: wrapBrandedHtml(
         `<p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">ответ на обращение №${m.id}</p>
@@ -404,11 +412,74 @@ export async function replyFeedback(id, adminId, text) {
     await addEvent(id, "reply_failed", { error: msg, text: body }, adminId).catch(() => {});
     throw new FeedbackError(`Письмо не отправилось: ${msg}`, 502);
   }
-  await addEvent(id, "reply_sent", { text: body, to: m.email }, adminId);
+  await addEvent(id, "reply_sent", { text: body, to: m.email, from: sentReply?.from }, adminId);
   await pool.query(
     `update public.feedback_messages set updated_at = now(), first_response_at = coalesce(first_response_at, now()),
             status = case when status = 'closed' then status else 'answered' end where id = $1`,
     [id]
   );
   return getFeedbackDetail(id);
+}
+
+// ─────────────────────── отправитель писем поддержки ───────────────────────
+// Подтверждения, ответы из админки и письма команде уходят с адреса поддержки, а не с noreply@: для этого у
+// поддержки свой SMTP-ящик (ключ 'smtp_support'). Пароль наружу не отдаём — только факт, что он задан.
+
+export async function getSupportSender() {
+  const { rows } = await pool.query("select value from public.app_settings where key = 'smtp_support'");
+  const v = rows[0]?.value ?? {};
+  const resolved = await resolveSupportSmtpSettings();
+  return {
+    host: v.host ?? "smtp.yandex.ru",
+    port: Number(v.port) || 465,
+    secure: v.secure !== false,
+    user: v.user ?? "",
+    fromName: v.fromName ?? "ЕГЭ·ПРО — поддержка",
+    fromAddress: v.fromAddress ?? "",
+    hasPassword: !!v.password,
+    // с какого адреса письма поддержки реально уйдут сейчас
+    effectiveFrom: resolved?.settings.fromAddress ?? null,
+    dedicated: !!resolved?.dedicated,
+  };
+}
+
+export async function saveSupportSender(input, adminId) {
+  const host = String(input?.host ?? "").trim();
+  const user = normalizeEmail(input?.user);
+  const port = Number(input?.port);
+  if (!host) throw new FeedbackError("Укажи SMTP-сервер, например smtp.yandex.ru.");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new FeedbackError("Порт — число от 1 до 65535 (для Яндекса 465).");
+  if (!EMAIL_RE.test(user)) throw new FeedbackError("Логин — полный адрес ящика поддержки, например support@ege-tutor.ru.");
+  const fromAddress = normalizeEmail(input?.fromAddress) || user;
+  if (!EMAIL_RE.test(fromAddress)) throw new FeedbackError("Адрес отправителя указан неверно.");
+  const fromName = String(input?.fromName ?? "").trim().slice(0, 80) || "ЕГЭ·ПРО — поддержка";
+
+  const { rows } = await pool.query("select value from public.app_settings where key = 'smtp_support'");
+  const password = String(input?.password ?? "") || rows[0]?.value?.password || "";
+  if (!password) throw new FeedbackError("Укажи пароль приложения для ящика поддержки.");
+
+  const value = { host, port, secure: input?.secure !== false, user, password, fromName, fromAddress };
+  await pool.query(
+    `insert into public.app_settings (key, value, updated_by) values ('smtp_support', $1, $2)
+     on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by`,
+    [JSON.stringify(value), adminId ?? null]
+  );
+  return getSupportSender();
+}
+
+/** Тестовое письмо «от поддержки» — чтобы проверить настройки, не создавая обращений. */
+export async function sendSupportSenderTest(to) {
+  const addr = normalizeEmail(to);
+  if (!EMAIL_RE.test(addr)) throw new FeedbackError("Укажи адрес, на который отправить тест.");
+  try {
+    const r = await send({
+      via: "support",
+      to: addr,
+      subject: "Тест: письма поддержки ЕГЭ·ПРО",
+      text: "Это тестовое письмо. Если вы видите его от адреса поддержки — ответы на обращения будут уходить с этого же адреса.",
+    });
+    return { from: r?.from ?? null, dedicated: r?.dedicated ?? null };
+  } catch (e) {
+    throw new FeedbackError(`Письмо не отправилось: ${String(e?.message ?? e).slice(0, 300)}`, 502);
+  }
 }

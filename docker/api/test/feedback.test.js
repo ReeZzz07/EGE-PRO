@@ -4,8 +4,9 @@ import { test, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   createFeedback, dispatchFeedbackEmails, listMyFeedback, listFeedback, getFeedbackDetail, updateFeedback, replyFeedback,
-  getPublicContactInfo, saveContactSettings, resolveContactSettings, setMailSenderForTests, FeedbackError, HOURLY_LIMIT, DEFAULT_SUPPORT_EMAIL,
+  getPublicContactInfo, saveContactSettings, resolveContactSettings, setMailSenderForTests, getSupportSender, saveSupportSender, sendSupportSenderTest, subjectFor, FeedbackError, HOURLY_LIMIT, DEFAULT_SUPPORT_EMAIL,
 } from "../feedback.js";
+import { resolveSupportSmtpSettings } from "../mailer.js";
 import { createTestUser, deleteTestUser, pool } from "./helpers.js";
 
 const sent = [];
@@ -28,11 +29,11 @@ beforeEach(async () => {
     if (failMail) throw new Error("SMTP недоступен");
     sent.push(m);
   });
-  await pool.query("delete from public.app_settings where key = 'contacts'");
+  await pool.query("delete from public.app_settings where key in ('contacts', 'smtp_support')");
 });
 after(async () => {
   setMailSenderForTests(null);
-  await pool.query("delete from public.app_settings where key = 'contacts'");
+  await pool.query("delete from public.app_settings where key in ('contacts', 'smtp_support')");
   await deleteFeedbackRows("email like '%@fbtest.example'", []);
   await pool.end();
 });
@@ -97,6 +98,9 @@ test("письма: команде на почту поддержки с Reply-T
   const r = await createFeedback(base({ email: "author@fbtest.example" }), { ip: ip() });
   await dispatchFeedbackEmails(r.id, { siteUrl: "https://example.org" });
   assert.equal(sent.length, 2);
+  assert.ok(sent.every((m) => m.via === "support"), "все письма по обращению — от имени поддержки, не noreply");
+  assert.equal(sent[0].subject, sent[1].subject, "одна тема в письме команде и в подтверждении — одна цепочка");
+  assert.equal(sent[0].subject, subjectFor({ id: r.id, topic: "payment" }));
   assert.equal(sent[0].to, DEFAULT_SUPPORT_EMAIL);
   assert.equal(sent[0].replyTo, "author@fbtest.example");
   assert.match(sent[0].subject, new RegExp(`№${r.id}\\]`));
@@ -156,6 +160,10 @@ test("ответ из админки: письмо автору с Reply-To, с�
     assert.equal(d.status, "answered");
     assert.ok(d.firstResponseAt);
     assert.equal(sent.at(-1).replyTo, DEFAULT_SUPPORT_EMAIL);
+    assert.equal(sent.at(-1).via, "support");
+    assert.equal(sent.at(-1).subject, `Re: ${subjectFor({ id: r.id, topic: "payment" })}`, "ответ — «Re:» к той же теме");
+    assert.equal(sent.filter((m) => m.to === DEFAULT_SUPPORT_EMAIL).length, 0, "копий ответа на почту поддержки нет");
+    assert.ok(!("bcc" in sent.at(-1)) && !("cc" in sent.at(-1)));
     assert.match(sent.at(-1).text, /Проверили, всё работает\./);
     const mine = await listMyFeedback(user);
     assert.equal(mine[0].replies[0].text, "Проверили, всё работает.");
@@ -239,4 +247,45 @@ test("контакты: по умолчанию почта поддержки и
   await saveContactSettings({ supportEmail: "help@ege-tutor.ru", channels: { telegram: { enabled: true, url: "https://t.me/egepro_support" }, vk: { enabled: true, url: "https://vk.com/egepro" } } }, null);
   assert.deepEqual((await getPublicContactInfo()).channels.map((c) => c.id), ["telegram", "vk"]);
   assert.equal((await resolveContactSettings()).supportEmail, "help@ege-tutor.ru");
+});
+
+test("отправитель поддержки: по умолчанию пароль не отдаётся, сохранение требует пароль, а повторное — без пароля оставляет прежний", async () => {
+  const before = await getSupportSender();
+  assert.equal(before.hasPassword, false);
+  assert.equal(before.dedicated, false);
+
+  await assert.rejects(() => saveSupportSender({ host: "smtp.yandex.ru", port: 465, user: "support@ege-tutor.ru" }, null), FeedbackError);
+  await assert.rejects(() => saveSupportSender({ host: "", port: 465, user: "support@ege-tutor.ru", password: "x" }, null), FeedbackError);
+  await assert.rejects(() => saveSupportSender({ host: "h", port: 0, user: "support@ege-tutor.ru", password: "x" }, null), FeedbackError);
+  await assert.rejects(() => saveSupportSender({ host: "h", port: 465, user: "не-почта", password: "x" }, null), FeedbackError);
+
+  const saved = await saveSupportSender({ host: "smtp.yandex.ru", port: 465, user: "Support@Ege-Tutor.ru", password: "secret-app-pass", fromName: "ЕГЭ·ПРО — поддержка" }, null);
+  assert.equal(saved.user, "support@ege-tutor.ru");
+  assert.equal(saved.fromAddress, "support@ege-tutor.ru", "пустой адрес отправителя = логин ящика");
+  assert.equal(saved.effectiveFrom, "support@ege-tutor.ru");
+  assert.equal(saved.hasPassword, true);
+  assert.equal(saved.dedicated, true);
+  assert.ok(!JSON.stringify(saved).includes("secret-app-pass"), "пароль наружу не уходит");
+
+  await saveSupportSender({ host: "smtp.yandex.ru", port: 465, user: "support@ege-tutor.ru" }, null); // без пароля
+  const r = await resolveSupportSmtpSettings();
+  assert.equal(r.dedicated, true);
+  assert.equal(r.settings.password, "secret-app-pass", "прежний пароль сохранён");
+  assert.equal(r.settings.fromAddress, "support@ege-tutor.ru");
+});
+
+test("отправитель поддержки: не задан — запасной вариант не выдаёт себя за ящик поддержки (dedicated: false)", async () => {
+  const r = await resolveSupportSmtpSettings();
+  assert.ok(r === null || r.dedicated === false);
+  const sender = await getSupportSender();
+  assert.equal(sender.dedicated, false);
+});
+
+test("отправитель поддержки: тестовое письмо уходит от имени поддержки; кривой адрес отклоняется", async () => {
+  await assert.rejects(() => sendSupportSenderTest("не-почта"), FeedbackError);
+  await sendSupportSenderTest("admin@fbtest.example");
+  assert.equal(sent.at(-1).via, "support");
+  assert.equal(sent.at(-1).to, "admin@fbtest.example");
+  failMail = true;
+  await assert.rejects(() => sendSupportSenderTest("admin@fbtest.example"), (e) => e.status === 502);
 });

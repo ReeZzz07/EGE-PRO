@@ -5,9 +5,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   FEEDBACK_TOPICS, STATUS_LABEL, STATUS_ORDER, TOPIC_LABEL,
-  loadAdminFeedback, loadAdminFeedbackDetail, loadContactSettings, replyAdminFeedback, saveContactSettings, updateAdminFeedback,
-  type AdminFeedbackDetail, type AdminFeedbackItem, type AdminFeedbackList, type ChannelId, type ChannelMeta, type ContactSettings, type FeedbackEventType, type FeedbackFilters, type FeedbackStatus,
+  loadAdminFeedback, loadAdminFeedbackDetail, loadContactSettings, loadSupportSender, replyAdminFeedback, saveContactSettings, saveSupportSender, sendSupportSenderTest, updateAdminFeedback,
+  type AdminFeedbackDetail, type AdminFeedbackItem, type AdminFeedbackList, type ChannelId, type ChannelMeta, type ContactSettings, type FeedbackEventType, type FeedbackFilters, type FeedbackStatus, type SupportSender,
 } from "../lib/feedback";
+import { useAuth } from "../lib/auth";
 import { useToast } from "./ui";
 
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -169,6 +170,7 @@ function Detail({ id, onChanged }: { id: number; onChanged: () => void }) {
                     {e.type === "status_changed" && `: ${STATUS_LABEL[e.data.from as FeedbackStatus] ?? e.data.from} → ${STATUS_LABEL[e.data.to as FeedbackStatus] ?? e.data.to}`}
                   </p>
                   {e.actor && <p className="font-mono text-[11px] text-ink2">{e.actor}</p>}
+                  {e.data.from && <p className="font-mono text-[11px] text-ink2">с адреса {e.data.from}{e.data.to ? ` → ${e.data.to}` : ""}</p>}
                   {(e.type === "reply_sent" || e.type === "reply_failed" || e.type === "note_changed") && e.data.text && <p className="mt-0.5 whitespace-pre-wrap text-ink2">{e.data.text}</p>}
                   {bad && e.data.error && <p className="font-mono text-[11px] text-red">{e.data.error}</p>}
                 </li>
@@ -341,6 +343,97 @@ const CHANNEL_HINT: Record<ChannelId, string> = {
   vk: "Например https://vk.com/имя_сообщества или https://vk.me/….",
 };
 
+function SenderSettings() {
+  const { push } = useToast();
+  const { profile } = useAuth();
+  const [cur, setCur] = useState<SupportSender | null>(null);
+  const [form, setForm] = useState({ host: "smtp.yandex.ru", port: "465", user: "", password: "", fromName: "ЕГЭ·ПРО — поддержка", fromAddress: "" });
+  const [busy, setBusy] = useState(false);
+  const [testTo, setTestTo] = useState(profile?.email ?? "");
+
+  const apply = (x: SupportSender) => {
+    setCur(x);
+    setForm((f) => ({ ...f, host: x.host, port: String(x.port), user: x.user, fromName: x.fromName, fromAddress: x.fromAddress, password: "" }));
+  };
+  useEffect(() => {
+    loadSupportSender().then((x) => x && apply(x));
+  }, []);
+
+  if (!cur) return null;
+
+  const save = async () => {
+    setBusy(true);
+    const r = await saveSupportSender({ host: form.host, port: Number(form.port), user: form.user, password: form.password, fromName: form.fromName, fromAddress: form.fromAddress });
+    setBusy(false);
+    if (r.error) return push(r.error, "err");
+    apply(r.sender!);
+    push("Отправитель сохранён", "ok");
+  };
+  const test = async () => {
+    setBusy(true);
+    const r = await sendSupportSenderTest(testTo);
+    setBusy(false);
+    if (r.error) return push(r.error, "err");
+    push(`Тест отправлен с адреса ${r.from ?? "—"}`, "ok");
+  };
+  const field = "input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13px]";
+  const label = "font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2";
+
+  return (
+    <div className="border-2 border-ink/15 p-4">
+      <p className="text-[14px] font-bold">Отправитель писем поддержки</p>
+      <p className={`mt-1 text-[12.5px] leading-relaxed ${cur.dedicated ? "text-ink2" : "font-bold text-red"}`}>
+        {cur.dedicated
+          ? `Подтверждения, ответы из админки и уведомления команде уходят с адреса ${cur.effectiveFrom}.`
+          : cur.effectiveFrom
+            ? `Ящик поддержки не подключён: письма уходят с основного адреса ${cur.effectiveFrom}. Подключите ящик поддержки ниже, чтобы ответы приходили с него.`
+            : "SMTP не настроен: письма по обращениям не уходят (обращения при этом сохраняются)."}
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className={label}>SMTP-сервер</span>
+          <input id="sup-host" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} className={field} />
+        </label>
+        <label className="block">
+          <span className={label}>Порт</span>
+          <input id="sup-port" inputMode="numeric" value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} className={field} />
+        </label>
+        <label className="block">
+          <span className={label}>Логин SMTP (личный ящик с доступом)</span>
+          <input id="sup-user" type="email" value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })} placeholder="noreply@ege-tutor.ru" className={field} />
+        </label>
+        <label className="block">
+          <span className={label}>Пароль приложения</span>
+          <input id="sup-password" type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={cur.hasPassword ? "задан — оставь пустым, чтобы не менять" : "создай в настройках Яндекс ID"} className={field} />
+        </label>
+        <label className="block">
+          <span className={label}>Имя отправителя</span>
+          <input id="sup-name" value={form.fromName} onChange={(e) => setForm({ ...form, fromName: e.target.value })} className={field} />
+        </label>
+        <label className="block">
+          <span className={label}>Адрес отправителя (если пусто — логин)</span>
+          <input id="sup-from" type="email" value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} placeholder="support@ege-tutor.ru" className={field} />
+        </label>
+      </div>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-ink2">
+        Общий ящик Яндекс 360 своего пароля не имеет: логин и пароль приложения — от личного ящика, у которого есть роли «Отправка писем по SMTP» на общем ящике, а в «Адрес отправителя» — адрес общего ящика поддержки.
+      </p>
+      <button onClick={save} disabled={busy} className="btn btn-ink mt-3 px-5 py-2.5 text-[13px]">
+        {busy ? "Сохраняем…" : "Сохранить отправителя"}
+      </button>
+      <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
+        <label className="block min-w-[14rem] flex-1">
+          <span className={label}>Отправить тестовое письмо на</span>
+          <input id="sup-test-to" type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} className={field} />
+        </label>
+        <button onClick={test} disabled={busy || !testTo.trim()} className="btn btn-ghost px-4 py-2 text-[12.5px] disabled:opacity-40">
+          Проверить отправку
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChannelsSettings() {
   const { push } = useToast();
   const [s, setS] = useState<ContactSettings | null>(null);
@@ -402,6 +495,7 @@ function ChannelsSettings() {
       <button onClick={save} disabled={busy} className="btn btn-ink px-5 py-2.5 text-[13px]">
         {busy ? "Сохраняем…" : "Сохранить"}
       </button>
+      <SenderSettings />
     </div>
   );
 }

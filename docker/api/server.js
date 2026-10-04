@@ -49,7 +49,7 @@ import {
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { normalizeEmail, EMAIL_RE, MIN_PASSWORD_LENGTH } from "./validators.js";
 import { getWelcomeOffer } from "./offers.js";
-import { createFeedback, dispatchFeedbackEmails, getPublicContactInfo, resolveContactSettings, saveContactSettings, listMyFeedback, listFeedback, getFeedbackDetail, updateFeedback, replyFeedback, FeedbackError, CHANNELS as FEEDBACK_CHANNELS } from "./feedback.js";
+import { getSupportSender, saveSupportSender, sendSupportSenderTest, createFeedback, dispatchFeedbackEmails, getPublicContactInfo, resolveContactSettings, saveContactSettings, listMyFeedback, listFeedback, getFeedbackDetail, updateFeedback, replyFeedback, FeedbackError, CHANNELS as FEEDBACK_CHANNELS } from "./feedback.js";
 import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, listAdminReviews, moderateReview, ReviewError } from "./reviews.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
@@ -853,6 +853,30 @@ app.get("/admin/feedback/settings", authMiddleware, requireAdmin, async (_req, r
 app.put("/admin/feedback/settings", authMiddleware, requireAdmin, async (req, res) => {
   try {
     res.json({ settings: await saveContactSettings(req.body ?? {}, req.user.sub) });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.get("/admin/feedback/sender", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json(await getSupportSender());
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.put("/admin/feedback/sender", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await saveSupportSender(req.body ?? {}, req.user.sub));
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.post("/admin/feedback/sender/test", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await sendSupportSenderTest(req.body?.to));
   } catch (e) {
     feedbackFail(res, e);
   }

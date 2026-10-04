@@ -23,6 +23,9 @@ vi.mock("../lib/feedback", async (orig) => ({
   replyAdminFeedback: vi.fn(),
   loadContactSettings: vi.fn(),
   saveContactSettings: vi.fn(),
+  loadSupportSender: vi.fn(),
+  saveSupportSender: vi.fn(),
+  sendSupportSenderTest: vi.fn(),
 }));
 
 const info = (channels: fb.ContactInfo["channels"] = []): fb.ContactInfo => ({ supportEmail: "support@ege-tutor.ru", replyWithinHours: 24, channels });
@@ -33,6 +36,7 @@ beforeEach(() => {
   auth.isGuestMode = false;
   vi.mocked(fb.useContactInfo).mockReturnValue(info());
   vi.mocked(fb.loadMyFeedback).mockResolvedValue([]);
+  vi.mocked(fb.loadSupportSender).mockResolvedValue(null);
 });
 
 const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -181,5 +185,28 @@ describe("AdminFeedback", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(fb.saveContactSettings).toHaveBeenCalled());
     expect(vi.mocked(fb.saveContactSettings).mock.calls[0]![0].channels.telegram).toEqual({ enabled: true, url: "https://t.me/egepro" });
+  });
+
+  it("отправитель писем: пока ящик поддержки не подключён — красное предупреждение; сохранение и тест уходят на сервер", async () => {
+    vi.mocked(fb.loadAdminFeedback).mockResolvedValue(list([]));
+    vi.mocked(fb.loadContactSettings).mockResolvedValue({
+      settings: { supportEmail: "support@ege-tutor.ru", channels: { whatsapp: { enabled: false, url: "" }, telegram: { enabled: false, url: "" }, vk: { enabled: false, url: "" } } },
+      channels: [],
+    });
+    const sender: fb.SupportSender = { host: "smtp.yandex.ru", port: 465, secure: true, user: "", fromName: "ЕГЭ·ПРО — поддержка", fromAddress: "", hasPassword: false, effectiveFrom: "noreply@ege-tutor.ru", dedicated: false };
+    vi.mocked(fb.loadSupportSender).mockResolvedValue(sender);
+    vi.mocked(fb.saveSupportSender).mockResolvedValue({ sender: { ...sender, user: "support@ege-tutor.ru", hasPassword: true, effectiveFrom: "support@ege-tutor.ru", dedicated: true } });
+    vi.mocked(fb.sendSupportSenderTest).mockResolvedValue({ from: "support@ege-tutor.ru" });
+    render(<AdminFeedback />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Контакты и каналы" }));
+    expect(await screen.findByText(/Ящик поддержки не подключён: письма уходят с основного адреса noreply@ege-tutor.ru/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Логин SMTP (личный ящик с доступом)"), { target: { value: "noreply@ege-tutor.ru" } });
+    fireEvent.change(screen.getByLabelText("Пароль приложения"), { target: { value: "app-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить отправителя" }));
+    await waitFor(() => expect(fb.saveSupportSender).toHaveBeenCalledWith({ host: "smtp.yandex.ru", port: 465, user: "noreply@ege-tutor.ru", password: "app-pass", fromName: "ЕГЭ·ПРО — поддержка", fromAddress: "" }));
+    expect(await screen.findByText(/уходят с адреса support@ege-tutor.ru/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Отправить тестовое письмо на"), { target: { value: "me@mail.ru" } });
+    fireEvent.click(screen.getByRole("button", { name: "Проверить отправку" }));
+    await waitFor(() => expect(fb.sendSupportSenderTest).toHaveBeenCalledWith("me@mail.ru"));
   });
 });
