@@ -54,6 +54,7 @@ import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, list
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
 import { getAdminBadges, startAdminDigestScheduler } from "./adminNotify.js";
+import { saveSignupAttribution, getAttributionReport } from "./attribution.js";
 import { ContentFilterError, sanitizeConfig as sanitizeFilterConfig, loadFilterConfig, saveFilterConfig, listFilterLog, clearFilterLog, checkText, userMessage, DEFAULT_CONFIG as FILTER_DEFAULTS, TARGETS as FILTER_TARGETS } from "./contentFilter.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
@@ -191,6 +192,8 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
       [email, hash, JSON.stringify({ full_name: full_name ?? "", age: ageNum, gender })]
     );
     const user = rows[0];
+    // метки источника (utm, yclid, реферер) — best-effort: их потеря не должна влиять на регистрацию (см. attribution.js)
+    await saveSignupAttribution(user.id, req.body?.attribution).catch((e) => console.warn("не удалось сохранить атрибуцию регистрации:", e?.message ?? e));
     res.json({ data: { user }, error: null, needsVerification: true });
     // Письмо — после ответа клиенту и best-effort: не должно ни задерживать регистрацию, ни ронять
     // её при временной проблеме с почтой (SMTP ещё не настроен админом, провайдер недоступен и т.п.).
@@ -884,6 +887,15 @@ app.post("/admin/content-filter/test", authMiddleware, requireAdmin, async (req,
     res.json({ ok: violations.length === 0, violations, message: violations.length ? userMessage(violations, target) : "" });
   } catch (e) {
     feedbackFail(res, e);
+  }
+});
+
+// Отчёт «источник → воронка → оплаты» (метки рекламы при регистрации, см. attribution.js)
+app.get("/admin/attribution", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await getAttributionReport({ from: req.query.from ? String(req.query.from) : undefined, to: req.query.to ? String(req.query.to) : undefined }));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
   }
 });
 

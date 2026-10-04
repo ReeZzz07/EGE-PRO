@@ -172,16 +172,27 @@ ${bodyHtml}
 /** Содержимое письма подтверждения почты — отдельно от отправки, чтобы админка могла показать его в
  *  предпросмотре рассылки «повторная ссылка подтверждения». */
 export function buildVerifyEmail(verifyUrl) {
+  const base = (() => {
+    try {
+      return new URL(verifyUrl).origin;
+    } catch {
+      return "https://ege-tutor.ru";
+    }
+  })();
   return {
     subject: "Подтверди email — ЕГЭ·ПРО",
-    text: `Подтверди свой email, перейдя по ссылке: ${verifyUrl}\n\nЕсли ты не регистрировался(-лась) на ЕГЭ·ПРО — просто проигнорируй это письмо.`,
-    html: wrapHtml(`
-<h2 style="font-size:18px;">Подтверди email</h2>
-<p>Нажми на кнопку ниже, чтобы подтвердить свой адрес и полноценно пользоваться ЕГЭ·ПРО.</p>
-<p style="margin:24px 0;"><a href="${escapeHtml(verifyUrl)}" style="background:#2451ff;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold;">Подтвердить email</a></p>
-<p style="font-size:12px;color:#8a8d9a;">Если кнопка не работает, скопируй ссылку: ${escapeHtml(verifyUrl)}</p>
-<p style="font-size:12px;color:#8a8d9a;">Если ты не регистрировался(-лась) на ЕГЭ·ПРО — просто проигнорируй это письмо.</p>
-`),
+    text: `Осталась одна кнопка — и аккаунт в ЕГЭ·ПРО заработает.\n\nПодтверди свой email, перейдя по ссылке (она действует 24 часа):\n${verifyUrl}\n\nНа открывшейся странице нажми «Подтвердить почту и войти» — и можно пройти диагностику.\n\nЕсли ты не регистрировался(-лась) на ЕГЭ·ПРО — просто проигнорируй это письмо.`,
+    html: wrapBrandedHtml(
+      `
+<p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#2447e9;">подтверждение почты</p>
+<h2 style="margin:0 0 14px;font-size:21px;">Осталась одна кнопка</h2>
+<div style="margin:0 0 14px;">Подтверди свой адрес — и аккаунт в ЕГЭ·ПРО заработает: можно будет сразу пройти диагностику и получить личный план подготовки.</div>
+<p style="margin:22px 0 6px;"><a href="${escapeHtml(verifyUrl)}" style="background:#2447e9;color:#f4f6ff;padding:13px 24px;text-decoration:none;font-weight:700;font-size:15px;border:2px solid #101b5e;display:inline-block;">Подтвердить email</a></p>
+<p style="margin:14px 0 0;font-size:12px;color:#8a8d9a;">На открывшейся странице нажми «Подтвердить почту и войти». Ссылка действует 24 часа. Если кнопка не работает, скопируй адрес в браузер:<br><span style="word-break:break-all;">${escapeHtml(verifyUrl)}</span></p>
+`,
+      base,
+      "Если ты не регистрировался(-лась) на ЕГЭ·ПРО — просто проигнорируй это письмо."
+    ),
   };
 }
 

@@ -91,6 +91,8 @@ export function initMetrika(id: string): void {
  *  в docs/yandex-direct-plan.html, раздел 2.1. */
 export type GoalName =
   | "signup"
+  | "check_email_seen"
+  | "email_confirmed"
   | "first_ai_use"
   | "checkout_start"
   | "purchase"

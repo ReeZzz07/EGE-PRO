@@ -6,6 +6,10 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { loadSubjectAggregates } from "./lib/dbTasks";
 import { initMetrika, injectCustomCode } from "./lib/metrika";
 import { loadSeoSettings } from "./lib/seo";
+import { captureAttribution } from "./lib/attribution";
+
+// Метки рекламы и реферер — сразу, до рендера: роутер в App.tsx может заменить адрес и стереть ?utm_…
+captureAttribution();
 
 // Задания подгружаются лениво по предмету (см. lib/dbTasks.ts) — рендерим сразу, не дожидаясь сети.
 ReactDOM.createRoot(document.getElementById("root")!).render(

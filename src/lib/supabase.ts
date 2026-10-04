@@ -4,6 +4,7 @@
 // `.from()` — настоящий PostgrestClient (протокол идентичен supabase-js, ничего не меняли),
 // `.auth`/`.storage`/`.functions` — свои реализации поверх docker/api под теми же именами методов,
 // которые уже вызываются в auth.tsx/adminTasks.ts/dbTasks.ts/aiTutor.ts.
+import { getAttributionForSignup } from "./attribution";
 import { PostgrestClient } from "@supabase/postgrest-js";
 
 export const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -90,6 +91,7 @@ const authShim = {
         full_name: options?.data?.full_name ?? "",
         age: options?.data?.age,
         gender: options?.data?.gender,
+        attribution: getAttributionForSignup(),
       }),
     });
     const json = await resp.json();

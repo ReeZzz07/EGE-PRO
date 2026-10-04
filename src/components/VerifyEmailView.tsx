@@ -5,6 +5,7 @@
 // сама слала запрос при загрузке, одноразовый токен сгорал бы от сканера раньше настоящего клика.
 import { useState } from "react";
 import { useAuth } from "../lib/auth";
+import { reachGoalOnce } from "../lib/metrika";
 import { Icon } from "./ui";
 import type { View } from "./Header";
 
@@ -24,6 +25,7 @@ export default function VerifyEmailView({ token, onNav }: { token: string; onNav
       setAlreadyConfirmed(res.code === "ALREADY_CONFIRMED");
       return setError(res.error);
     }
+    reachGoalOnce("email_confirmed", "email_confirmed");
     onNav({ name: "onboarding" });
   };
 
