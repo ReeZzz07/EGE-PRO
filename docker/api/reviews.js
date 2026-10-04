@@ -4,6 +4,7 @@
 // 0037_reviews.sql. Низкие оценки (1–3) и отзывы без согласия на публикацию остаются приватными
 // (status 'private': видны только команде), публично показывается только status 'approved'.
 import { pool } from "./db.js";
+import { fireAndForget, notifyReviewSubmitted } from "./adminNotify.js";
 
 export const REQUIRED_AI_REQUESTS = 5;
 export const MIN_BODY = 30;
@@ -99,6 +100,7 @@ export async function saveMyReview(userId, input) {
   }
 
   const status = statusFor({ rating, consentPublic });
+  const prev = (await pool.query("select rating, body, subject, display_name, consent_public from public.reviews where user_id = $1", [userId])).rows[0];
   // правка опубликованного отзыва возвращает его на модерацию (статус пересчитан выше); ответ команды
   // к изменённому тексту не относится — сбрасываем
   await pool.query(
@@ -111,7 +113,14 @@ export async function saveMyReview(userId, input) {
        published_at = null, updated_at = now()`,
     [userId, rating, body, subject, displayName, consentPublic, status]
   );
-  return (await getMyReviewState(userId)).review;
+  const saved = (await getMyReviewState(userId)).review;
+  // письмо команде — только если отзыв новый или что-то в нём реально изменилось (повторное «Сохранить» без правок не шумит)
+  const changed = !prev || prev.rating !== rating || prev.body !== body || (prev.subject ?? null) !== subject || prev.display_name !== displayName || prev.consent_public !== consentPublic;
+  if (changed) {
+    const { rows } = await pool.query("select email from auth.users where id = $1", [userId]);
+    fireAndForget(notifyReviewSubmitted({ review: saved, authorEmail: rows[0]?.email ?? "—", isEdit: !!prev }));
+  }
+  return saved;
 }
 
 export async function deleteMyReview(userId) {

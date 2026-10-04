@@ -212,6 +212,8 @@ export async function replyAdminFeedback(id: number, text: string): Promise<{ de
 
 export interface ContactSettings {
   supportEmail: string;
+  /** куда приходят уведомления об отзывах (не на почту поддержки) */
+  reviewNotifyEmail: string;
   channels: Record<ChannelId, { enabled: boolean; url: string }>;
 }
 

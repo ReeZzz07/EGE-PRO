@@ -9,6 +9,7 @@ import {
   type AdminFeedbackDetail, type AdminFeedbackItem, type AdminFeedbackList, type ChannelId, type ChannelMeta, type ContactSettings, type FeedbackEventType, type FeedbackFilters, type FeedbackStatus, type SupportSender,
 } from "../lib/feedback";
 import { useAuth } from "../lib/auth";
+import { refreshAdminBadges } from "../lib/adminBadges";
 import { useToast } from "./ui";
 
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -64,6 +65,7 @@ function Detail({ id, onChanged }: { id: number; onChanged: () => void }) {
   const apply = (detail: AdminFeedbackDetail) => {
     setD(detail);
     setNote(detail.adminNote ?? "");
+    refreshAdminBadges();
     onChanged();
   };
 
@@ -468,6 +470,12 @@ function ChannelsSettings() {
       <label className="block">
         <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Почта поддержки</span>
         <input id="ct-email" type="email" value={s.supportEmail} onChange={(e) => setS({ ...s, supportEmail: e.target.value })} className="input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13.5px]" />
+        <span className="mt-1 block text-[11.5px] text-ink2">Сюда приходят обращения и ежедневная сводка по ним.</span>
+      </label>
+      <label className="block">
+        <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Почта для уведомлений об отзывах</span>
+        <input id="ct-review-email" type="email" value={s.reviewNotifyEmail} onChange={(e) => setS({ ...s, reviewNotifyEmail: e.target.value })} placeholder="info@ege-tutor.ru" className="input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13.5px]" />
+        <span className="mt-1 block text-[11.5px] text-ink2">Новые и изменённые отзывы (в том числе с низкой оценкой, они не публикуются) и ежедневная сводка по модерации — только сюда, не на почту поддержки.</span>
       </label>
       {meta.map((m) => (
         <div key={m.id} className="border-2 border-ink/15 p-4">

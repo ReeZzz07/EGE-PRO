@@ -171,7 +171,7 @@ describe("AdminFeedback", () => {
 
   it("каналы: Telegram и VK подготовлены — включаются ссылкой, сохранение уходит на сервер", async () => {
     vi.mocked(fb.loadAdminFeedback).mockResolvedValue(list([]));
-    const settings: fb.ContactSettings = { supportEmail: "support@ege-tutor.ru", channels: { whatsapp: { enabled: false, url: "" }, telegram: { enabled: false, url: "" }, vk: { enabled: false, url: "" } } };
+    const settings: fb.ContactSettings = { supportEmail: "support@ege-tutor.ru", reviewNotifyEmail: "info@ege-tutor.ru", channels: { whatsapp: { enabled: false, url: "" }, telegram: { enabled: false, url: "" }, vk: { enabled: false, url: "" } } };
     vi.mocked(fb.loadContactSettings).mockResolvedValue({
       settings,
       channels: [{ id: "whatsapp", label: "WhatsApp", hosts: ["wa.me"] }, { id: "telegram", label: "Telegram", hosts: ["t.me"] }, { id: "vk", label: "ВКонтакте", hosts: ["vk.com"] }],
@@ -179,18 +179,21 @@ describe("AdminFeedback", () => {
     vi.mocked(fb.saveContactSettings).mockImplementation(async (s) => ({ settings: s }));
     render(<AdminFeedback />);
     fireEvent.click(await screen.findByRole("tab", { name: "Контакты и каналы" }));
-    expect(await screen.findByLabelText("Почта поддержки")).toHaveValue("support@ege-tutor.ru");
+    expect(await screen.findByLabelText(/^Почта поддержки/)).toHaveValue("support@ege-tutor.ru");
+    // уведомления об отзывах — на отдельную почту, не на почту поддержки
+    expect(screen.getByLabelText(/^Почта для уведомлений об отзывах/)).toHaveValue("info@ege-tutor.ru");
     fireEvent.click(screen.getByLabelText("Telegram"));
     fireEvent.change(screen.getByLabelText("Ссылка Telegram"), { target: { value: "https://t.me/egepro" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(fb.saveContactSettings).toHaveBeenCalled());
     expect(vi.mocked(fb.saveContactSettings).mock.calls[0]![0].channels.telegram).toEqual({ enabled: true, url: "https://t.me/egepro" });
+    expect(vi.mocked(fb.saveContactSettings).mock.calls[0]![0].reviewNotifyEmail).toBe("info@ege-tutor.ru");
   });
 
   it("отправитель писем: пока ящик поддержки не подключён — красное предупреждение; сохранение и тест уходят на сервер", async () => {
     vi.mocked(fb.loadAdminFeedback).mockResolvedValue(list([]));
     vi.mocked(fb.loadContactSettings).mockResolvedValue({
-      settings: { supportEmail: "support@ege-tutor.ru", channels: { whatsapp: { enabled: false, url: "" }, telegram: { enabled: false, url: "" }, vk: { enabled: false, url: "" } } },
+      settings: { supportEmail: "support@ege-tutor.ru", reviewNotifyEmail: "info@ege-tutor.ru", channels: { whatsapp: { enabled: false, url: "" }, telegram: { enabled: false, url: "" }, vk: { enabled: false, url: "" } } },
       channels: [],
     });
     const sender: fb.SupportSender = { host: "smtp.yandex.ru", port: 465, secure: true, user: "", fromName: "ЕГЭ·ПРО — поддержка", fromAddress: "", hasPassword: false, effectiveFrom: "noreply@ege-tutor.ru", dedicated: false };

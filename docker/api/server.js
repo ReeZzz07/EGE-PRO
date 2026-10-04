@@ -53,6 +53,7 @@ import { getSupportSender, saveSupportSender, sendSupportSenderTest, createFeedb
 import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, listAdminReviews, moderateReview, ReviewError } from "./reviews.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
+import { getAdminBadges, startAdminDigestScheduler } from "./adminNotify.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
@@ -839,6 +840,15 @@ app.get("/admin/feedback", authMiddleware, requireAdmin, async (req, res) => {
     res.json(await listFeedback(req.query));
   } catch (e) {
     feedbackFail(res, e);
+  }
+});
+
+// Числа для значков в админке: новые/просроченные обращения, отзывы на модерации
+app.get("/admin/badges", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json(await getAdminBadges());
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
   }
 });
 
@@ -1721,6 +1731,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 const server = app.listen(PORT, () => console.log(`[api] listening on :${PORT}`));
 startLifecycleScheduler();
 startBlogScheduler();
+startAdminDigestScheduler();
 resumeCampaigns().catch((e) => console.warn("[campaigns] не удалось возобновить рассылки:", e?.message ?? e));
 
 // раньше необработанное исключение/rejection (например, в неawait'нутом .catch() пула — см.

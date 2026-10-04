@@ -38,6 +38,8 @@ export const HOURLY_LIMIT = 5;
 const MIN_FILL_MS = 3000;
 
 export const DEFAULT_SUPPORT_EMAIL = "support@ege-tutor.ru";
+/** Уведомления об отзывах идут на ЭТУ почту, а не на почту поддержки (туда — только обращения) */
+export const DEFAULT_REVIEW_NOTIFY_EMAIL = "info@ege-tutor.ru";
 
 /** Каналы связи: порядок = порядок на странице. Ссылку задаёт админ; разрешены только свои домены. */
 export const CHANNELS = [
@@ -86,7 +88,12 @@ export async function resolveContactSettings() {
     const url = validChannelUrl(ch, saved.channels?.[ch.id]?.url);
     channels[ch.id] = { enabled: !!url && saved.channels?.[ch.id]?.enabled !== false, url: url ?? "" };
   }
-  return { supportEmail: EMAIL_RE.test(email) ? email : DEFAULT_SUPPORT_EMAIL, channels };
+  const reviewEmail = normalizeEmail(saved.reviewNotifyEmail);
+  return {
+    supportEmail: EMAIL_RE.test(email) ? email : DEFAULT_SUPPORT_EMAIL,
+    reviewNotifyEmail: EMAIL_RE.test(reviewEmail) ? reviewEmail : DEFAULT_REVIEW_NOTIFY_EMAIL,
+    channels,
+  };
 }
 
 /** Что видит посетитель страницы /contacts: только включённые каналы, без служебного. */
@@ -103,6 +110,8 @@ export async function getPublicContactInfo() {
 export async function saveContactSettings(input, adminId) {
   const email = normalizeEmail(input?.supportEmail);
   if (!EMAIL_RE.test(email)) throw new FeedbackError("Укажи корректный адрес почты поддержки.");
+  const reviewEmail = normalizeEmail(input?.reviewNotifyEmail) || DEFAULT_REVIEW_NOTIFY_EMAIL;
+  if (!EMAIL_RE.test(reviewEmail)) throw new FeedbackError("Укажи корректный адрес для уведомлений об отзывах.");
   const channels = {};
   for (const ch of CHANNELS) {
     const raw = String(input?.channels?.[ch.id]?.url ?? "").trim();
@@ -111,7 +120,7 @@ export async function saveContactSettings(input, adminId) {
     if (enabled && !raw) throw new FeedbackError(`${ch.label}: включён, но ссылка не указана.`);
     channels[ch.id] = { enabled, url: raw ? validChannelUrl(ch, raw) : "" };
   }
-  const value = { supportEmail: email, channels };
+  const value = { supportEmail: email, reviewNotifyEmail: reviewEmail, channels };
   await pool.query(
     `insert into public.app_settings (key, value, updated_by) values ('contacts', $1, $2)
      on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by`,

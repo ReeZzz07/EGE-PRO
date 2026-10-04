@@ -3,9 +3,16 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { getReviewEligibility, saveMyReview, getMyReviewState, deleteMyReview, listPublicReviews, listAdminReviews, moderateReview, statusFor, defaultDisplayName, ReviewError } from "../reviews.js";
+import { setNotifySenderForTests, whenNotificationsSettled } from "../adminNotify.js";
 import { createTestUser, deleteTestUser, insertAiMessage, pool } from "./helpers.js";
 
-after(() => pool.end());
+// письма команде об отзывах здесь не проверяем (см. adminNotify.test.js) и настоящий SMTP не трогаем
+setNotifySenderForTests(async () => {});
+after(async () => {
+  await whenNotificationsSettled();
+  setNotifySenderForTests(null);
+  await pool.end();
+});
 
 const BODY = "Репетитор объясняет понятно, диагностика сразу показала слабые темы.";
 

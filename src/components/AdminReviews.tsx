@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { REVIEW_STATUS_LABEL, loadAdminReviews, moderateAdminReview, type AdminReview, type AdminReviews, type ReviewStatus } from "../lib/reviews";
 import { Stars } from "./ReviewsSection";
+import { refreshAdminBadges } from "../lib/adminBadges";
 import { useToast } from "./ui";
 
 const FILTERS: ReviewStatus[] = ["pending", "approved", "private", "rejected"];
@@ -21,6 +22,7 @@ function ReviewRow({ r, onChanged }: { r: AdminReview; onChanged: () => void }) 
     setBusy(false);
     if (res.error) return push(res.error, "err");
     push(action === "approve" ? "Опубликовано" : action === "reply" ? "Ответ сохранён" : "Готово", "ok");
+    refreshAdminBadges();
     onChanged();
   };
 

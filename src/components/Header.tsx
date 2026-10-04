@@ -3,6 +3,7 @@ import type { Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { useUnreadBlogCount } from "../lib/blog";
+import { useAdminBadges } from "../lib/adminBadges";
 import type { FeedbackTopic } from "../lib/feedback";
 import { Icon } from "./ui";
 
@@ -97,6 +98,8 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
   const { derived } = useProgress();
   const { profile, signOut } = useAuth();
   const unreadBlog = useUnreadBlogCount(profile?.id);
+  const adminBadges = useAdminBadges();
+  const adminCount = adminBadges?.total ?? 0;
   const [menuOpen, setMenuOpen] = useState(false);
   // "landing" -> "home": у гостя главная страница называется view.name "landing" (с необязательным
   // section при клике по якорю), а не "home" как в NAV/GUEST_NAV, — без этой нормализации пункт
@@ -148,7 +151,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                     key={n.id}
                     onClick={() => onNav({ name: n.id } as View)}
                     title={n.label}
-                    aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.label}
+                    aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.id === "admin" && adminCount ? `${n.label}, ${adminCount} требуют внимания` : n.label}
                     className={`relative flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-2 text-[12.5px] font-bold transition-colors sm:px-2 lg:px-1.5 lg:text-[13px] ${
                       isActive ? "text-blue" : "text-ink2 hover:bg-ink/5 hover:text-ink"
                     }`}
@@ -161,6 +164,14 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                           aria-hidden
                         >
                           {unreadBlog > 9 ? "9+" : unreadBlog}
+                        </span>
+                      )}
+                      {n.id === "admin" && !!adminCount && (
+                        <span
+                          className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red px-0.5 font-mono text-[9px] font-bold leading-none text-white"
+                          aria-hidden
+                        >
+                          {adminCount > 9 ? "9+" : adminCount}
                         </span>
                       )}
                     </span>
@@ -283,7 +294,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
             <button
               key={n.id}
               onClick={n.onClick}
-              aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.label}
+              aria-label={n.id === "blog" && unreadBlog ? `${n.label}, ${unreadBlog} новых` : n.id === "admin" && adminCount ? `${n.label}, ${adminCount} требуют внимания` : n.label}
               aria-current={isActive ? "page" : undefined}
               className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-bold transition-colors ${
                 isActive ? "text-blue" : "text-ink2"
@@ -298,6 +309,14 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                     aria-hidden
                   >
                     {unreadBlog > 9 ? "9+" : unreadBlog}
+                  </span>
+                )}
+                {n.id === "admin" && !!adminCount && (
+                  <span
+                    className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red px-0.5 font-mono text-[9px] font-bold leading-none text-white"
+                    aria-hidden
+                  >
+                    {adminCount > 9 ? "9+" : adminCount}
                   </span>
                 )}
               </span>
