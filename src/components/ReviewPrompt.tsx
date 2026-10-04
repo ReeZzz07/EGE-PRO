@@ -19,14 +19,16 @@ function readDismissed(key: string): boolean {
   }
 }
 
-/** card — светлая карточка на дашборде; strip — тёмная полоска в чате репетитора (TutorChat.tsx). */
+/** card — карточка на дашборде: приглашение для допущенных, компактный прогресс для тех, кто ещё не выполнил
+ *  условия; strip — тёмная полоска в чате репетитора (TutorChat.tsx), только допущенным. */
 export default function ReviewPrompt({ variant, onOpen }: { variant: "card" | "strip"; onOpen: () => void }) {
   const { profile } = useAuth();
   const { state } = useMyReviewState();
   const key = profile ? dismissKey(variant, profile.id) : "";
   const [dismissed, setDismissed] = useState(() => (key ? readDismissed(key) : false));
 
-  if (!profile || dismissed || !state || !state.eligibility.eligible || state.review) return null;
+  if (!profile || dismissed || !state || state.review || state.eligibility.isAdmin) return null;
+  if (variant === "strip" && !state.eligibility.eligible) return null;
 
   const close = () => {
     try {
@@ -36,6 +38,42 @@ export default function ReviewPrompt({ variant, onOpen }: { variant: "card" | "s
     }
     setDismissed(true);
   };
+
+  if (!state.eligibility.eligible) {
+    const e = state.eligibility;
+    const steps = [
+      { done: e.onboarding, label: "онбординг" },
+      { done: e.diagnostic, label: "диагностика" },
+      { done: e.aiMessages >= e.required, label: `репетитору ${Math.min(e.aiMessages, e.required)}/${e.required}` },
+    ];
+    return (
+      <div className="anim-rise mt-6 flex flex-wrap items-center justify-between gap-3 border-l-4 border-ink/30 bg-ink/5 px-4 py-3 sm:px-5">
+        <div className="flex items-start gap-3">
+          <Icon name="star" size={18} className="mt-0.5 shrink-0 text-ink2" />
+          <div className="text-[13px] leading-relaxed text-ink2">
+            <p>
+              <strong className="text-ink">Отзыв о сервисе откроется, когда попробуешь его в деле:</strong>
+            </p>
+            <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[12px]">
+              {steps.map((st) => (
+                <li key={st.label} className={st.done ? "text-green" : ""}>
+                  {st.done ? "✓" : "○"} {st.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={onOpen} className="btn btn-ghost px-3.5 py-2 text-[12.5px]">
+            Подробнее
+          </button>
+          <button onClick={close} aria-label="Скрыть" className="btn btn-ghost px-2.5 py-2 text-[12.5px]">
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (variant === "strip") {
     return (

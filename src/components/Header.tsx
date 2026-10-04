@@ -76,6 +76,7 @@ const ACCOUNT_MENU: { id: string; label: string; icon: string }[] = [
   { id: "stats", label: "Статистика", icon: "chart" },
   { id: "mistakes", label: "Ошибки", icon: "alert" },
   { id: "subjects", label: "Мои предметы", icon: "book" },
+  { id: "review", label: "Мой отзыв", icon: "star" },
   { id: "settings", label: "Настройки", icon: "gear" },
 ];
 const ACCOUNT_VIEWS: View["name"][] = ACCOUNT_MENU.map((n) => n.id) as View["name"][];
@@ -226,7 +227,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
                 // визуальный отступ через padding остаётся частью хитбокса и разрыва не создаёт.
                 <div className="absolute right-0 top-full z-50 w-52 pt-1">
                   <div role="menu" className="sheet overflow-hidden rounded-sm py-1.5">
-                    {ACCOUNT_MENU.map((n) => (
+                    {ACCOUNT_MENU.filter((n) => n.id !== "review" || !profile.isAdmin).map((n) => (
                       <button
                         key={n.id}
                         role="menuitem"

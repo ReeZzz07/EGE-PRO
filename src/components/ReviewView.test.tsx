@@ -100,11 +100,26 @@ describe("ReviewPrompt", () => {
     expect(screen.queryByRole("button", { name: "Оставить отзыв" })).not.toBeInTheDocument();
   });
 
-  it("не показывается, если условия не выполнены или отзыв уже есть", () => {
-    hook(state({ eligible: false }));
+  it("условия не выполнены: карточка показывает прогресс, а не приглашение; полоска в чате скрыта", () => {
+    hook(state({ eligible: false, onboarding: true, diagnostic: false, aiMessages: 2 }));
+    const onOpen = vi.fn();
+    const { container, rerender } = render(<ReviewPrompt variant="card" onOpen={onOpen} />);
+    expect(screen.getByText(/Отзыв о сервисе откроется/)).toBeInTheDocument();
+    expect(screen.getByText(/✓ онбординг/)).toBeInTheDocument();
+    expect(screen.getByText(/○ диагностика/)).toBeInTheDocument();
+    expect(screen.getByText(/○ репетитору 2\/5/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Оставить отзыв" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Подробнее" }));
+    expect(onOpen).toHaveBeenCalled();
+    rerender(<ReviewPrompt variant="strip" onOpen={onOpen} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("не показывается, если отзыв уже есть или это админ", () => {
+    hook(state({}, { rating: 5, body: "x".repeat(40), subject: null, displayName: "А", consentPublic: true, status: "approved", adminReply: null, createdAt: "", updatedAt: "" }));
     const { container, rerender } = render(<ReviewPrompt variant="card" onOpen={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
-    hook(state({}, { rating: 5, body: "x".repeat(40), subject: null, displayName: "А", consentPublic: true, status: "approved", adminReply: null, createdAt: "", updatedAt: "" }));
+    hook(state({ eligible: false, isAdmin: true }));
     rerender(<ReviewPrompt variant="card" onOpen={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
