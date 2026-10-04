@@ -72,6 +72,27 @@ export const TEMPLATES = {
 Если ты просто отвлёкся(лась), вернись на страницу тарифов и оплати в пару кликов: тариф включается сразу после платежа, чек придёт на почту. Оплата разовая на 30 дней, без автосписаний.`,
     summary: false,
   },
+  // Просьба об отзыве — тем, кто уже выполнил условия допуска (онбординг, диагностика, 5 обращений к
+  // репетитору — см. reviews.js) и ещё не писал отзыв. Без скидки и подарков за отзыв: это просьба,
+  // а не сделка. Кнопка ведёт на страницу «Мой отзыв» (/review).
+  review: {
+    title: "Просьба оставить отзыв",
+    when: "Через сутки – 7 дней после того, как ученик выполнил условия для отзыва (онбординг, диагностика, 5 обращений к репетитору), если он ещё не писал отзыв. Один раз.",
+    eyebrow: "твой отзыв",
+    cta: "Оставить отзыв →",
+    ctaPath: "/review",
+    rich: false,
+    noOffer: true,
+    placeholders: ["имя"],
+    footer: FOOTER_ONCE,
+    subject: "Как тебе ЕГЭ·ПРО? Расскажи в паре предложений",
+    bodyText: `Ты уже прошёл(ла) онбординг и диагностику и не раз советовался(лась) с ИИ-репетитором — значит, у тебя есть своё мнение о ЕГЭ·ПРО, и нам оно очень нужно.
+
+Отзыв — это оценка и пара предложений: что помогло, чего не хватило. Это займёт минуту.
+
+Пиши честно. Отзывы с оценкой 1–3 на сайте не публикуются — их видит только команда, и мы разбираемся, что исправить. Отзыв с оценкой 4–5 появится на сайте только с твоего согласия и после проверки; подписать его можно именем и первой буквой фамилии.`,
+    summary: false,
+  },
   expiring: {
     title: "Скоро закончится платный тариф",
     when: "За 3 дня до окончания платного тарифа. Один раз на каждый оплаченный период. Кнопка ведёт на /renew — продление с теми же настройками.",
@@ -275,7 +296,8 @@ ${offer.html}
 
 /** Предпросмотр/тест из админки: образцовые данные, скидка показана всегда, чтобы видеть полную версию. */
 export async function buildSampleEmail(kind, override) {
-  return buildLifecycleEmail(kind, SAMPLE_VARS, { siteUrl: (process.env.CORS_ORIGIN || "").split(",")[0].trim(), offer: SAMPLE_OFFER, summary: SAMPLE_SUMMARY }, override);
+  // у письма без скидки (noOffer) в образце её тоже нет — предпросмотр должен показывать то, что реально уйдёт
+  return buildLifecycleEmail(kind, SAMPLE_VARS, { siteUrl: (process.env.CORS_ORIGIN || "").split(",")[0].trim(), offer: TEMPLATES[kind]?.noOffer ? null : SAMPLE_OFFER, summary: SAMPLE_SUMMARY }, override);
 }
 
 // ─────────────── отправка (вызывается из lifecycle.js) ───────────────
@@ -289,6 +311,11 @@ export async function sendActivationEmail(to, { fullName, siteUrl, offer } = {})
 
 export async function sendPlanNudgeEmail(to, { fullName, siteUrl, subjectName, weakTopics = [], offer } = {}) {
   const m = await buildLifecycleEmail("plan", { имя: fullName ?? "", предмет: subjectName ?? "", темы: weakTopics.join(", ") }, { siteUrl, offer });
+  await sendMail({ to, ...m });
+}
+
+export async function sendReviewRequestEmail(to, { fullName, siteUrl } = {}) {
+  const m = await buildLifecycleEmail("review", { имя: fullName ?? "" }, { siteUrl });
   await sendMail({ to, ...m });
 }
 

@@ -164,12 +164,12 @@ const AFTER_LOGIN_KEY = "ege-pro.after-login.v1";
 /** Куда вернуть после входа, если человека сюда привела ссылка из письма (/renew — продление,
  *  /onboarding — анкета подготовки из письма-напоминания, /subjects — докупка предметов из письма
  *  о незавершённой оплате, /plan — письмо-напоминание про план после диагностики, /diagnostic —
- *  письмо-напоминание пройти диагностику). */
+ *  письмо-напоминание пройти диагностику, /review — просьба оставить отзыв). */
 function takeAfterLoginView(): View | null {
   try {
     const v = sessionStorage.getItem(AFTER_LOGIN_KEY);
     sessionStorage.removeItem(AFTER_LOGIN_KEY);
-    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : v === "plan" ? { name: "plan" } : v === "diagnostic" ? { name: "diagnostic" } : null;
+    return v === "renew" ? { name: "renew" } : v === "onboarding" ? { name: "onboarding" } : v === "subjects" ? { name: "subjects" } : v === "plan" ? { name: "plan" } : v === "diagnostic" ? { name: "diagnostic" } : v === "review" ? { name: "review" } : null;
   } catch {
     return null;
   }
@@ -198,7 +198,7 @@ function AppShell() {
   // восстанавливаем при следующей загрузке (для авторизованных — см. эффект ниже).
   const setView = (v: View) => {
     // цель «после входа» живёт только пока человек остаётся на пути вход → продление/докупка предметов/план
-    if (v.name !== "auth" && v.name !== "renew" && v.name !== "subjects" && v.name !== "plan") {
+    if (v.name !== "auth" && v.name !== "renew" && v.name !== "subjects" && v.name !== "plan" && v.name !== "review") {
       try {
         sessionStorage.removeItem(AFTER_LOGIN_KEY);
       } catch {
@@ -317,6 +317,16 @@ function AppShell() {
     if (!loading && !profile && view.name === "diagnostic") {
       try {
         sessionStorage.setItem(AFTER_LOGIN_KEY, "diagnostic");
+      } catch {
+        /* ignore */
+      }
+      setView({ name: "auth", mode: "login" });
+      return;
+    }
+    // ссылка на отзыв из письма-просьбы (review_request, см. lifecycle.js) — та же схема
+    if (!loading && !profile && view.name === "review") {
+      try {
+        sessionStorage.setItem(AFTER_LOGIN_KEY, "review");
       } catch {
         /* ignore */
       }

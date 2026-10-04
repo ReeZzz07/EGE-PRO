@@ -3,8 +3,8 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { findActivationCandidates, findPlanNudgeCandidates, findAbandonedPaymentCandidates, findExpiryCandidates } from "../lifecycle.js";
-import { createTestUser, deleteTestUser, createTestPayment, pool } from "./helpers.js";
+import { findActivationCandidates, findPlanNudgeCandidates, findAbandonedPaymentCandidates, findExpiryCandidates, findReviewRequestCandidates } from "../lifecycle.js";
+import { createTestUser, deleteTestUser, createTestPayment, insertAiMessage, pool } from "./helpers.js";
 
 after(() => pool.end());
 
@@ -216,5 +216,70 @@ test("напоминание про план: уже получал это пи�
     assert.ok(!got.includes(id));
   } finally {
     await deleteTestUser(id);
+  }
+});
+
+// ─────────── просьба об отзыве (review_request) ───────────
+
+/** Допущенный к отзыву: онбординг, диагностика и 5 обращений — каждое hoursAgo часов назад */
+async function reviewReadyUser({ hoursAgo = 30, aiCount = 5, onboarded = true, diagnostic = true, ...opts } = {}) {
+  const id = await makeRealisticUser({ ...opts, onboarded }, 24 * 20);
+  const at = new Date(Date.now() - hoursAgo * 3600 * 1000);
+  if (onboarded) await pool.query("update public.profiles set onboarded_at = $2 where id = $1", [id, at]);
+  if (diagnostic) await pool.query("insert into public.diagnostics (user_id, subject, finished_at) values ($1, 'math', $2)", [id, at]);
+  for (let i = 0; i < aiCount; i++) await insertAiMessage(id, { mode: "chat", role: "user", createdAt: at });
+  return id;
+}
+
+test("просьба об отзыве: выполнил все три условия 30 часов назад — в выборке, в том числе платный", async () => {
+  const free = await reviewReadyUser();
+  const paid = await reviewReadyUser({ tariffId: "attestat" });
+  try {
+    const got = await ids(findReviewRequestCandidates);
+    assert.ok(got.includes(free));
+    assert.ok(got.includes(paid));
+  } finally {
+    await deleteTestUser(free);
+    await deleteTestUser(paid);
+  }
+});
+
+test("просьба об отзыве: не хватает условия, слишком свежо, слишком давно, админ — не в выборке", async () => {
+  const fourAi = await reviewReadyUser({ aiCount: 4 });
+  const noDiag = await reviewReadyUser({ diagnostic: false });
+  const noOnb = await reviewReadyUser({ onboarded: false });
+  const fresh = await reviewReadyUser({ hoursAgo: 5 });
+  const old = await reviewReadyUser({ hoursAgo: 24 * 9 });
+  const admin = await reviewReadyUser({ isAdmin: true });
+  try {
+    const got = await ids(findReviewRequestCandidates);
+    for (const id of [fourAi, noDiag, noOnb, fresh, old, admin]) assert.ok(!got.includes(id));
+  } finally {
+    for (const id of [fourAi, noDiag, noOnb, fresh, old, admin]) await deleteTestUser(id);
+  }
+});
+
+test("просьба об отзыве: срок считается от ПОСЛЕДНЕГО условия — 5-е обращение только что сделано, значит рано", async () => {
+  const id = await reviewReadyUser({ hoursAgo: 48, aiCount: 4 });
+  try {
+    await insertAiMessage(id, { mode: "chat", role: "user" }); // 5-е обращение — сейчас
+    assert.ok(!(await ids(findReviewRequestCandidates)).includes(id));
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("просьба об отзыве: уже написал отзыв или уже получал письмо — не в выборке", async () => {
+  const reviewed = await reviewReadyUser();
+  const mailed = await reviewReadyUser();
+  try {
+    await pool.query("insert into public.reviews (user_id, rating, body, display_name) values ($1, 5, $2, 'Аня')", [reviewed, "Отличная платформа, диагностика и репетитор очень помогают."]);
+    await pool.query("insert into public.lifecycle_emails (user_id, kind) values ($1, 'review_request')", [mailed]);
+    const got = await ids(findReviewRequestCandidates);
+    assert.ok(!got.includes(reviewed));
+    assert.ok(!got.includes(mailed));
+  } finally {
+    await deleteTestUser(reviewed);
+    await deleteTestUser(mailed);
   }
 });

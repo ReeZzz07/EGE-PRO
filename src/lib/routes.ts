@@ -18,6 +18,8 @@ export function viewToPath(view: View): string {
   if (view.name === "subjects") return "/subjects";
   if (view.name === "plan") return "/plan";
   if (view.name === "diagnostic") return "/diagnostic";
+  // /review — «Мой отзыв»: сюда ведёт письмо с просьбой об отзыве (docker/api/lifecycleEmails.js)
+  if (view.name === "review") return "/review";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
   if (view.name === "blog") return "/blog";
   if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
@@ -72,6 +74,9 @@ export function pathToView(pathname: string, search = ""): View | null {
     // как и /plan выше
     case "/diagnostic":
       return { name: "diagnostic" };
+    // /review — ссылка из письма-просьбы об отзыве (см. lifecycle.js); без входа — сначала вход (см. AppShell)
+    case "/review":
+      return { name: "review" };
     case "/oferta":
       return { name: "legal", doc: "offer" };
     case "/privacy":

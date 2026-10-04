@@ -6,6 +6,8 @@
 //    вовсе (см. разбор воронки 26.09.2026: 11 реальных пользователей дошли до плана, ни один не
 //    получил ни одного письма);
 //  • payment_abandoned — тому, кто начал оплату тарифа, но не довёл её до конца;
+//  • review_request — через сутки-неделю после того, как человек выполнил условия для отзыва (онбординг,
+//    диагностика, 5 обращений к репетитору — см. reviews.js) и так и не написал его; платным тоже;
 //  • expiring:<дата> / expired:<дата> — платному пользователю за 3 дня до окончания тарифа и в первые
 //    3 дня после: со ссылкой /renew на продление «как было» (дата в виде — чтобы следующий
 //    оплаченный период снова получил свои напоминания, а не упирался в старую строку журнала).
@@ -14,7 +16,8 @@
 // продублирует письмо; цена этого — при сбое SMTP письмо не повторяется (лучше потерять напоминание,
 // чем засыпать человека копиями). Отключить целиком — переменная окружения LIFECYCLE_EMAILS=off.
 import { pool } from "./db.js";
-import { sendActivationEmail, sendPlanNudgeEmail, sendPaymentAbandonedEmail, sendSubscriptionExpiryEmail } from "./lifecycleEmails.js";
+import { sendActivationEmail, sendPlanNudgeEmail, sendPaymentAbandonedEmail, sendSubscriptionExpiryEmail, sendReviewRequestEmail } from "./lifecycleEmails.js";
+import { REQUIRED_AI_REQUESTS } from "./reviews.js";
 import { getSubscription } from "./subscription.js";
 import { getWelcomeOffer } from "./offers.js";
 
@@ -120,6 +123,30 @@ export async function findAbandonedPaymentCandidates(limit = BATCH) {
 }
 
 
+/** Выполнил условия допуска к отзыву (те же, что в reviews.js → getReviewEligibility) и не написал его.
+ *  eligible_at — момент, когда выполнено ПОСЛЕДНЕЕ из условий (онбординг / первая диагностика / 5-е
+ *  обращение к репетитору); письмо уходит через ≥20 часов после него (человек успел увидеть карточку на
+ *  дашборде) и не позже 7 дней (старым «допущенным» не пишем — актуальность письма пропала). Платным
+ *  пользователям тоже: их отзывы нужны не меньше. */
+export async function findReviewRequestCandidates(limit = BATCH) {
+  const { rows } = await pool.query(
+    `select c.id, c.email, c.full_name from (
+       select u.id, u.email, p.full_name, p.onboarded_at, d.first_at, m.fifth_at
+       from auth.users u join public.profiles p on p.id = u.id
+         cross join lateral (select min(finished_at) as first_at from public.diagnostics where user_id = u.id) d
+         cross join lateral (select created_at as fifth_at from public.ai_messages where user_id = u.id and role = 'user' order by created_at offset $2 limit 1) m
+       where not p.is_admin and p.onboarded_at is not null and d.first_at is not null and u.email not like '%.local'
+         and not exists (select 1 from public.reviews r where r.user_id = u.id)
+         and not exists (select 1 from public.lifecycle_emails l where l.user_id = u.id and l.kind = 'review_request')
+     ) c
+     where greatest(c.onboarded_at, c.first_at, c.fifth_at) between now() - interval '7 days' and now() - interval '20 hours'
+     order by greatest(c.onboarded_at, c.first_at, c.fifth_at)
+     limit $1`,
+    [limit, REQUIRED_AI_REQUESTS - 1]
+  );
+  return rows;
+}
+
 /** Платные тарифы, срок которых закончится в ближайшие 3 дня (expired=false) или закончился не
  *  более 3 дней назад (expired=true). kind включает дату окончания — см. шапку файла. */
 export async function findExpiryCandidates(expired, limit = BATCH) {
@@ -169,9 +196,9 @@ async function sendExpiryBatch(expired, siteUrl) {
 }
 
 export async function runLifecycleEmails({ ignoreQuietHours = false } = {}) {
-  if (!ignoreQuietHours && !inSendingWindow()) return { activation: 0, planNudge: 0, abandoned: 0, expiry: 0 };
+  if (!ignoreQuietHours && !inSendingWindow()) return { activation: 0, planNudge: 0, abandoned: 0, review: 0, expiry: 0 };
   const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
-  const sent = { activation: 0, planNudge: 0, abandoned: 0, expiry: 0 };
+  const sent = { activation: 0, planNudge: 0, abandoned: 0, review: 0, expiry: 0 };
 
   for (const c of await findActivationCandidates()) {
     if (!(await claim(c.id, "activation_d1"))) continue;
@@ -210,10 +237,20 @@ export async function runLifecycleEmails({ ignoreQuietHours = false } = {}) {
     }
   }
 
+  for (const c of await findReviewRequestCandidates()) {
+    if (!(await claim(c.id, "review_request"))) continue;
+    try {
+      await sendReviewRequestEmail(c.email, { fullName: c.full_name, siteUrl });
+      sent.review++;
+    } catch (e) {
+      console.warn("не удалось отправить просьбу об отзыве (review_request):", e?.message ?? e);
+    }
+  }
+
   sent.expiry = (await sendExpiryBatch(false, siteUrl)) + (await sendExpiryBatch(true, siteUrl));
 
-  if (sent.activation || sent.planNudge || sent.abandoned || sent.expiry)
-    console.log(`[lifecycle] отправлено: напоминаний ${sent.activation}, про план ${sent.planNudge}, о брошенной оплате ${sent.abandoned}, о сроке тарифа ${sent.expiry}`);
+  if (sent.activation || sent.planNudge || sent.abandoned || sent.review || sent.expiry)
+    console.log(`[lifecycle] отправлено: напоминаний ${sent.activation}, про план ${sent.planNudge}, о брошенной оплате ${sent.abandoned}, просьб об отзыве ${sent.review}, о сроке тарифа ${sent.expiry}`);
   return sent;
 }
 

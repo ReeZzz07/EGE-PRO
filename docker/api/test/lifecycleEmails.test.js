@@ -37,7 +37,8 @@ test("образец каждого письма: оформление как у
     assert.ok(m.html.includes(TEMPLATES[kind].eyebrow), `${kind}: нет эйбрау`);
     assert.ok(m.html.includes("Аня, привет!"));
     assert.ok(m.html.includes(TEMPLATES[kind].cta.replace(/&/g, "&amp;")) || m.html.includes(TEMPLATES[kind].cta));
-    assert.ok(m.html.includes("−30%"), `${kind}: в образце должна быть скидка`);
+    if (TEMPLATES[kind].noOffer) assert.ok(!m.html.includes("−30%") && !m.text.includes("скидка"), `${kind}: в образце скидки быть не должно`);
+    else assert.ok(m.html.includes("−30%"), `${kind}: в образце должна быть скидка`);
     assert.ok(!/\{[^{}\s]+\}/.test(m.subject + m.text), `${kind}: остались неподставленные {ключи}`);
   }
   const activation = await buildSampleEmail("activation");
@@ -153,4 +154,14 @@ test("блок скидки: заработана только часть — п
 
   const full = offerBlock({ active: true, percent: 30, maxPercent: 30, expiresAt, steps: steps(true, true, true) });
   assert.ok(full.text.includes("скидка −30%") && !full.text.includes("вырастет"));
+});
+
+test("review: просьба об отзыве — кнопка на /review, без скидки и без обещаний награды, про приватность низких оценок сказано честно", async () => {
+  const m = await buildSampleEmail("review");
+  assert.ok(m.html.includes("/review"));
+  assert.ok(m.text.includes("Оставить отзыв"));
+  assert.match(m.text, /оценкой 1–3 на сайте не публикуются/);
+  assert.doesNotMatch(m.text + m.html, /скидк|бонус|подарок/i);
+  const real = await buildLifecycleEmail("review", { имя: "Аня" }, { siteUrl: "https://example.org" });
+  assert.ok(real.text.includes("https://example.org/review"));
 });

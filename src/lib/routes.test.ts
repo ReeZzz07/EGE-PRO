@@ -23,6 +23,11 @@ describe("pathToView", () => {
     expect(viewToPath({ name: "onboarding" })).toBe("/");
   });
 
+  it("/review — адрес из письма-просьбы об отзыве", () => {
+    expect(pathToView("/review")).toEqual({ name: "review" });
+    expect(viewToPath({ name: "review" })).toBe("/review");
+  });
+
   it("/subjects — адрес из письма «оплата не завершена» (докупка предметов)", () => {
     expect(pathToView("/subjects")).toEqual({ name: "subjects" });
     expect(viewToPath({ name: "subjects" })).toBe("/subjects");
