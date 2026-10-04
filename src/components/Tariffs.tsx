@@ -118,7 +118,17 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
                 </span>
               )}
               <h2 className="font-display mt-2 text-lg font-black">{t.name}</h2>
-              {t.salePriceRub != null ? (
+              {t.priceRub > 0 && discountedPrice(t.salePriceRub ?? t.priceRub) != null ? (
+                // любая применённая скидка: основная цена зачёркнута, крупно — цена первого платежа
+                <>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <p className="font-display text-2xl font-black">{money(discountedPrice(t.salePriceRub ?? t.priceRub)!)}</p>
+                    <p className="font-mono text-[13px] text-ink2 line-through">{money(t.salePriceRub ?? t.priceRub)}</p>
+                    <span className="rounded-sm bg-red px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-white">−{effectiveDiscount}%</span>
+                  </div>
+                  <p className="mt-1 font-mono text-[11.5px] text-ink2">Скидка действует на первую оплату</p>
+                </>
+              ) : t.salePriceRub != null ? (
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <p className="font-display text-2xl font-black">{money(t.salePriceRub)}</p>
                   <p className="font-mono text-[13px] text-ink2 line-through">{money(t.priceRub)}</p>
@@ -129,14 +139,9 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
               ) : (
                 <p className="font-display mt-2 text-2xl font-black">{money(t.priceRub)}</p>
               )}
-              {t.priceRub > 0 && discountedPrice(t.salePriceRub ?? t.priceRub) != null && (
-                <p className="mt-1 font-mono text-[12px] font-bold text-teal">
-                  К оплате со скидкой −{effectiveDiscount}%: {money(discountedPrice(t.salePriceRub ?? t.priceRub)!)}
-                </p>
-              )}
               {t.priceRub > 0 && offer && offer.maxPercent > effectiveDiscount && pendingStepsText(offer) && (
                 <p className="mt-0.5 font-mono text-[11.5px] text-ink2">
-                  Пройди {pendingStepsText(offer)} — будет −{offer.maxPercent}%: {money(Math.round((t.salePriceRub ?? t.priceRub) * (1 - offer.maxPercent / 100) * 100) / 100)}
+                  Пройди {pendingStepsText(offer)} — скидка вырастет до −{offer.maxPercent}%
                 </p>
               )}
               <ul className="mt-4 flex-1 space-y-2 text-[13px] text-ink2">
