@@ -47,7 +47,7 @@ import {
   releaseEssayCheckSlot,
 } from "./tariffGate.js";
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
-import { normalizeEmail, EMAIL_RE, MIN_PASSWORD_LENGTH } from "./validators.js";
+import { normalizeEmail, EMAIL_RE, emailProblem, MIN_PASSWORD_LENGTH } from "./validators.js";
 import { getWelcomeOffer } from "./offers.js";
 import { getSupportSender, saveSupportSender, sendSupportSenderTest, createFeedback, dispatchFeedbackEmails, getPublicContactInfo, resolveContactSettings, saveContactSettings, listMyFeedback, listFeedback, getFeedbackDetail, updateFeedback, replyFeedback, FeedbackError, CHANNELS as FEEDBACK_CHANNELS } from "./feedback.js";
 import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, listAdminReviews, moderateReview, ReviewError } from "./reviews.js";
@@ -164,7 +164,7 @@ app.post("/auth/signup", authLimiter, async (req, res) => {
   const { password, full_name, age, gender } = req.body ?? {};
   const email = normalizeEmail(req.body?.email);
   if (!email || !password) return res.status(400).json({ error: { message: "email и password обязательны" } });
-  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: { message: "Проверь email — похоже, в адресе опечатка" } });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: { message: emailProblem(email) } });
   // Раньше пароль при регистрации не проверялся вообще (в отличие от смены/сброса пароля ниже,
   // которые оба требуют 6+ символов) — можно было завести аккаунт с паролем из одного символа.
   if (password.length < MIN_PASSWORD_LENGTH) return res.status(400).json({ error: { message: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` } });
@@ -284,7 +284,7 @@ app.post("/auth/change-email", authMiddleware, async (req, res) => {
   const { password } = req.body ?? {};
   const newEmail = normalizeEmail(req.body?.newEmail);
   if (!newEmail) return res.status(400).json({ error: { message: "Введи новый email" } });
-  if (!EMAIL_RE.test(newEmail)) return res.status(400).json({ error: { message: "Проверь email — похоже, в адресе опечатка" } });
+  if (!EMAIL_RE.test(newEmail)) return res.status(400).json({ error: { message: emailProblem(newEmail) } });
   try {
     const { rows } = await pool.query("select email, encrypted_password from auth.users where id = $1", [req.user.sub]);
     const row = rows[0];

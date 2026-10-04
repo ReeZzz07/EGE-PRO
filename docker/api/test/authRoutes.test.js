@@ -68,6 +68,16 @@ test("/auth/signup: без email или password — 400 с понятным с�
   assert.equal(r3.status, 400);
 });
 
+test("/auth/signup: email с кириллицей («л@gmail.com», «иван@mail.ru») — 400 с подсказкой про латиницу, аккаунт не создаётся", async () => {
+  for (const email of ["л@gmail.com", "иван@mail.ru", "ivan@gmаil.com" /* кириллическая «а» */]) {
+    const { status, json } = await signup({ email, password: "valid-pass-1" });
+    assert.equal(status, 400, email);
+    assert.match(json.error.message, /латиницей/, email);
+  }
+  const { rows } = await pool.query("select count(*)::int as n from auth.users where email ~ '[^\x01-\x7F]'");
+  assert.equal(rows[0].n, 0, "в auth.users нет адресов с не-ASCII символами");
+});
+
 test("/auth/signup: успех — 200, needsVerification=true, БЕЗ access_token (email ещё не подтверждён)", async () => {
   const email = testEmail();
   const r = await signup({ email, password: "testpass123", full_name: "Тест Тестов" });

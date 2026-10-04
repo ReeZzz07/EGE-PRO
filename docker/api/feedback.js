@@ -6,7 +6,7 @@
 // WhatsApp, Telegram, VK) — в public.app_settings, ключ 'contacts', правятся в /admin → Обращения.
 import { createHash } from "node:crypto";
 import { pool } from "./db.js";
-import { EMAIL_RE, normalizeEmail } from "./validators.js";
+import { EMAIL_RE, emailProblem, normalizeEmail } from "./validators.js";
 import { escapeHtml, sendMail, wrapBrandedHtml, resolveSupportSmtpSettings } from "./mailer.js";
 
 // Тесты подменяют отправку, чтобы не слать настоящие письма (см. test/feedback.test.js)
@@ -156,7 +156,7 @@ export async function createFeedback(input, ctx = {}) {
       context.tariff = rows[0].tariff_id;
     }
   }
-  if (!EMAIL_RE.test(email)) throw new FeedbackError("Укажи корректную почту — на неё придёт ответ.");
+  if (!EMAIL_RE.test(email)) throw new FeedbackError(emailProblem(email)?.startsWith("Email нужно") ? emailProblem(email) : "Укажи корректную почту — на неё придёт ответ.");
 
   const ipHash = hashIp(ctx.ip);
   const { rows: recent } = await pool.query(

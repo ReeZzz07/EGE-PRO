@@ -4,7 +4,7 @@
 // прошлых обращений со статусами и ответами. Каналы связи (WhatsApp/Telegram/VK) включаются в админке ссылкой.
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { isValidEmail } from "../lib/validation";
+import { emailProblem } from "../lib/validation";
 import { DEFAULT_LEGAL_ENTITY, loadLegalEntityInfo, type LegalEntityInfo } from "../lib/legalEntity";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import {
@@ -89,7 +89,8 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
     e.preventDefault();
     setError(null);
     if (!topic) return setError("Выбери тему обращения.");
-    if (!loggedIn && !isValidEmail(email)) return setError("Укажи корректную почту — на неё придёт ответ.");
+    const emailErr = loggedIn ? null : emailProblem(email);
+    if (emailErr) return setError(emailErr.startsWith("Email нужно") ? emailErr : "Укажи корректную почту — на неё придёт ответ.");
     if (message.trim().length < MIN_MESSAGE) return setError(`Опиши вопрос подробнее — хотя бы ${MIN_MESSAGE} символов.`);
     if (!consent) return setError("Нужно согласие на обработку данных, чтобы мы могли ответить.");
     setBusy(true);

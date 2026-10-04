@@ -17,7 +17,7 @@ import {
   type AdminUserDetail,
 } from "../lib/adminUsers";
 import { ActivitySection, FunnelSteps, fmtDate } from "./AdminUserCard";
-import { isValidEmail } from "../lib/validation";
+import { emailProblem } from "../lib/validation";
 import { Icon, useToast } from "./ui";
 
 /** Код → подпись для полей анкеты онбординга (см. OnboardingFlow.tsx) — та же анкета, что видит
@@ -101,7 +101,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
     // Раньше это поле вообще не проверялось — правка email здесь напрямую пишет в auth.users, и
     // опечатка молча ломала все будущие письма пользователю (включая подтверждение регистрации),
     // без единого сообщения об ошибке ни админу, ни человеку.
-    if (!email.trim() || !isValidEmail(email)) return push("Проверь email — похоже, в адресе опечатка.", "err");
+    if (!email.trim() || emailProblem(email)) return push(emailProblem(email) ?? "Проверь email — похоже, в адресе опечатка.", "err");
     setSaving(true);
     const res = await updateAdminUser(id, {
       fullName: fullName.trim(),

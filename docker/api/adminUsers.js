@@ -5,7 +5,7 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { pool } from "./db.js";
-import { normalizeEmail, EMAIL_RE } from "./validators.js";
+import { normalizeEmail, EMAIL_RE, emailProblem } from "./validators.js";
 
 /** Таблицы с прямым user_id, которые нужно включить в выгрузку персональных данных пользователя
  * (см. exportUserData). essay_assessments сюда не входит — она ссылается на essay_submissions
@@ -187,7 +187,7 @@ export async function updateUser(id, patch) {
       const email = normalizeEmail(patch.email);
       if (!EMAIL_RE.test(email)) {
         await client.query("rollback");
-        return { error: "Проверь email — похоже, в адресе опечатка" };
+        return { error: emailProblem(email) };
       }
       const dup = await client.query("select id from auth.users where lower(email) = $1 and id <> $2", [email, id]);
       if (dup.rows.length) {
