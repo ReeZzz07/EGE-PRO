@@ -14,6 +14,7 @@ import WelcomeContentModal from "./WelcomeContentModal";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
 import SubscriptionBanner from "./SubscriptionBanner";
 import PlanUpgradeBanner from "./PlanUpgradeBanner";
+import ReviewPrompt from "./ReviewPrompt";
 import { useWelcomeOffer } from "../lib/offers";
 import BlogSection from "./BlogSection";
 
@@ -341,6 +342,8 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
       {showPlanUpgrade && primarySubject && <PlanUpgradeBanner subjectName={SUBJECTS[primarySubject].name} weakTopics={diagnosticDone?.weakTopics ?? []} offer={offer} onNav={onNav} />}
 
       {offer && profile?.tariffId === "free" && !showPlanUpgrade && <WelcomeOfferBanner offer={offer} onNav={onNav} />}
+
+      {profile && !isGuestMode && !profile.isAdmin && <ReviewPrompt variant="card" onOpen={() => onNav({ name: "review" })} />}
 
       {profile && !isGuestMode && (!profile.onboardedAt ? (
         <OnboardingNudge onNav={onNav} />

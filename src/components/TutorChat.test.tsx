@@ -11,6 +11,8 @@ vi.mock("../lib/store", () => ({
   useProgress: () => ({ derived: { mistakeIds: new Set(), solvedIds: new Set() } }),
 }));
 vi.mock("../lib/aiTutor", () => ({ loadAiQuota: vi.fn(), callAiTutor: vi.fn() }));
+// приглашение оставить отзыв требует AuthProvider — к квоте чата отношения не имеет (см. ReviewView.test.tsx)
+vi.mock("./ReviewPrompt", () => ({ default: () => null }));
 
 describe("TutorChat — бейдж квоты", () => {
   it("безлимитный тариф — обычная подпись, без упоминания лимита", async () => {

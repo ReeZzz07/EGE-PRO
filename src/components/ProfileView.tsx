@@ -249,6 +249,7 @@ export default function ProfileView({ onNav }: { onNav: (v: View) => void }) {
           accent={mistakeCount > 0 ? "red" : undefined}
           onClick={() => onNav({ name: "mistakes" })}
         />
+        {!profile.isAdmin && !isGuestMode && <FactTile icon="star" label="отзыв" value="Мой отзыв" onClick={() => onNav({ name: "review" })} />}
       </div>
 
       {/* имя */}

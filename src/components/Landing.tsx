@@ -6,6 +6,7 @@ import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
 import BlogSection from "./BlogSection";
+import ReviewsSection from "./ReviewsSection";
 import type { View } from "./Header";
 
 /** Разбивает заголовок на части вокруг выделяемой подстроки и оборачивает её в hl-подсветку. */
@@ -290,6 +291,8 @@ export default function Landing({
           ))}
         </div>
       </section>
+
+      <ReviewsSection />
 
       <BlogSection onNav={onNav} />
 

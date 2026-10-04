@@ -1,3 +1,4 @@
+import ReviewPrompt from "./ReviewPrompt";
 import { useEffect, useRef, useState } from "react";
 import type { EgeTask } from "../data/tasks";
 import { taskById, SUBJECTS } from "../data/tasks";
@@ -304,6 +305,7 @@ export default function TutorChat({
             </button>
           </div>
         )}
+        {!examMode && !compact && <ReviewPrompt variant="strip" onOpen={() => onNavigate?.("review")} />}
         <div ref={bottomRef} />
       </div>
 

@@ -21,6 +21,7 @@ import MockExam from "./components/MockExam";
 import SessionSummary from "./components/SessionSummary";
 import Tariffs from "./components/Tariffs";
 import ProfileView from "./components/ProfileView";
+import ReviewView from "./components/ReviewView";
 import SettingsView from "./components/SettingsView";
 import SubjectsView from "./components/SubjectsView";
 import Kim2027Changes from "./components/Kim2027Changes";
@@ -450,6 +451,7 @@ function AppShell() {
         {view.name === "session-summary" && <SessionSummary onNav={setView} />}
         {view.name === "tariffs" && <Tariffs onNav={setView} />}
         {view.name === "profile" && <ProfileView onNav={setView} />}
+        {view.name === "review" && <ReviewView onNav={setView} />}
         {view.name === "settings" && <SettingsView onNav={setView} highlightPrep={view.highlightPrep} highlightProfile={view.highlightProfile} />}
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}

@@ -49,6 +49,7 @@ import {
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { normalizeEmail, EMAIL_RE, MIN_PASSWORD_LENGTH } from "./validators.js";
 import { getWelcomeOffer } from "./offers.js";
+import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, listAdminReviews, moderateReview, ReviewError } from "./reviews.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
 import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCampaign, renderCampaignSample, validateCampaignContent, resumeCampaigns, CampaignError, MAX_RECIPIENTS as CAMPAIGN_MAX_RECIPIENTS, RECENT_DAYS as CAMPAIGN_RECENT_DAYS, CTA_PATHS as CAMPAIGN_CTA_PATHS } from "./campaigns.js";
@@ -102,6 +103,7 @@ const aiTutorLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders
 // Создание платежа — редкое осознанное действие (не то, что ученик делает пачками), но всё же не
 // без лимита: без него можно было бы наплодить в ЮKassa (и в нашей БД) сколько угодно "pending"
 // платежей одним скриптом.
+const reviewsLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 const paymentsLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 // Вебхук публичный (ЮKassa шлёт его без авторизации, см. комментарий у самого роута) — лимит не
 // для настоящих уведомлений ЮKassa (их в разы меньше), а на случай, если кто-то найдёт URL и
@@ -780,6 +782,63 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.send(renderBotHtml({ title, description, canonicalUrl, ogImage, verificationMetaTags }));
+});
+
+// ─────────────────────── отзывы (см. reviews.js, миграция 0037) ───────────────────────
+const reviewFail = (res, e) => res.status(e instanceof ReviewError ? e.status : 500).json({ error: String(e?.message ?? e) });
+
+// Публичная лента одобренных отзывов — без авторизации (лендинг, страница тарифов)
+app.get("/reviews/public", reviewsLimiter, async (req, res) => {
+  try {
+    res.set("Cache-Control", "public, max-age=60");
+    res.json(await listPublicReviews(req.query.limit));
+  } catch (e) {
+    reviewFail(res, e);
+  }
+});
+
+// Допуск (прогресс по трём условиям), свой отзыв, имя по умолчанию и предметы для выбора
+app.get("/reviews/me", authMiddleware, reviewsLimiter, async (req, res) => {
+  try {
+    res.json(await getMyReviewState(req.user.sub));
+  } catch (e) {
+    reviewFail(res, e);
+  }
+});
+
+app.put("/reviews/me", authMiddleware, reviewsLimiter, async (req, res) => {
+  try {
+    res.json({ review: await saveMyReview(req.user.sub, req.body ?? {}) });
+  } catch (e) {
+    reviewFail(res, e);
+  }
+});
+
+app.delete("/reviews/me", authMiddleware, reviewsLimiter, async (req, res) => {
+  try {
+    await deleteMyReview(req.user.sub);
+    res.json({ ok: true });
+  } catch (e) {
+    reviewFail(res, e);
+  }
+});
+
+app.get("/admin/reviews", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await listAdminReviews(req.query.status ? String(req.query.status) : undefined));
+  } catch (e) {
+    reviewFail(res, e);
+  }
+});
+
+app.patch("/admin/reviews/:id", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const action = String(req.body?.action ?? "");
+    const review = await moderateReview(req.params.id, { action, reply: req.body?.reply });
+    res.json({ review });
+  } catch (e) {
+    reviewFail(res, e);
+  }
 });
 
 // ─────────────────────── оплата (ЮKassa) ───────────────────────

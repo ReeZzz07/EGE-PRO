@@ -21,6 +21,7 @@ export type View =
   | { name: "session-summary" }
   | { name: "tariffs" }
   | { name: "profile" }
+  | { name: "review" }
   | { name: "settings"; highlightPrep?: boolean; highlightProfile?: boolean }
   | { name: "subjects" }
   | { name: "kim2027" }
@@ -37,7 +38,7 @@ export type View =
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
 export const PROTECTED_VIEWS: View["name"][] = [
   "bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary",
-  "profile", "settings", "subjects", "kim2027", "payment-return", "renew", "admin",
+  "profile", "review", "settings", "subjects", "kim2027", "payment-return", "renew", "admin",
 ];
 
 /** Виды, доступные только администраторам (см. AppShell). */

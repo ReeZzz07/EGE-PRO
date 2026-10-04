@@ -16,6 +16,7 @@ import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
 import { useWelcomeOffer } from "../lib/offers";
 import { Icon, useToast } from "./ui";
+import ReviewsSection from "./ReviewsSection";
 import WelcomeOfferBanner, { pendingStepsText } from "./WelcomeOfferBanner";
 import SubscriptionBanner from "./SubscriptionBanner";
 import type { View } from "./Header";
@@ -195,6 +196,8 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
           );
         })}
       </div>
+
+      <ReviewsSection limit={3} className="mx-auto mt-12 max-w-5xl" />
 
       {/* только то, что реально так работает (см. payments.js: разовый платёж на 30 дней, тариф
           включает вебхук сразу после оплаты, чек уходит на почту; карту принимает ЮKassa, не мы) */}
