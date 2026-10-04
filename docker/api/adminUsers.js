@@ -275,6 +275,8 @@ export async function anonymizeUser(id) {
     );
     await client.query("update public.essay_submissions set text = $2 where user_id = $1", [id, "[удалено по запросу пользователя]"]);
     await client.query("update public.ai_messages set content = $2 where user_id = $1", [id, "[удалено по запросу пользователя]"]);
+    // обращения в поддержку остаются (история), но без почты, имени и текста автора (миграция 0038)
+    await client.query("select public.scrub_feedback_for_user($1)", [id]);
     await client.query("commit");
     return {};
   } catch (e) {

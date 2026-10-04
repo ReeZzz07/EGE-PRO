@@ -500,6 +500,14 @@ function SolveViewRegular({ task, taskId, onNav }: { task: EgeTask; taskId: stri
                 </p>
               </div>
             ) : null}
+
+            {/* ошибки в условии/ответе — самый ценный сигнал для качества банка: сразу открываем форму с номером задания */}
+            <p className="mt-6 border-t border-ink/10 pt-3 text-[12px] text-ink2">
+              Нашёл ошибку в условии или ответе?{" "}
+              <button onClick={() => onNav({ name: "contacts", topic: "task_error", taskId: task.id })} className="link-slide font-bold text-ink2 hover:text-ink">
+                Сообщить
+              </button>
+            </p>
           </div>
         </div>
 

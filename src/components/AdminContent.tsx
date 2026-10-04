@@ -19,6 +19,7 @@ import AdminLifecycleEmails from "./AdminLifecycleEmails";
 import AdminCampaigns from "./AdminCampaigns";
 import AdminBlog from "./AdminBlog";
 import AdminReviews from "./AdminReviews";
+import AdminFeedback from "./AdminFeedback";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
   return (
@@ -77,7 +78,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
   const { push } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail" | "campaigns" | "blog" | "reviews">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail" | "campaigns" | "blog" | "reviews" | "feedback">("content");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [legalEntity, setLegalEntity] = useState<LegalEntityInfo>(DEFAULT_LEGAL_ENTITY);
@@ -217,6 +218,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         >
           Отзывы
         </button>
+        <button
+          onClick={() => setTab("feedback")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "feedback" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Обращения
+        </button>
       </div>
 
       {tab === "campaigns" && (
@@ -234,6 +241,12 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       {tab === "reviews" && (
         <div className="mt-6">
           <AdminReviews />
+        </div>
+      )}
+
+      {tab === "feedback" && (
+        <div className="mt-6">
+          <AdminFeedback />
         </div>
       )}
 

@@ -97,6 +97,12 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
           <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-5 py-2.5 text-[13px]">
             Вернуться к тарифам
           </button>
+          <p className="mt-5 text-[12.5px] text-ink2">
+            Не получается?{" "}
+            <button onClick={() => onNav({ name: "contacts", topic: "payment" })} className="link-slide font-bold text-ink2 hover:text-ink">
+              Напиши в поддержку
+            </button>
+          </p>
         </>
       )}
 
@@ -110,6 +116,12 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
           <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-5 py-2.5 text-[13px]">
             К тарифам
           </button>
+          <p className="mt-5 text-[12.5px] text-ink2">
+            Не получается?{" "}
+            <button onClick={() => onNav({ name: "contacts", topic: "payment" })} className="link-slide font-bold text-ink2 hover:text-ink">
+              Напиши в поддержку
+            </button>
+          </p>
         </>
       )}
 
@@ -123,6 +135,12 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
           <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-5 py-2.5 text-[13px]">
             К тарифам
           </button>
+          <p className="mt-5 text-[12.5px] text-ink2">
+            Не получается?{" "}
+            <button onClick={() => onNav({ name: "contacts", topic: "payment" })} className="link-slide font-bold text-ink2 hover:text-ink">
+              Напиши в поддержку
+            </button>
+          </p>
         </>
       )}
     </div>

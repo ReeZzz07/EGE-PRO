@@ -49,6 +49,7 @@ import {
 import { searchUsers, getUserFacets, USER_BOOL_FILTERS, getUserDetail, getUserEmail, updateUser, exportUserData, anonymizeUser, deleteUserCascade, logAdminAction } from "./adminUsers.js";
 import { normalizeEmail, EMAIL_RE, MIN_PASSWORD_LENGTH } from "./validators.js";
 import { getWelcomeOffer } from "./offers.js";
+import { createFeedback, dispatchFeedbackEmails, getPublicContactInfo, resolveContactSettings, saveContactSettings, listMyFeedback, listFeedback, getFeedbackDetail, updateFeedback, replyFeedback, FeedbackError, CHANNELS as FEEDBACK_CHANNELS } from "./feedback.js";
 import { getMyReviewState, saveMyReview, deleteMyReview, listPublicReviews, listAdminReviews, moderateReview, ReviewError } from "./reviews.js";
 import { startLifecycleScheduler } from "./lifecycle.js";
 import { startBlogScheduler } from "./blogScheduler.js";
@@ -103,6 +104,7 @@ const aiTutorLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders
 // Создание платежа — редкое осознанное действие (не то, что ученик делает пачками), но всё же не
 // без лимита: без него можно было бы наплодить в ЮKassa (и в нашей БД) сколько угодно "pending"
 // платежей одним скриптом.
+const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 const reviewsLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 const paymentsLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 // Вебхук публичный (ЮKassa шлёт его без авторизации, см. комментарий у самого роута) — лимит не
@@ -719,7 +721,7 @@ app.get("/sitemap.xml", async (req, res) => {
     console.warn("не удалось прочитать blog_articles для sitemap.xml, отдаю без статей:", e?.message ?? e);
   }
   res.setHeader("content-type", "application/xml; charset=utf-8");
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}${entry("/blog", "weekly", "0.7")}${articleEntries}</urlset>\n`);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}${entry("/contacts", "yearly", "0.4")}${entry("/blog", "weekly", "0.7")}${articleEntries}</urlset>\n`);
 });
 
 // ─────────────────────── SEO-заглушка для ботов соцсетей ───────────────────────
@@ -782,6 +784,102 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.send(renderBotHtml({ title, description, canonicalUrl, ogImage, verificationMetaTags }));
+});
+
+// ─────────────────────── обратная связь (см. feedback.js, миграция 0038) ───────────────────────
+const feedbackFail = (res, e) => res.status(e instanceof FeedbackError ? e.status : 500).json({ error: String(e?.message ?? e) });
+
+/** Вошедший пользователь, если токен есть и годен; иначе гость. Битый токен не ошибка: форма открыта всем. */
+async function optionalUserId(req) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return null;
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    const { rows } = await pool.query("select token_version from public.profiles where id = $1", [payload.sub]);
+    if (rows[0] && (payload.tv ?? 0) < rows[0].token_version) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
+// Контакты и каналы связи для страницы /contacts — без авторизации
+app.get("/feedback/info", reviewsLimiter, async (_req, res) => {
+  try {
+    res.set("Cache-Control", "public, max-age=60");
+    res.json(await getPublicContactInfo());
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.post("/feedback", feedbackLimiter, async (req, res) => {
+  try {
+    const userId = await optionalUserId(req);
+    const r = await createFeedback(req.body ?? {}, { userId, ip: req.ip, userAgent: req.headers["user-agent"] });
+    // письма — после ответа и без ожидания: медленный SMTP не должен держать форму, а результат
+    // каждой отправки всё равно записывается в журнал обращения
+    if (r.saved) dispatchFeedbackEmails(r.id, { siteUrl: (process.env.CORS_ORIGIN || "").split(",")[0].trim() }).catch((e) => console.warn("[feedback] сбой рассылки:", e?.message ?? e));
+    res.status(201).json({ ok: true, id: r.id });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.get("/feedback/mine", authMiddleware, reviewsLimiter, async (req, res) => {
+  try {
+    res.json({ items: await listMyFeedback(req.user.sub) });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.get("/admin/feedback", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await listFeedback(req.query));
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.get("/admin/feedback/settings", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json({ settings: await resolveContactSettings(), channels: FEEDBACK_CHANNELS.map((c) => ({ id: c.id, label: c.label, hosts: c.hosts })) });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.put("/admin/feedback/settings", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json({ settings: await saveContactSettings(req.body ?? {}, req.user.sub) });
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.get("/admin/feedback/:id", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await getFeedbackDetail(Number(req.params.id)));
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.patch("/admin/feedback/:id", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await updateFeedback(Number(req.params.id), req.user.sub, { status: req.body?.status, note: req.body?.note }));
+  } catch (e) {
+    feedbackFail(res, e);
+  }
+});
+
+app.post("/admin/feedback/:id/reply", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await replyFeedback(Number(req.params.id), req.user.sub, req.body?.text));
+  } catch (e) {
+    feedbackFail(res, e);
+  }
 });
 
 // ─────────────────────── отзывы (см. reviews.js, миграция 0037) ───────────────────────

@@ -199,6 +199,14 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
 
       <ReviewsSection limit={3} className="mx-auto mt-12 max-w-5xl" />
 
+      <p className="mt-8 text-center text-[12.5px] text-ink2">
+        Вопрос по оплате или тарифу?{" "}
+        <button onClick={() => onNav({ name: "contacts", topic: "payment" })} className="link-slide font-bold text-ink2 hover:text-ink">
+          Напиши нам
+        </button>
+        {" "}— ответим в течение одного дня.
+      </p>
+
       {/* только то, что реально так работает (см. payments.js: разовый платёж на 30 дней, тариф
           включает вебхук сразу после оплаты, чек уходит на почту; карту принимает ЮKassa, не мы) */}
       {tariffs.some((t) => t.priceRub > 0) && (

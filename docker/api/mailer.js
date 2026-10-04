@@ -113,7 +113,7 @@ function transportFor(settings) {
 /** Отправка — best-effort везде, где письмо не является сутью запроса (регистрация, оплата не
  * должны падать из-за временной проблемы с почтой): вызывающий код сам решает, ловить ли ошибку
  * или дать ей всплыть, эта функция не глотает исключения молча. */
-export async function sendMail({ to, subject, text, html }) {
+export async function sendMail({ to, subject, text, html, replyTo }) {
   const settings = await resolveSmtpSettings();
   if (!settings) throw new Error("SMTP не настроен — задай его в /admin → Почта");
   const transport = transportFor(settings);
@@ -123,6 +123,7 @@ export async function sendMail({ to, subject, text, html }) {
     subject,
     text,
     html,
+    ...(replyTo ? { replyTo } : {}),
   });
 }
 

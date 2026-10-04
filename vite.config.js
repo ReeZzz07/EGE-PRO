@@ -40,6 +40,8 @@ const apiProxy = backendHost
       "/offers": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       // отзывы: GET /reviews/public, GET/PUT/DELETE /reviews/me (docker/api/reviews.js); админская
       // модерация идёт через уже проксируемый /admin/reviews
+      // обратная связь: GET /feedback/info, POST /feedback, GET /feedback/mine (docker/api/feedback.js); админка — через /admin/feedback
+      "/feedback": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/reviews": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       // Раньше — статические файлы в public/ (см. src/lib/seo.ts, docker/api/server.js) — теперь
       // генерируются api из public.app_settings, редактируются в /admin → SEO. Проксируем их сюда

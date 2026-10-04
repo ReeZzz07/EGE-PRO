@@ -28,6 +28,12 @@ describe("pathToView", () => {
     expect(viewToPath({ name: "review" })).toBe("/review");
   });
 
+  it("/contacts — публичная страница контактов", () => {
+    expect(pathToView("/contacts")).toEqual({ name: "contacts" });
+    expect(viewToPath({ name: "contacts" })).toBe("/contacts");
+    expect(viewToPath({ name: "contacts", topic: "task_error", taskId: "math-1" })).toBe("/contacts");
+  });
+
   it("/subjects — адрес из письма «оплата не завершена» (докупка предметов)", () => {
     expect(pathToView("/subjects")).toEqual({ name: "subjects" });
     expect(viewToPath({ name: "subjects" })).toBe("/subjects");

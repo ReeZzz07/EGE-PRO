@@ -22,6 +22,7 @@ import SessionSummary from "./components/SessionSummary";
 import Tariffs from "./components/Tariffs";
 import ProfileView from "./components/ProfileView";
 import ReviewView from "./components/ReviewView";
+import ContactsView from "./components/ContactsView";
 import SettingsView from "./components/SettingsView";
 import SubjectsView from "./components/SubjectsView";
 import Kim2027Changes from "./components/Kim2027Changes";
@@ -71,7 +72,9 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
           )}
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
             <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
-            <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>          </div>
+            <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>
+            <button onClick={() => onNav({ name: "contacts" })} className="link-slide text-[11.5px] font-bold text-paper/70 hover:text-paper">Контакты</button>
+          </div>
         </div>
         <div className="order-1 sm:order-2">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.25em] text-hl">Предметы</p>
@@ -462,6 +465,7 @@ function AppShell() {
         {view.name === "tariffs" && <Tariffs onNav={setView} />}
         {view.name === "profile" && <ProfileView onNav={setView} />}
         {view.name === "review" && <ReviewView onNav={setView} />}
+        {view.name === "contacts" && <ContactsView key={`${view.topic ?? ""}:${view.taskId ?? ""}`} onNav={setView} topic={view.topic} taskId={view.taskId} />}
         {view.name === "settings" && <SettingsView onNav={setView} highlightPrep={view.highlightPrep} highlightProfile={view.highlightProfile} />}
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}

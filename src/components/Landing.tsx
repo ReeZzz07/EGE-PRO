@@ -290,6 +290,13 @@ export default function Landing({
             </Reveal>
           ))}
         </div>
+      <p className="mt-5 text-[13px] text-ink2">
+          Не нашёл ответ?{" "}
+          <button onClick={() => onNav({ name: "contacts" })} className="link-slide font-bold text-ink hover:text-blue">
+            Напиши нам
+          </button>{" "}
+          — ответим в течение одного дня.
+        </p>
       </section>
 
       <ReviewsSection />

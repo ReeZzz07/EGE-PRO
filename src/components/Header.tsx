@@ -3,6 +3,7 @@ import type { Subject } from "../data/tasks";
 import { useProgress } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { useUnreadBlogCount } from "../lib/blog";
+import type { FeedbackTopic } from "../lib/feedback";
 import { Icon } from "./ui";
 
 export type View =
@@ -22,6 +23,7 @@ export type View =
   | { name: "tariffs" }
   | { name: "profile" }
   | { name: "review" }
+  | { name: "contacts"; topic?: FeedbackTopic; taskId?: string }
   | { name: "settings"; highlightPrep?: boolean; highlightProfile?: boolean }
   | { name: "subjects" }
   | { name: "kim2027" }
@@ -77,6 +79,7 @@ const ACCOUNT_MENU: { id: string; label: string; icon: string }[] = [
   { id: "mistakes", label: "Ошибки", icon: "alert" },
   { id: "subjects", label: "Мои предметы", icon: "book" },
   { id: "review", label: "Мой отзыв", icon: "star" },
+  { id: "contacts", label: "Помощь", icon: "chat" },
   { id: "settings", label: "Настройки", icon: "gear" },
 ];
 const ACCOUNT_VIEWS: View["name"][] = ACCOUNT_MENU.map((n) => n.id) as View["name"][];
