@@ -23,6 +23,12 @@ export function viewToPath(view: View): string {
   // /contacts — контакты и форма обратной связи (публичная страница, есть в sitemap.xml)
   if (view.name === "contacts") return "/contacts";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
+  // /parents — страница для родителей (публичная, есть в sitemap.xml)
+  if (view.name === "parents") return "/parents";
+  // /pay-for/<токен> — страница родителя, куда ведёт ссылка от ученика («попросить родителя оплатить»);
+  // ?paymentId= — возврат после оплаты. Токен — длинная случайная строка, поэтому без encodeURIComponent
+  // его не ломаем: base64url безопасен для пути.
+  if (view.name === "parent-pay") return `/pay-for/${encodeURIComponent(view.token)}${view.paymentId ? `?paymentId=${encodeURIComponent(view.paymentId)}` : ""}`;
   if (view.name === "blog") return "/blog";
   if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
   // /payment/return не строится через setView() изнутри приложения — на него попадают только
@@ -46,6 +52,11 @@ export function pathToView(pathname: string, search = ""): View | null {
   // /blog/:slug — единственный путь здесь с переменным сегментом, обрабатываем до switch ниже, не
   // трогая его: точный "/blog" — список, "/blog/<slug>" — статья (ровно один плоский сегмент, без
   // вложенных "/" — вложенный путь или пустой хвост не наш формат).
+  if (pathname.startsWith("/pay-for/")) {
+    const token = pathname.slice("/pay-for/".length);
+    if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
+    return { name: "parent-pay", token, paymentId: new URLSearchParams(search).get("paymentId") ?? undefined };
+  }
   if (pathname === "/blog") return { name: "blog" };
   if (pathname.startsWith("/blog/")) {
     const rest = pathname.slice("/blog/".length);
@@ -81,6 +92,8 @@ export function pathToView(pathname: string, search = ""): View | null {
       return { name: "review" };
     case "/contacts":
       return { name: "contacts" };
+    case "/parents":
+      return { name: "parents" };
     case "/oferta":
       return { name: "legal", doc: "offer" };
     case "/privacy":

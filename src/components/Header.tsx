@@ -32,6 +32,8 @@ export type View =
   | { name: "blog" }
   | { name: "blog-article"; slug: string }
   | { name: "payment-return"; paymentId: string }
+  | { name: "parent-pay"; token: string; paymentId?: string }
+  | { name: "parents" }
   | { name: "renew" }
   | { name: "reset-password"; token: string }
   | { name: "check-email"; email: string }
@@ -57,6 +59,7 @@ const NAV: { id: string; label: string; icon: string }[] = [
   { id: "bank", label: "Банк заданий", icon: "list" },
   { id: "tutor", label: "ИИ-репетитор", icon: "chat" },
   { id: "tariffs", label: "Тариф", icon: "spark" },
+  { id: "parents", label: "Родителям", icon: "user" },
   { id: "blog", label: "База знаний", icon: "book" },
 ];
 
@@ -91,6 +94,7 @@ const GUEST_NAV: { id: string; section?: string; view?: View; label: string; ico
   { id: "features", section: "features", label: "Возможности", icon: "chat" },
   { id: "principle", section: "principle", label: "Принцип", icon: "target" },
   { id: "tariffs", view: { name: "tariffs" }, label: "Тарифы", icon: "spark" },
+  { id: "parents", view: { name: "parents" }, label: "Родителям", icon: "user" },
   { id: "blog", view: { name: "blog" }, label: "База знаний", icon: "book" },
 ];
 

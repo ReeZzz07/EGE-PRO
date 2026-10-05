@@ -112,3 +112,28 @@ describe("pathToView ⇄ viewToPath — согласованность для п
     expect(viewToPath(view!)).toBe("/blog/some-article");
   });
 });
+
+describe("страницы родителя: /parents и /pay-for/<токен>", () => {
+  const TOKEN = "Abc_def-123456789012345678901";
+  const PAYMENT = "11111111-2222-3333-4444-555555555555";
+
+  it("/parents — публичная страница для родителей", () => {
+    expect(pathToView("/parents")).toEqual({ name: "parents" });
+    expect(viewToPath({ name: "parents" })).toBe("/parents");
+  });
+
+  it("/pay-for/<токен>: токен из пути, paymentId из запроса (возврат после оплаты); обратно путь собирается тот же", () => {
+    expect(pathToView(`/pay-for/${TOKEN}`)).toEqual({ name: "parent-pay", token: TOKEN, paymentId: undefined });
+    const back = pathToView(`/pay-for/${TOKEN}`, `?paymentId=${PAYMENT}`);
+    expect(back).toEqual({ name: "parent-pay", token: TOKEN, paymentId: PAYMENT });
+    expect(viewToPath(back!)).toBe(`/pay-for/${TOKEN}?paymentId=${PAYMENT}`);
+    expect(viewToPath({ name: "parent-pay", token: TOKEN })).toBe(`/pay-for/${TOKEN}`);
+  });
+
+  it("/pay-for/ с коротким, пустым или «грязным» токеном — не наш роут", () => {
+    expect(pathToView("/pay-for/")).toBeNull();
+    expect(pathToView("/pay-for/short")).toBeNull();
+    expect(pathToView("/pay-for/abc/def")).toBeNull();
+    expect(pathToView(`/pay-for/${TOKEN}/x`)).toBeNull();
+  });
+});

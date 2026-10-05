@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { getPaymentStatus, type PaymentKind, type PaymentStatus } from "../lib/payments";
 import { trackPurchase } from "../lib/metrika";
 import { Icon } from "./ui";
+import ParentPayModal from "./ParentPayModal";
 import type { View } from "./Header";
 
 const POLL_INTERVAL_MS = 2000;
@@ -18,6 +19,7 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [kind, setKind] = useState<PaymentKind>("tariff");
   const pollsRef = useRef(0);
+  const [parentModal, setParentModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,10 +95,16 @@ export default function PaymentReturnView({ paymentId, onNav }: { paymentId: str
             <Icon name="x" size={22} />
           </span>
           <h1 className="font-display mt-4 text-xl font-black">Оплата не прошла</h1>
-          <p className="mt-2 text-[13.5px] text-ink2">Платёж отменён или отклонён банком — попробуй ещё раз или выбери другой способ оплаты.</p>
+          <p className="mt-2 text-[13.5px] text-ink2">Платёж отменён или отклонён банком — попробуй ещё раз, выбери другой способ оплаты (например, СБП) или попроси родителя оплатить.</p>
           <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-5 py-2.5 text-[13px]">
             Вернуться к тарифам
           </button>
+          <div>
+            <button onClick={() => setParentModal(true)} className="btn btn-ghost mt-3 px-5 py-2.5 text-[13px]">
+              Попросить родителя оплатить
+            </button>
+          </div>
+          {parentModal && <ParentPayModal place="payment-canceled" onClose={() => setParentModal(false)} />}
           <p className="mt-5 text-[12.5px] text-ink2">
             Не получается?{" "}
             <button onClick={() => onNav({ name: "contacts", topic: "payment" })} className="link-slide font-bold text-ink2 hover:text-ink">

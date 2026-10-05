@@ -36,6 +36,8 @@ import CheckEmailView from "./components/CheckEmailView";
 import VerifyEmailView from "./components/VerifyEmailView";
 import CookieBanner from "./components/CookieBanner";
 import { pathToView, viewToPath } from "./lib/routes";
+import ParentPayView from "./components/ParentPayView";
+import ParentsView from "./components/ParentsView";
 import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
@@ -73,6 +75,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
             <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
             <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>
+            <button onClick={() => onNav({ name: "parents" })} className="link-slide text-[11.5px] font-bold text-paper/70 hover:text-paper">Родителям</button>
             <button onClick={() => onNav({ name: "contacts" })} className="link-slide text-[11.5px] font-bold text-paper/70 hover:text-paper">Контакты</button>
           </div>
         </div>
@@ -474,6 +477,8 @@ function AppShell() {
         {view.name === "blog-article" && <BlogArticle slug={view.slug} onNav={setView} />}
         {view.name === "renew" && profile && <RenewView onNav={setView} />}
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
+        {view.name === "parent-pay" && <ParentPayView key={`${view.token}:${view.paymentId ?? ""}`} token={view.token} paymentId={view.paymentId} onNav={setView} />}
+        {view.name === "parents" && <ParentsView onNav={setView} />}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && (
           <Suspense fallback={<p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>}>

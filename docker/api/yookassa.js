@@ -51,7 +51,11 @@ const VAT_CODE_NO_VAT = 1;
  *  idempotenceKey обязателен для ЮKassa (заголовок Idempotence-Key): повторный запрос с тем же
  *  ключом (например, из-за ретрая на сетевой сбой) возвращает тот же платёж, а не создаёт второй
  *  и не списывает деньги дважды. */
-export async function createYookassaPayment({ shopId, secretKey }, { amountRub, description, returnUrl, metadata, idempotenceKey, customerEmail }) {
+export async function createYookassaPayment({ shopId, secretKey }, { amountRub, description, returnUrl, metadata, idempotenceKey, customerEmail, method }) {
+  // method: "card" | "sbp" — сразу открыть этот способ (СБП — выбор банка/QR, карта — форма карты),
+  // а не общий список способов ЮKassa, в котором ученик легко «зависал» и не выбирал ничего.
+  // Не задан — ЮKassa показывает все способы, включённые в магазине.
+  const methodData = method === "sbp" ? { type: "sbp" } : method === "card" ? { type: "bank_card" } : null;
   const amountValue = amountRub.toFixed(2);
   const resp = await fetchWithTimeout(`${YOOKASSA_API}/payments`, {
     method: "POST",
@@ -64,6 +68,7 @@ export async function createYookassaPayment({ shopId, secretKey }, { amountRub, 
       amount: { value: amountValue, currency: "RUB" },
       capture: true,
       confirmation: { type: "redirect", return_url: returnUrl },
+      ...(methodData ? { payment_method_data: methodData } : {}),
       description,
       metadata,
       receipt: {

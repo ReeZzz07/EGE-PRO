@@ -104,7 +104,11 @@ export type GoalName =
   | "diagnostic_done"
   | "first_task_solved"
   | "paywall_seen"
-  | "offer_seen";
+  | "offer_seen"
+  | "parent_link_shared"
+  | "parent_email_sent"
+  | "parent_page_opened"
+  | "parent_pay_start";
 
 /** Достигнута цель. Если счётчик не подключён (не настроен в админке / ещё грузится) — цель ждёт в
  *  очереди и уходит после init; ничего не отправляется, пока счётчика нет вовсе.

@@ -277,6 +277,9 @@ export async function anonymizeUser(id) {
     await client.query("update public.ai_messages set content = $2 where user_id = $1", [id, "[удалено по запросу пользователя]"]);
     // обращения в поддержку остаются (история), но без почты, имени и текста автора (миграция 0038)
     await client.query("select public.scrub_feedback_for_user($1)", [id]);
+    // ссылки «попросить родителя оплатить» после анонимизации больше не работают (миграция 0041)
+    await client.query("delete from public.parent_links where user_id = $1", [id]);
+    await client.query("delete from public.parent_email_log where user_id = $1", [id]);
     await client.query("commit");
     return {};
   } catch (e) {

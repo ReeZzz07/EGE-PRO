@@ -60,6 +60,7 @@ import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCa
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
 import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
+import { getOrCreateLink, recordShare, sendParentEmail, getPublicView, startParentPayment, getParentPaymentStatus, getParentPayStats, linkUrl, isValidToken } from "./parentPay.js";
 import { createActionToken, consumeActionToken, inspectActionToken } from "./authTokens.js";
 import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, sendMail, resolveWelcomeEmailSettings } from "./mailer.js";
 
@@ -726,7 +727,7 @@ app.get("/sitemap.xml", async (req, res) => {
     console.warn("не удалось прочитать blog_articles для sitemap.xml, отдаю без статей:", e?.message ?? e);
   }
   res.setHeader("content-type", "application/xml; charset=utf-8");
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}${entry("/contacts", "yearly", "0.4")}${entry("/blog", "weekly", "0.7")}${articleEntries}</urlset>\n`);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entry("/", "weekly", "1.0")}${entry("/tariffs", "monthly", "0.8")}${entry("/parents", "monthly", "0.6")}${entry("/contacts", "yearly", "0.4")}${entry("/blog", "weekly", "0.7")}${articleEntries}</urlset>\n`);
 });
 
 // ─────────────────────── SEO-заглушка для ботов соцсетей ───────────────────────
@@ -891,6 +892,14 @@ app.post("/admin/content-filter/test", authMiddleware, requireAdmin, async (req,
 });
 
 // Отчёт «источник → воронка → оплаты» (метки рекламы при регистрации, см. attribution.js)
+app.get("/admin/parent-pay", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await getParentPayStats({ from: String(req.query.from ?? ""), to: String(req.query.to ?? "") }));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 app.get("/admin/attribution", authMiddleware, requireAdmin, async (req, res) => {
   try {
     res.json(await getAttributionReport({ from: req.query.from ? String(req.query.from) : undefined, to: req.query.to ? String(req.query.to) : undefined }));
@@ -1049,7 +1058,7 @@ app.post("/payments/create", authMiddleware, paymentsLimiter, async (req, res) =
   const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
   if (!siteUrl) return res.status(500).json({ error: "Не настроен домен сайта (CORS_ORIGIN)" });
   try {
-    const result = await initiatePayment(req.user.sub, tariffId, siteUrl);
+    const result = await initiatePayment(req.user.sub, tariffId, siteUrl, { method: req.body?.method });
     if (result.error) return res.status(400).json({ error: result.error });
     res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
   } catch (e) {
@@ -1090,6 +1099,80 @@ app.post("/payments/addon", authMiddleware, paymentsLimiter, async (req, res) =>
     const result = await initiateAddon(req.user.sub, req.body?.count, siteUrl);
     if (result.error) return res.status(400).json({ error: result.error });
     res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ─────────────────────── «попросить родителя оплатить» (parentPay.js) ───────────────────────
+// Ученик (авторизован) получает ссылку и делится ею; родитель (без входа) открывает публичную страницу
+// по токену и платит. Публичные роуты ходят только по длинному случайному токену из ссылки.
+function siteUrlOrFail(res) {
+  const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  if (!siteUrl) res.status(500).json({ error: "Не настроен домен сайта (CORS_ORIGIN)" });
+  return siteUrl;
+}
+
+app.post("/parent-link", authMiddleware, paymentsLimiter, async (req, res) => {
+  const siteUrl = siteUrlOrFail(res);
+  if (!siteUrl) return;
+  try {
+    const link = await getOrCreateLink(req.user.sub);
+    res.json({ url: linkUrl(siteUrl, link.token), expiresAt: link.expiresAt });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/parent-link/shared", authMiddleware, paymentsLimiter, async (req, res) => {
+  try {
+    await recordShare(req.user.sub, String(req.body?.channel ?? "other"));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/parent-link/email", authMiddleware, paymentsLimiter, async (req, res) => {
+  const siteUrl = siteUrlOrFail(res);
+  if (!siteUrl) return;
+  try {
+    const result = await sendParentEmail(req.user.sub, req.body?.email, siteUrl);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/public/parent-link/:token", webhookLimiter, async (req, res) => {
+  try {
+    const view = await getPublicView(req.params.token);
+    if (!view) return res.status(404).json({ error: "Ссылка не найдена" });
+    res.json(view);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/public/parent-link/:token/pay", paymentsLimiter, async (req, res) => {
+  const siteUrl = siteUrlOrFail(res);
+  if (!siteUrl) return;
+  try {
+    const result = await startParentPayment(req.params.token, { tariffId: req.body?.tariffId, email: req.body?.email, method: req.body?.method }, siteUrl);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/public/parent-link/:token/payments/:paymentId", webhookLimiter, async (req, res) => {
+  try {
+    if (!isValidToken(req.params.token) || !/^[0-9a-f-]{36}$/i.test(req.params.paymentId)) return res.status(404).json({ error: "Платёж не найден" });
+    const st = await getParentPaymentStatus(req.params.token, req.params.paymentId);
+    if (!st) return res.status(404).json({ error: "Платёж не найден" });
+    res.json(st);
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }

@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { DIRECT_UTM_TEMPLATE, loadAttributionReport, type AttributionReport } from "../lib/adminAttribution";
 import { useToast } from "./ui";
+import AdminParentPay from "./AdminParentPay";
 
 const pct = (a: number, b: number) => (b ? `${Math.round((100 * a) / b)}%` : "—");
 const money = (n: number) => `${Math.round(n).toLocaleString("ru-RU")} ₽`;
@@ -215,6 +216,8 @@ export default function AdminAttribution() {
           </section>
         </>
       )}
+
+      <AdminParentPay from={from || undefined} to={to || undefined} />
 
       <section className="border-2 border-dashed border-ink/25 p-4" aria-labelledby="at-utm">
         <h3 id="at-utm" className="font-display text-[15px] font-black">

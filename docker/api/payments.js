@@ -16,32 +16,42 @@ export { priceWithDiscount, effectiveDiscountPercent } from "./pricing.js";
  *  (3-D Secure/банк). Общая часть для всех видов оплаты (tariff / renewal / addon) — сумму, вид и
  *  описание считает вызывающий код. siteUrl — реальный https-домен (CORS_ORIGIN), нужен для
  *  return_url: куда ЮKassa вернёт браузер пользователя после оплаты. */
-async function startPayment({ userId, tariffId, amountRub, discountPercent, periodDays, kind, extraSubjects = 0, description, siteUrl }) {
+async function startPayment({ userId, tariffId, amountRub, discountPercent, periodDays, kind, extraSubjects = 0, description, siteUrl, method = null, parentLinkId = null, customerEmail = null, returnUrlFor = null }) {
   const settings = await resolveYookassaSettings();
   if (!settings) return { error: "Приём оплаты пока не настроен — обратись к администратору." };
 
   const email = (await pool.query("select email from auth.users where id = $1", [userId])).rows[0]?.email;
 
   const inserted = await pool.query(
-    `insert into public.payments (user_id, tariff_id, amount_rub, discount_percent, period_days, status, kind, extra_subjects)
-     values ($1, $2, $3, $4, $5, 'pending', $6, $7) returning id`,
-    [userId, tariffId, amountRub, discountPercent ?? null, periodDays, kind, extraSubjects]
+    `insert into public.payments (user_id, tariff_id, amount_rub, discount_percent, period_days, status, kind, extra_subjects, pay_method, parent_link_id)
+     values ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9) returning id`,
+    [userId, tariffId, amountRub, discountPercent ?? null, periodDays, kind, extraSubjects, method, parentLinkId]
   );
   const paymentId = inserted.rows[0].id;
 
   let ykPayment;
+  const payload = {
+    amountRub,
+    description,
+    // платёж родителя возвращает на его публичную страницу (он не залогинен), обычный — в кабинет
+    returnUrl: returnUrlFor ? returnUrlFor(paymentId) : `${siteUrl}/payment/return?paymentId=${paymentId}`,
+    metadata: { paymentId },
+    // чек уходит тому, кто платит: родителю — на указанную им почту, ученику — на почту аккаунта
+    customerEmail: customerEmail || email,
+  };
   try {
-    ykPayment = await createYookassaPayment(settings, {
-      amountRub,
-      description,
-      returnUrl: `${siteUrl}/payment/return?paymentId=${paymentId}`,
-      metadata: { paymentId },
-      customerEmail: email,
+    try {
       // Свой же id строки — готовый уникальный ключ, отдельный randomUUID() не нужен: повторный
       // POST /payments/create с тем же paymentId (ретрай на сетевой сбой) не создаст в ЮKassa
       // второй платёж на ту же попытку и не спишет деньги дважды.
-      idempotenceKey: paymentId,
-    });
+      ykPayment = await createYookassaPayment(settings, { ...payload, method, idempotenceKey: paymentId });
+    } catch (e) {
+      // выбранный способ не принят (например, не подключён у магазина) — не теряем платёж, а даём
+      // ЮKassa показать общий список способов; другой ключ идемпотентности, т.к. тело запроса иное
+      if (!method) throw e;
+      console.warn(`способ оплаты ${method} не создался, повторяю без него:`, e?.message ?? e);
+      ykPayment = await createYookassaPayment(settings, { ...payload, method: null, idempotenceKey: `${paymentId}-any` });
+    }
   } catch (e) {
     await pool.query("delete from public.payments where id = $1", [paymentId]);
     return { error: `Не удалось создать платёж: ${e?.message ?? e}` };
@@ -52,7 +62,7 @@ async function startPayment({ userId, tariffId, amountRub, discountPercent, peri
 }
 
 /** Обычная покупка тарифа со страницы тарифов. */
-export async function initiatePayment(userId, tariffId, siteUrl) {
+export async function initiatePayment(userId, tariffId, siteUrl, opts = {}) {
   const { rows } = await pool.query(
     `select t.price_rub, t.sale_price_rub, t.name, p.discount_percent
      from public.tariffs t, public.profiles p
@@ -80,6 +90,11 @@ export async function initiatePayment(userId, tariffId, siteUrl) {
     kind: "tariff",
     description: `ЕГЭ·ПРО — тариф «${row.name}» на ${PERIOD_DAYS} дней`,
     siteUrl,
+    // способ оплаты и (для платежа родителя) ссылка, почта для чека и страница возврата — см. parentPay.js
+    method: opts.method === "sbp" || opts.method === "card" ? opts.method : null,
+    parentLinkId: opts.parentLinkId ?? null,
+    customerEmail: opts.customerEmail ?? null,
+    returnUrlFor: opts.returnUrlFor ?? null,
   });
 }
 

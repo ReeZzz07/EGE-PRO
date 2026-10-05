@@ -3,12 +3,12 @@
 // 0024_payments.sql и PaymentReturnView.tsx (страница, куда ЮKassa возвращает после оплаты).
 import { apiFetch, isSupabaseConfigured } from "./supabase";
 
-export async function createPayment(tariffId: string): Promise<{ confirmationUrl?: string; error?: string }> {
+export async function createPayment(tariffId: string, method?: "card" | "sbp"): Promise<{ confirmationUrl?: string; error?: string }> {
   if (!isSupabaseConfigured) return { error: "Оплата недоступна в демо-режиме." };
   const resp = await apiFetch("/payments/create", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ tariffId }),
+    body: JSON.stringify({ tariffId, ...(method ? { method } : {}) }),
   });
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) return { error: json.error ?? resp.statusText };

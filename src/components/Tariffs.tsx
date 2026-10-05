@@ -18,6 +18,7 @@ import { useWelcomeOffer } from "../lib/offers";
 import { Icon, useToast } from "./ui";
 import ReviewsSection from "./ReviewsSection";
 import WelcomeOfferBanner, { pendingStepsText } from "./WelcomeOfferBanner";
+import ParentPayModal from "./ParentPayModal";
 import SubscriptionBanner from "./SubscriptionBanner";
 import type { View } from "./Header";
 
@@ -35,6 +36,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   const [switching, setSwitching] = useState<string | null>(null);
   const [seo, setSeo] = useState(DEFAULT_SEO);
   const [content, setContent] = useState<TariffsPageContent>(DEFAULT_TARIFFS_CONTENT);
+  const [parentModal, setParentModal] = useState(false);
 
   useEffect(() => {
     loadActiveTariffs().then((t) => {
@@ -47,7 +49,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
 
   useDocumentHead({ ...seo.pages.tariffs, path: "/tariffs", ogImage: seo.ogImage });
 
-  const choose = async (t: Tariff) => {
+  const choose = async (t: Tariff, method?: "card" | "sbp") => {
     if (!profile) {
       onNav({ name: "auth", mode: "signup" });
       return;
@@ -60,14 +62,14 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       return;
     }
     setSwitching(t.id);
-    const res = await createPayment(t.id);
+    const res = await createPayment(t.id, method);
     setSwitching(null);
     if (res.error) return push(res.error, "err");
     if (res.confirmationUrl) {
       // редирект — только после того, как Метрика приняла событие (или через 1 с): иначе уход со
       // страницы обрывал бы отправку цели
       const url = res.confirmationUrl;
-      reachGoal("checkout_start", { tariff: t.id, price: t.priceRub }, () => {
+      reachGoal("checkout_start", { tariff: t.id, price: t.priceRub, ...(method ? { method } : {}) }, () => {
         window.location.href = url;
       });
     }
@@ -100,6 +102,18 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
           <strong className="text-ink">Ты администратор</strong> — тарифы тебя не ограничивают, доступ ко всем предметам и функциям есть в любом случае.
         </p>
       )}
+
+      {profile && !profile.isAdmin && tariffs.some((t) => t.priceRub > 0) && (
+        <div className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-between gap-3 border-2 border-ink bg-hl/40 px-4 py-3">
+          <p className="text-[13px] leading-relaxed text-ink">
+            <strong>Платит родитель?</strong> Отправь ему ссылку: он оплатит картой или через СБП, а тариф включится тебе.
+          </p>
+          <button onClick={() => setParentModal(true)} className="btn btn-ink shrink-0 px-4 py-2 text-[12.5px]">
+            Попросить родителя оплатить
+          </button>
+        </div>
+      )}
+      {parentModal && <ParentPayModal place="tariffs" onClose={() => setParentModal(false)} />}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {tariffs.map((t) => {
@@ -172,6 +186,15 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
                   className={`mt-5 w-full justify-center px-4 py-2.5 text-[13px] ${isCurrent ? "btn btn-ghost" : "btn btn-ink"}`}
                 >
                   {isCurrent ? "Текущий тариф" : switching === t.id ? "Открываем оплату…" : profile ? "Выбрать" : "Начать"}
+                </button>
+              )}
+              {profile && t.priceRub > 0 && !isCurrent && !isExpiredOne && !profile.isAdmin && (
+                <button
+                  onClick={() => choose(t, "sbp")}
+                  disabled={switching === t.id}
+                  className="link-slide mt-2 self-center font-mono text-[11.5px] font-bold text-ink2 hover:text-ink"
+                >
+                  или сразу через СБП
                 </button>
               )}
               {isExpiredOne && profile?.tariffExpiresAt && (
