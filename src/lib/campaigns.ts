@@ -19,6 +19,8 @@ export interface CampaignContent {
    *  здесь только "показывать ли вообще для этой рассылки"; если у конкретного человека скидка уже
    *  не активна, блок для него молча не появится. */
   includeOffer: boolean;
+  /** отправить от имени поддержки (support@): ответы получателей придут в ящик поддержки */
+  fromSupport?: boolean;
 }
 
 export const CTA_OPTIONS: { value: CampaignContent["ctaPath"]; label: string }[] = [
@@ -152,7 +154,7 @@ export async function cancelCampaign(id: string): Promise<{ error?: string }> {
 // ─────────────── шаблоны-заготовки ───────────────
 
 export interface CampaignPreset {
-  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "custom";
+  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "payment_survey" | "custom";
   title: string;
   hint: string;
   kind: CampaignKind;
@@ -225,6 +227,27 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
       includeOffer: true,
     },
     suggested: { funnel: { abandoned: "yes", offer_active: "yes" }, label: "Начал, но не завершил платёж — Да, Скидка ещё активна — Да" },
+  },
+  {
+    id: "payment_survey",
+    title: "Что помешало оплатить?",
+    hint: "Одна просьба тем, кто начал оплату и не завершил: ответить, что помешало. Письмо уходит от имени поддержки, ответы приходят на support@. Без скидок и давления.",
+    kind: "custom",
+    content: {
+      subject: "Что помешало оплатить тариф в ЕГЭ·ПРО?",
+      eyebrow: "один вопрос",
+      bodyText: `Ты начал(а) оплату тарифа в ЕГЭ·ПРО, но платёж не завершился. Подскажи, пожалуйста, что помешало: не было карты, нужно было спросить родителей, непонятно, что входит в тариф, показалось дорого или что-то сломалось?
+
+Достаточно ответить на это письмо одной строчкой — нам это правда поможет сделать сервис удобнее.
+
+Если дело в карте: на странице тарифов есть кнопка «Попросить родителя оплатить» — она создаёт ссылку, по которой родитель оплатит тариф сам, картой или через СБП. Оплатить через СБП можно и самому.`,
+      ctaLabel: "Открыть тарифы →",
+      ctaPath: "/tariffs",
+      footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем. Просто ответь на письмо, если захочешь написать.",
+      includeOffer: false,
+      fromSupport: true,
+    },
+    suggested: { funnel: { abandoned: "yes" }, label: "Начал, но не завершил платёж — Да" },
   },
   {
     id: "custom",

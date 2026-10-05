@@ -90,6 +90,33 @@ describe("AdminCampaignComposer", () => {
     expect(await pick({ confirmed: "yes", onboarded: "no" })).toBe("Напоминание про онбординг");
     expect(await pick({ diagnostic: "no" })).toBe("Напоминание про диагностику");
     expect(await pick({})).toBe("Своё письмо");
+    // начал, но не завершил платёж: без активной скидки — опрос «что помешало», со скидкой — письмо про скидку
+    expect(await pick({ abandoned: "yes" })).toBe("Что помешало оплатить?");
+    expect(await pick({ abandoned: "yes", offer_active: "yes" })).toBe("Скидка ещё действует");
+  });
+
+  it("заготовка «Что помешало оплатить?»: письмо от имени поддержки, без блока скидки, ведёт на тарифы и уходит с флагом fromSupport", async () => {
+    setup({ filters: { ...EMPTY_USER_FILTERS, funnel: { ...EMPTY_USER_FILTERS.funnel, abandoned: "yes" } } });
+    await screen.findByText("Анна Иванова");
+    expect(screen.getByLabelText(/Тема письма/)).toHaveValue("Что помешало оплатить тариф в ЕГЭ·ПРО?");
+    expect(screen.getByRole("checkbox", { name: /Отправить от имени поддержки/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Показать блок с текущей приветственной скидкой/ })).not.toBeChecked();
+    expect(screen.getByLabelText(/Куда ведёт кнопка/)).toHaveValue("/tariffs");
+    fireEvent.click(ackBox());
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
+    const arg = vi.mocked(createCampaign).mock.calls[0][0];
+    expect(arg.content).toMatchObject({ fromSupport: true, includeOffer: false, ctaPath: "/tariffs" });
+    expect(arg.content.bodyText).toMatch(/Попросить родителя оплатить/);
+  });
+
+  it("у обычных заготовок отправка от имени поддержки выключена и её можно включить вручную", async () => {
+    setup();
+    await screen.findByText("Анна Иванова");
+    const box = screen.getByRole("checkbox", { name: /Отправить от имени поддержки/ });
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+    expect(box).toBeChecked();
   });
 
   it("показывает условия отбора, число получателей и пример; кнопка отправки заблокирована, пока не подтверждено", async () => {

@@ -153,7 +153,8 @@ async function defaultSend(campaign, user) {
     { subject: campaign.subject, bodyText: campaign.body_text, eyebrow: campaign.eyebrow, ctaLabel: campaign.cta_label, ctaPath: campaign.cta_path, footer: campaign.footer },
     { name: user.full_name, offer }
   );
-  await sendMail({ to: user.email, ...m });
+  // from_support: от имени поддержки (support@) — ответы на письмо приходят в общий ящик поддержки
+  await sendMail({ to: user.email, ...m, ...(campaign.from_support ? { via: "support" } : {}) });
 }
 
 // ─────────────── создание и отправка ───────────────
@@ -168,7 +169,7 @@ export class CampaignError extends Error {
 
 /** Создаёт рассылку и запускает отправку в фоне. confirmCount — число получателей, которое админ видел и
  *  подтвердил; если сервер насчитал другое, рассылка не создаётся (COUNT_MISMATCH). */
-export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, includeOffer = false, filters, q, excludeRecent = true, confirmCount }, opts = {}) {
+export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, includeOffer = false, fromSupport = false, filters, q, excludeRecent = true, confirmCount }, opts = {}) {
   const invalid = validateCampaignContent(kind, { subject, bodyText, eyebrow, ctaLabel, ctaPath, footer });
   if (invalid) throw new CampaignError(invalid, "INVALID");
   const f = sanitizeFilters(filters);
@@ -185,8 +186,8 @@ export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow
   try {
     await client.query("begin");
     const ins = await client.query(
-      `insert into public.email_campaigns (created_by, kind, subject, body_text, eyebrow, cta_label, cta_path, footer, include_offer, filters, q, exclude_recent, total)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning id`,
+      `insert into public.email_campaigns (created_by, kind, subject, body_text, eyebrow, cta_label, cta_path, footer, include_offer, from_support, filters, q, exclude_recent, total)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) returning id`,
       [
         adminId,
         kind,
@@ -197,6 +198,7 @@ export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow
         kind === "custom" ? String(ctaPath ?? "") : null,
         kind === "custom" ? String(footer ?? "").trim() : null,
         kind === "custom" && !!includeOffer,
+        kind === "custom" && !!fromSupport,
         JSON.stringify(f),
         term || null,
         !!excludeRecent,

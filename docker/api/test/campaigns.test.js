@@ -107,6 +107,27 @@ test("отправка: каждому получателю ровно одно 
   assert.equal(c.q, tag);
 });
 
+test("от имени поддержки: флаг сохраняется в рассылке и доходит до отправщика; по умолчанию выключен; для повторной ссылки не действует", async () => {
+  await setup();
+  const seen = [];
+  const send = async (c) => void seen.push(c.from_support);
+  const a = await createCampaign({ adminId: null, kind: "custom", ...content({ subject: `SUP ${tag}` }), fromSupport: true, filters: { onboarded: "no" }, ...qOnly, excludeRecent: false, confirmCount: 2 }, { send, delayMs: 0 });
+  subjects.push(a.id);
+  await waitDone(a.id);
+  assert.deepEqual(seen, [true, true]);
+  assert.equal((await getCampaign(a.id)).from_support, true);
+
+  const plain = await createCampaign({ adminId: null, kind: "custom", ...content({ subject: `PLAIN ${tag}` }), filters: { onboarded: "no" }, ...qOnly, excludeRecent: false, confirmCount: 2 }, { send: async () => {}, delayMs: 0 });
+  subjects.push(plain.id);
+  await waitDone(plain.id);
+  assert.equal((await getCampaign(plain.id)).from_support, false);
+
+  const verify = await createCampaign({ adminId: null, kind: "verify_link", fromSupport: true, filters: {}, ...qOnly, excludeRecent: false, confirmCount: 1 }, { send: async () => {}, delayMs: 0 });
+  subjects.push(verify.id);
+  await waitDone(verify.id);
+  assert.equal((await getCampaign(verify.id)).from_support, false, "ссылка подтверждения всегда стандартным письмом");
+});
+
 test("недавно получавшие исключаются по умолчанию, но не старше 7 дней и не при выключенной опции", async () => {
   await setup();
   const f = fakeSender();

@@ -81,7 +81,7 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
   // заготовку подбираем по фильтру таблицы: не подтвердил почту → ссылка, не прошёл онбординг → анкета,
   // не проходил диагностику → диагностика; иначе пустое «своё письмо» (случайно не отправить чужой текст)
   const [presetId, setPresetId] = useState<CampaignPreset["id"]>(() =>
-    filters.funnel.confirmed === "no" ? "verify" : filters.funnel.onboarded === "no" ? "onboarding" : filters.funnel.diagnostic === "no" ? "diagnostic" : "custom"
+    filters.funnel.confirmed === "no" ? "verify" : filters.funnel.abandoned === "yes" ? (filters.funnel.offer_active === "yes" ? "discount_abandoned" : "payment_survey") : filters.funnel.onboarded === "no" ? "onboarding" : filters.funnel.diagnostic === "no" ? "diagnostic" : "custom"
   );
   const [drafts, setDrafts] = useState<Record<string, CampaignContent>>(() => Object.fromEntries(CAMPAIGN_PRESETS.map((p) => [p.id, { ...p.content }])));
   const [excludeRecent, setExcludeRecent] = useState(true);
@@ -362,6 +362,12 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
                       Подвал <span className="font-normal normal-case">(пометка внизу письма; можно оставить пустым)</span>
                     </span>
                     <textarea value={content.footer} onChange={(e) => setContent({ footer: e.target.value })} rows={2} maxLength={400} className="input-blank mt-1.5 w-full resize-y rounded-sm px-3.5 py-2 text-[13px]" />
+                  </label>
+                  <label className="flex items-start gap-2 border-2 border-dashed border-ink/20 p-3">
+                    <input type="checkbox" checked={!!content.fromSupport} onChange={(e) => setContent({ fromSupport: e.target.checked })} className="mt-0.5 h-4 w-4" />
+                    <span className="text-[12.5px] leading-relaxed text-ink2">
+                      <strong className="text-ink">Отправить от имени поддержки</strong> (адрес support@) — ответы получателей придут в ящик поддержки. Включайте, когда в письме просят ответить.
+                    </span>
                   </label>
                   <label className="flex items-start gap-2 border-2 border-dashed border-ink/20 p-3">
                     <input type="checkbox" checked={content.includeOffer} onChange={(e) => setContent({ includeOffer: e.target.checked })} className="mt-0.5 h-4 w-4" />

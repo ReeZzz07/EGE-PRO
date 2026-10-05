@@ -1367,7 +1367,7 @@ app.post("/admin/campaigns/test", authMiddleware, requireAdmin, async (req, res)
   try {
     const email = await getUserEmail(req.user.sub);
     const m = renderCampaignSample(kind, req.body);
-    await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}` });
+    await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}`, ...(req.body?.fromSupport === true ? { via: "support" } : {}) });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
@@ -1387,6 +1387,7 @@ app.post("/admin/campaigns", authMiddleware, requireAdmin, async (req, res) => {
       ctaPath: b.ctaPath,
       footer: b.footer,
       includeOffer: b.includeOffer === true,
+      fromSupport: b.fromSupport === true,
       filters: b.filters,
       q: b.q,
       excludeRecent: b.excludeRecent !== false,
