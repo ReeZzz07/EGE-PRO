@@ -4,6 +4,8 @@
 // аргументом (policy) во все build*Prompt() — то есть буквально каждый вызов модели, во всех
 // режимах (hint/explain_topic/chat/check_essay), собирается поверх этого текста, без исключений.
 // DEFAULT_POLICY — то, чем засеяна БД при первом старте, и то, на что жмёт «Восстановить дефолт».
+import { findShortAnswerAssertion } from "./shortAnswerLeak.js";
+
 export const DEFAULT_POLICY = `Ты — ИИ-репетитор образовательной платформы «ЕГЭ·ПРО». Ты работаешь в режиме наставника, а не решебника.
 
 Тебе МОЖНО и НУЖНО:
@@ -377,7 +379,9 @@ export function verdictBlock(verdict) {
  *  есть в самом условии задания. */
 export function findAnswerLeakIndex(text, answer, statement = []) {
   const pats = answerPatterns(answer, statement);
-  if (!pats.length) return -1;
+  // «слишком частые» короткие числа прямой сверкой не ловятся (см. answerPatterns) — для них отдельная проверка
+  // на ЗАЯВЛЕНИЕ о результате («a = 3», «амплитуда равна 3»), см. shortAnswerLeak.js
+  if (!pats.length) return findShortAnswerAssertion(text, answer, statement);
   const stmt = norm(statement.join("\n"));
   const t = norm(text);
   let best = -1;

@@ -418,9 +418,13 @@ test("findAnswerLeakIndex: десятичная запятая и точка э�
   assert.notEqual(findAnswerLeakIndex("Итого -2,7", "-2,7", ["Найдите значение"]), -1);
 });
 
-test("findAnswerLeakIndex: 1–2-значные числа не сверяются (слишком часты в вычислениях)", () => {
-  assert.equal(findAnswerLeakIndex("Получаем 24 и ещё 3", "24", ["Найдите площадь"]), -1);
-  assert.equal(findAnswerLeakIndex("Получаем 1", "1", ["Найдите время"]), -1);
+test("findAnswerLeakIndex: 1–2-значные числа сами по себе не сверяются (слишком часты в вычислениях), но заявление «получаем/равно N» — утечка", () => {
+  // просто число рядом с вычислениями — не утечка
+  assert.equal(findAnswerLeakIndex("Площадь клетки 24, а сторон ещё 3. Разделим на 8.", "24", ["Найдите площадь"]), -1);
+  assert.equal(findAnswerLeakIndex("Шаг 1. Выпиши, что известно: время 1 час.", "1", ["Найдите время"]), -1);
+  // назван как результат («получаем N», «равно N») — теперь ловится, см. shortAnswerLeak.js
+  assert.notEqual(findAnswerLeakIndex("Получаем 24 и ещё 3", "24", ["Найдите площадь"]), -1);
+  assert.notEqual(findAnswerLeakIndex("Получаем 1", "1", ["Найдите время"]), -1);
 });
 
 test("findAnswerLeakIndex: слово-ответ в любой форме и любой вариант через «/» (lit-7623, bio-49157)", () => {
