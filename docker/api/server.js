@@ -33,6 +33,7 @@ import {
   normalizeCriterionCode,
   DEFAULT_POLICY,
 } from "./prompt.js";
+import { MATH_FORMAT_RULE, normalizeMath } from "./mathFormat.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision, settingsForTask } from "./taskImages.js";
@@ -1750,12 +1751,12 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
     // сообщению ученика, см. verdict выше) — иначе на первом заходе модель может увести к правдоподобному,
     // но неверному термину (живая жалоба 28.09.2026). Открытую утечку по-прежнему ловит постфильтр ниже.
     const hintExplainCtx = { ...promptCtx, orientAnswer: refAnswer };
-    const system =
+    const system = (
       body.mode === "hint"
         ? buildHintPrompt(policy, task, body.hintLevel ?? 0, hintExplainCtx)
         : body.mode === "explain_topic"
           ? buildExplainPrompt(policy, task, hintExplainCtx)
-          : buildChatPrompt(policy, task, promptCtx);
+          : buildChatPrompt(policy, task, promptCtx)) + MATH_FORMAT_RULE;
     const history = (body.history ?? []).slice(-8);
 
     // иллюстрации к заданию — в промпт (формулы текстом всегда, картинки в vision, если провайдер
@@ -1788,6 +1789,9 @@ app.post("/ai-tutor", authMiddleware, aiTutorLimiter, async (req, res) => {
       await releaseDailyAiSlot(limitCheck.reservationId);
       throw e;
     }
+
+    // формулы со знаком доллара → скобочная разметка, которую умеют и интерфейс, и фильтры ниже (см. mathFormat.js)
+    text = normalizeMath(text);
 
     if (body.mode === "hint" && leaksAnswer(text, body.taskId)) {
       console.warn("postfilter: подозрение на утечку ответа", { taskId: body.taskId, userId });

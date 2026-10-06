@@ -291,14 +291,16 @@ export function useToast() {
 // Модель (особенно на математике/физике/химии) регулярно пишет формулы в LaTeX — \[ ... \] для
 // формулы на отдельной строке, \( ... \) внутри фразы — а не голым текстом. Без разбора это шло в
 // TutorText как есть: сырые "\cdot", "\frac{}{}", обратные слэши и скобки прямо в тексте ответа
-// (см. живой пример — жалоба на "лишние символы"). Формулы других видов (LaTeX $ $ / $$ $$) в
-// живых ответах модели не встречались — этот проект не претендует на полный LaTeX, только на то,
-// что модель реально пишет по построению промпта.
-const INLINE_MATH_RE = /\\\(([\s\S]+?)\\\)/g;
+// (см. живой пример — жалоба на "лишние символы"). Разметка со знаком доллара ($...$, $$...$$)
+// тоже поддержана: сервер приводит новые ответы к скобочному виду (docker/api/mathFormat.js), а здесь
+// она разбирается для уже сохранённой истории чата, где такие ответы остались как были (06.10.2026
+// модель стала писать $f(x) = ...$, и ученик видел сырой LaTeX). Одиночный $ — формула, только если
+// внутри одной строки и без пробела после открывающего и перед закрывающим («5 $ и 6 $» не формула).
+const INLINE_MATH_RE = /\\\(([\s\S]+?)\\\)|[$](?![\s$])([^$\n]+?)(?<![\s$])[$]/g;
 // \[ ... \] у модели нередко разбит по строкам ("\[\n\cos(x) = 0,6\n\]") — раз в TutorText текст
 // сперва режется по "\n" на параграфы, регэксп внутри ОДНОЙ строки такой блок никогда не увидит.
 // Поэтому блочные формулы вырезаются из ВСЕГО текста ДО построчной разбивки (см. splitDisplayMath).
-const DISPLAY_MATH_BLOCK_RE = /\\\[([\s\S]*?)\\\]/g;
+const DISPLAY_MATH_BLOCK_RE = /\\\[([\s\S]*?)\\\]|[$][$]([\s\S]+?)[$][$]/g;
 
 function renderMath(latex: string, displayMode: boolean, key: string | number): ReactNode {
   try {
@@ -333,7 +335,7 @@ function inlineFormat(body: string): ReactNode[] {
   let segmentIndex = 0;
   for (const m of body.matchAll(INLINE_MATH_RE)) {
     if (m.index! > lastIndex) nodes.push(...formatBold(body.slice(lastIndex, m.index), `t${segmentIndex}`));
-    nodes.push(renderMath(m[1].trim(), false, `m${segmentIndex}`));
+    nodes.push(renderMath((m[1] ?? m[2]).trim(), false, `m${segmentIndex}`));
     lastIndex = m.index! + m[0].length;
     segmentIndex++;
   }
@@ -348,7 +350,7 @@ function splitDisplayMath(text: string): Array<{ math: string } | { prose: strin
   let lastIndex = 0;
   for (const m of text.matchAll(DISPLAY_MATH_BLOCK_RE)) {
     if (m.index! > lastIndex) parts.push({ prose: text.slice(lastIndex, m.index) });
-    parts.push({ math: m[1].trim() });
+    parts.push({ math: (m[1] ?? m[2]).trim() });
     lastIndex = m.index! + m[0].length;
   }
   if (lastIndex < text.length) parts.push({ prose: text.slice(lastIndex) });
