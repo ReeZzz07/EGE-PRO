@@ -21,7 +21,15 @@ export interface CampaignContent {
   includeOffer: boolean;
   /** отправить от имени поддержки (support@): ответы получателей придут в ящик поддержки */
   fromSupport?: boolean;
+  /** дополнительная скидка на первую оплату тем получателям, у кого приветственная скидка уже закончилась (1–50 %;
+   *  0 или пусто — не дарить). Работает только вместе с includeOffer. Начисляется в момент отправки письма. */
+  bonusPercent?: number;
+  /** на сколько часов она действует (1–336), по умолчанию 72 */
+  bonusHours?: number;
 }
+
+export const MAX_BONUS_PERCENT = 50;
+export const MAX_BONUS_HOURS = 336;
 
 export const CTA_OPTIONS: { value: CampaignContent["ctaPath"]; label: string }[] = [
   { value: "", label: "Главная платформы" },
@@ -36,6 +44,8 @@ export interface CampaignPreview {
   overLimit: boolean;
   maxRecipients: number;
   excludedRecent: number;
+  /** сколько из получателей без действующей скидки — именно им будет начислена дополнительная */
+  expiredOffer?: number;
   sample: { id: string; email: string; full_name: string | null }[];
 }
 
@@ -154,7 +164,7 @@ export async function cancelCampaign(id: string): Promise<{ error?: string }> {
 // ─────────────── шаблоны-заготовки ───────────────
 
 export interface CampaignPreset {
-  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "payment_survey" | "custom";
+  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "payment_survey" | "unpaid_bonus" | "custom";
   title: string;
   hint: string;
   kind: CampaignKind;
@@ -248,6 +258,28 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
       fromSupport: true,
     },
     suggested: { funnel: { abandoned: "yes" }, label: "Начал, но не завершил платёж — Да" },
+  },
+  {
+    id: "unpaid_bonus",
+    title: "Скидка тем, кто не купил",
+    hint: "Тем, кто подтвердил почту, но ещё ни разу не оплатил тариф. У кого приветственная скидка действует, в письме их обычная скидка с таймером. Тем, у кого она закончилась, можно подарить дополнительную скидку: процент и срок задаются ниже.",
+    kind: "custom",
+    content: {
+      subject: "Тариф ЕГЭ·ПРО со скидкой на первую оплату",
+      eyebrow: "скидка на тариф",
+      bodyText: `Ты уже зарегистрирован(а) в ЕГЭ·ПРО, но пока занимаешься на бесплатном тарифе: 3 вопроса ИИ-репетитору в день и два предмета.
+
+Платный тариф снимает лимит на вопросы и открывает больше предметов, так что заниматься можно каждый день, сколько нужно. Оплата разовая, на 30 дней, без автопродления.
+
+Скидка на первую оплату — в блоке ниже. Если что-то мешает оплатить (нет карты, нужно спросить родителей): на странице тарифов есть кнопка «Попросить родителя оплатить», а оплатить можно и через СБП.`,
+      ctaLabel: "Выбрать тариф →",
+      ctaPath: "/tariffs",
+      footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
+      includeOffer: true,
+      bonusPercent: 10,
+      bonusHours: 72,
+    },
+    suggested: { funnel: { confirmed: "yes", paid: "no" }, label: "Подтвердил аккаунт — Да, Оплатил тариф — Нет" },
   },
   {
     id: "custom",

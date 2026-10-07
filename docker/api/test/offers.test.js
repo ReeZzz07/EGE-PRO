@@ -2,7 +2,8 @@
 // Скидка = три части (подтверждение почты / онбординг / диагностика), срок — от самого позднего шага.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { getWelcomeOffer, resolveWelcomeOfferConfig } from "../offers.js";
+import { getWelcomeOffer, grantBonusDiscount, resolveWelcomeOfferConfig } from "../offers.js";
+import { effectiveDiscountPercent } from "../pricing.js";
 import { createTestUser, deleteTestUser, createTestPayment, pool } from "./helpers.js";
 
 after(async () => {
@@ -241,3 +242,94 @@ test("оффер: несколько диагностик — учитывает
     await deleteTestUser(id);
   }
 });
+
+// ─────────── дополнительная скидка из рассылки (миграция 0043) ───────────
+
+test("подарок: у кого приветственная скидка закончилась, выданная скидка становится оффером (без шагов), с процентом и сроком", async () => {
+  await clearCfg();
+  const id = await createTestUser();
+  try {
+    await setConfirmedAgo(id, 400);
+    assert.equal((await getWelcomeOffer(id)).active, false, "приветственная давно закончилась");
+    assert.equal(await grantBonusDiscount(id, null, 15, 72), true);
+    const o = await getWelcomeOffer(id);
+    assert.equal(o.active, true);
+    assert.equal(o.percent, 15);
+    assert.equal(o.maxPercent, 15);
+    assert.deepEqual(o.steps, []);
+    assert.equal(o.bonus, true);
+    const h = hoursLeft(o);
+    assert.ok(h > 71.9 && h <= 72, `ожидали ~72 часа, получили ${h}`);
+    // скидка попадает в цену так же, как приветственная: персональная и оффер не суммируются
+    assert.equal(effectiveDiscountPercent(null, o), 15);
+    assert.equal(effectiveDiscountPercent(25, o), 25);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("подарок: действует до конца срока, потом оффера снова нет; просроченная запись не мешает", async () => {
+  await clearCfg();
+  const id = await createTestUser();
+  try {
+    await setConfirmedAgo(id, 400);
+    await grantBonusDiscount(id, null, 20, 24);
+    assert.equal((await getWelcomeOffer(id)).active, true);
+    await pool.query("update public.user_bonus_discounts set expires_at = now() - interval '1 minute' where user_id = $1", [id]);
+    assert.equal((await getWelcomeOffer(id)).active, false);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("подарок и приветственная скидка не суммируются: действует большая; у равных — приветственная со своими шагами", async () => {
+  await clearCfg();
+  const id = await createTestUser();
+  try {
+    await setConfirmedAgo(id, 1); // приветственная 10 %
+    await grantBonusDiscount(id, null, 30, 48);
+    const big = await getWelcomeOffer(id);
+    assert.equal(big.percent, 30);
+    assert.equal(big.bonus, true);
+    await pool.query("delete from public.user_bonus_discounts where user_id = $1", [id]);
+    await grantBonusDiscount(id, null, 10, 48);
+    const same = await getWelcomeOffer(id);
+    assert.equal(same.percent, 10);
+    assert.equal(same.bonus, undefined, "при равенстве остаётся приветственный оффер с шагами");
+    assert.ok(same.steps.length > 0);
+  } finally {
+    await deleteTestUser(id);
+  }
+});
+
+test("подарок выдаётся только подходящему: не подтвердил почту, админ или уже платил — нет; повторная выдача по той же рассылке — нет", async () => {
+  await clearCfg();
+  const unconfirmed = await createTestUser();
+  const admin = await createTestUser({ isAdmin: true });
+  const paid = await createTestUser();
+  const ok = await createTestUser();
+  try {
+    await pool.query("update auth.users set email_confirmed_at = null where id = $1", [unconfirmed]);
+    await setConfirmedAgo(paid, 400);
+    await setConfirmedAgo(ok, 400);
+    await createTestPayment(paid, { status: "succeeded" });
+    assert.equal(await grantBonusDiscount(unconfirmed, null, 10, 24), false);
+    assert.equal(await grantBonusDiscount(admin, null, 10, 24), false);
+    assert.equal(await grantBonusDiscount(paid, null, 10, 24), false);
+    assert.equal((await getWelcomeOffer(paid)).active, false);
+
+    const { rows } = await pool.query("insert into public.email_campaigns (kind, subject, body_text, total) values ('custom', 'бонус-тест', 'текст', 1) returning id");
+    const campaignId = rows[0].id;
+    try {
+      assert.equal(await grantBonusDiscount(ok, campaignId, 10, 24), true);
+      assert.equal(await grantBonusDiscount(ok, campaignId, 10, 24), false, "одна выдача на рассылку и получателя");
+      const n = (await pool.query("select count(*)::int as n from public.user_bonus_discounts where user_id = $1", [ok])).rows[0].n;
+      assert.equal(n, 1);
+    } finally {
+      await pool.query("delete from public.email_campaigns where id = $1", [campaignId]);
+    }
+  } finally {
+    for (const id of [unconfirmed, admin, paid, ok]) await deleteTestUser(id);
+  }
+});
+

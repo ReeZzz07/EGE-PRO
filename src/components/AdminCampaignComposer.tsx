@@ -9,6 +9,8 @@ import {
   CAMPAIGN_PRESETS,
   createCampaign,
   CTA_OPTIONS,
+  MAX_BONUS_HOURS,
+  MAX_BONUS_PERCENT,
   loadCampaign,
   previewCampaign,
   renderCampaign,
@@ -81,7 +83,7 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
   // заготовку подбираем по фильтру таблицы: не подтвердил почту → ссылка, не прошёл онбординг → анкета,
   // не проходил диагностику → диагностика; иначе пустое «своё письмо» (случайно не отправить чужой текст)
   const [presetId, setPresetId] = useState<CampaignPreset["id"]>(() =>
-    filters.funnel.confirmed === "no" ? "verify" : filters.funnel.abandoned === "yes" ? (filters.funnel.offer_active === "yes" ? "discount_abandoned" : "payment_survey") : filters.funnel.onboarded === "no" ? "onboarding" : filters.funnel.diagnostic === "no" ? "diagnostic" : "custom"
+    filters.funnel.confirmed === "no" ? "verify" : filters.funnel.confirmed === "yes" && filters.funnel.paid === "no" ? "unpaid_bonus" : filters.funnel.abandoned === "yes" ? (filters.funnel.offer_active === "yes" ? "discount_abandoned" : "payment_survey") : filters.funnel.onboarded === "no" ? "onboarding" : filters.funnel.diagnostic === "no" ? "diagnostic" : "custom"
   );
   const [drafts, setDrafts] = useState<Record<string, CampaignContent>>(() => Object.fromEntries(CAMPAIGN_PRESETS.map((p) => [p.id, { ...p.content }])));
   const [excludeRecent, setExcludeRecent] = useState(true);
@@ -370,12 +372,51 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
                     </span>
                   </label>
                   <label className="flex items-start gap-2 border-2 border-dashed border-ink/20 p-3">
-                    <input type="checkbox" checked={content.includeOffer} onChange={(e) => setContent({ includeOffer: e.target.checked })} className="mt-0.5 h-4 w-4" />
+                    <input type="checkbox" checked={content.includeOffer} onChange={(e) => setContent(e.target.checked ? { includeOffer: true } : { includeOffer: false, bonusPercent: 0 })} className="mt-0.5 h-4 w-4" />
                     <span className="text-[12.5px] leading-relaxed text-ink2">
                       <strong className="text-ink">Показать блок с текущей приветственной скидкой получателя</strong> — процент и точный срок истечения подставятся у каждого свои. Тем, у кого скидка уже не
                       активна, блок просто не появится — письмо всё равно уйдёт, без упоминания скидки.
                     </span>
                   </label>
+                  {content.includeOffer && (
+                    <div className="border-2 border-dashed border-ink/20 p-3" data-testid="bonus-box">
+                      <p className="text-[12.5px] leading-relaxed text-ink2">
+                        <strong className="text-ink">Дополнительная скидка</strong> для тех, у кого приветственная скидка уже закончилась. У кого она ещё действует, в письме будет их обычная скидка, ничего не меняется.
+                        Дополнительная скидка начисляется в момент отправки, действует на первую оплату, не суммируется с другими (берётся большая).
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-end gap-3">
+                        <label className="block">
+                          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Скидка, % <span className="font-normal normal-case">(0 — не дарить)</span></span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={MAX_BONUS_PERCENT}
+                            value={content.bonusPercent ?? 0}
+                            onChange={(e) => setContent({ bonusPercent: e.target.value === "" ? 0 : Number(e.target.value) })}
+                            className="input-blank mt-1.5 block w-28 rounded-sm px-3 py-2 text-[13px] tabular-nums"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Действует, часов <span className="font-normal normal-case">(до {MAX_BONUS_HOURS})</span></span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={MAX_BONUS_HOURS}
+                            value={content.bonusHours ?? 72}
+                            onChange={(e) => setContent({ bonusHours: e.target.value === "" ? 72 : Number(e.target.value) })}
+                            disabled={!content.bonusPercent}
+                            className="input-blank mt-1.5 block w-28 rounded-sm px-3 py-2 text-[13px] tabular-nums disabled:opacity-40"
+                          />
+                        </label>
+                      </div>
+                      {!!content.bonusPercent && (
+                        <p data-testid="bonus-summary" className="mt-2 text-[12.5px] font-bold text-ink">
+                          Скидку −{content.bonusPercent}% на {content.bonusHours ?? 72} ч получат{" "}
+                          {previewing || !preview ? "…" : preview.expiredOffer ?? 0} из {preview?.count ?? 0} получателей (те, у кого приветственная скидка закончилась).
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -426,6 +467,11 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
               <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={!preview || preview.count === 0 || preview.overLimit} className="mt-0.5 h-4 w-4" />
               <span className="text-[13px] leading-relaxed">
                 Я проверил(а) получателей и текст: письмо получат ровно <strong>{preview?.count ?? 0}</strong> человек, отозвать отправленное будет нельзя.
+                {kind === "custom" && content.includeOffer && !!content.bonusPercent && (
+                  <>
+                    {" "}Дополнительную скидку <strong>−{content.bonusPercent}%</strong> на {content.bonusHours ?? 72} ч получат <strong>{preview?.expiredOffer ?? 0}</strong> из них, отозвать её тоже нельзя.
+                  </>
+                )}
               </span>
             </label>
             {submitError && (

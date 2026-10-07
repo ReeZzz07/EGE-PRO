@@ -16,7 +16,7 @@ import { buildUserWhere } from "./adminUsers.js";
 import { createActionToken } from "./authTokens.js";
 import { buildVerifyEmail, escapeHtml, paragraphHtml, sendMail, sendVerifyEmail, wrapBrandedHtml } from "./mailer.js";
 import { fillBody, fillLine, offerBlock } from "./lifecycleEmails.js";
-import { getWelcomeOffer } from "./offers.js";
+import { getWelcomeOffer, grantBonusDiscount } from "./offers.js";
 
 export const MAX_RECIPIENTS = 500;
 export const SEND_DELAY_MS = 1200;
@@ -24,6 +24,10 @@ export const RECENT_DAYS = 7;
 /** Куда ведёт кнопка письма: главная платформы, тарифы, продление тарифа, онбординг (анкета подготовки). */
 export const CTA_PATHS = ["", "/tariffs", "/renew", "/onboarding", "/diagnostic"];
 export const KINDS = ["verify_link", "custom"];
+/** Дополнительная скидка из рассылки: потолок процента и срока (миграция 0043), срок по умолчанию. */
+export const MAX_BONUS_PERCENT = 50;
+export const MAX_BONUS_HOURS = 336;
+export const DEFAULT_BONUS_HOURS = 72;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const siteUrl = () => (process.env.CORS_ORIGIN || "").split(",")[0].trim() || "https://ege-tutor.ru";
@@ -70,10 +74,27 @@ export async function previewRecipients({ q, filters, kind, excludeRecent = true
     `select u.id, u.email, p.full_name from auth.users u join public.profiles p on p.id = u.id ${withEx.where} order by u.created_at desc limit 5`,
     withEx.params
   );
-  return { count, overLimit: count > MAX_RECIPIENTS, maxRecipients: MAX_RECIPIENTS, excludedRecent, sample };
+  // сколько из получателей без действующей скидки — именно им рассылка может подарить дополнительную
+  let expiredOffer = 0;
+  if (f.offer_active !== "yes") {
+    const exp = recipientsWhere({ ...base, filters: { ...f, offer_active: "no" }, excludeRecent });
+    expiredOffer = (await pool.query(`select count(*)::int as n from auth.users u join public.profiles p on p.id = u.id ${exp.where}`, exp.params)).rows[0].n;
+  }
+  return { count, overLimit: count > MAX_RECIPIENTS, maxRecipients: MAX_RECIPIENTS, excludedRecent, expiredOffer, sample };
 }
 
 // ─────────────── содержимое писем ───────────────
+
+/** Дополнительная скидка из полей рассылки: { percent: null|1..50, hours: 1..336 } или { error }. Пусто/0 — без скидки. */
+export function normalizeBonus(c = {}) {
+  const raw = c.bonusPercent;
+  if (raw === undefined || raw === null || raw === "" || Number(raw) === 0) return { percent: null, hours: DEFAULT_BONUS_HOURS };
+  const percent = Number(raw);
+  if (!Number.isInteger(percent) || percent < 1 || percent > MAX_BONUS_PERCENT) return { error: `Дополнительная скидка — целое число от 1 до ${MAX_BONUS_PERCENT} процентов` };
+  const hours = c.bonusHours === undefined || c.bonusHours === null || c.bonusHours === "" ? DEFAULT_BONUS_HOURS : Number(c.bonusHours);
+  if (!Number.isInteger(hours) || hours < 1 || hours > MAX_BONUS_HOURS) return { error: `Срок дополнительной скидки — от 1 до ${MAX_BONUS_HOURS} часов` };
+  return { percent, hours };
+}
 
 export function validateCampaignContent(kind, c) {
   if (!KINDS.includes(kind)) return "Неизвестный вид рассылки";
@@ -87,6 +108,9 @@ export function validateCampaignContent(kind, c) {
   if (String(c.ctaLabel ?? "").length > 60) return "Текст кнопки — до 60 символов";
   if (String(c.footer ?? "").length > 400) return "Подвал слишком длинный (до 400 символов)";
   if (!CTA_PATHS.includes(String(c.ctaPath ?? ""))) return "Недопустимая ссылка кнопки";
+  const bonus = normalizeBonus(c);
+  if (bonus.error) return bonus.error;
+  if (bonus.percent && c.includeOffer !== true) return "Дополнительная скидка работает только вместе с блоком скидки в письме — включи его";
   return null;
 }
 
@@ -136,7 +160,27 @@ const SAMPLE_OFFER = {
  *  подтверждения — то же стандартное письмо, что реально уйдёт, с образцовой (нерабочей) ссылкой. */
 export function renderCampaignSample(kind, c = {}) {
   if (kind === "verify_link") return buildVerifyEmail(`${siteUrl()}/verify-email?token=ОБРАЗЕЦ-ССЫЛКИ`);
-  return buildCampaignEmail(c, { name: "Аня", offer: c.includeOffer ? SAMPLE_OFFER : null });
+  const bonus = normalizeBonus(c);
+  // с дополнительной скидкой показываем письмо так, как его увидит получатель, у которого приветственная скидка закончилась
+  const offer = !c.includeOffer
+    ? null
+    : bonus.percent
+      ? { active: true, percent: bonus.percent, maxPercent: bonus.percent, expiresAt: new Date(Date.now() + bonus.hours * 3600 * 1000).toISOString(), steps: [], bonus: true }
+      : SAMPLE_OFFER;
+  return buildCampaignEmail(c, { name: "Аня", offer });
+}
+
+/** Скидка, которую увидит этот получатель в письме рассылки с блоком скидки: его действующая (приветственная или
+ *  ранее подаренная); если её нет, а рассылка дарит дополнительную — выдаём её сейчас, и в письме она выглядит как
+ *  обычная скидка на первую оплату (offers.js → grantBonusDiscount: только подтвердившему почту и ещё не платившему;
+ *  не подошёл — блока просто не будет). Без include_offer — null. */
+export async function resolveCampaignOffer(campaign, user) {
+  if (!campaign.include_offer) return null;
+  let offer = await getWelcomeOffer(user.id);
+  if (!offer.active && campaign.bonus_percent) {
+    if (await grantBonusDiscount(user.id, campaign.id, campaign.bonus_percent, campaign.bonus_hours ?? DEFAULT_BONUS_HOURS)) offer = await getWelcomeOffer(user.id);
+  }
+  return offer;
 }
 
 async function defaultSend(campaign, user) {
@@ -148,7 +192,7 @@ async function defaultSend(campaign, user) {
   // Оффер считается заново прямо перед отправкой (не при создании рассылки) — рассылка на сотни
   // получателей растягивается по времени (пауза между письмами), у части оффер мог истечь как раз
   // за это время; offerBlock для них тогда просто ничего не добавит, а не соврёт про истёкший срок.
-  const offer = campaign.include_offer ? await getWelcomeOffer(user.id) : null;
+  const offer = await resolveCampaignOffer(campaign, user);
   const m = buildCampaignEmail(
     { subject: campaign.subject, bodyText: campaign.body_text, eyebrow: campaign.eyebrow, ctaLabel: campaign.cta_label, ctaPath: campaign.cta_path, footer: campaign.footer },
     { name: user.full_name, offer }
@@ -169,8 +213,9 @@ export class CampaignError extends Error {
 
 /** Создаёт рассылку и запускает отправку в фоне. confirmCount — число получателей, которое админ видел и
  *  подтвердил; если сервер насчитал другое, рассылка не создаётся (COUNT_MISMATCH). */
-export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, includeOffer = false, fromSupport = false, filters, q, excludeRecent = true, confirmCount }, opts = {}) {
-  const invalid = validateCampaignContent(kind, { subject, bodyText, eyebrow, ctaLabel, ctaPath, footer });
+export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, includeOffer = false, fromSupport = false, bonusPercent, bonusHours, filters, q, excludeRecent = true, confirmCount }, opts = {}) {
+  const invalid = validateCampaignContent(kind, { subject, bodyText, eyebrow, ctaLabel, ctaPath, footer, includeOffer, bonusPercent, bonusHours });
+  const bonus = kind === "custom" ? normalizeBonus({ bonusPercent, bonusHours }) : { percent: null, hours: DEFAULT_BONUS_HOURS };
   if (invalid) throw new CampaignError(invalid, "INVALID");
   const f = sanitizeFilters(filters);
   const term = String(q ?? "").trim().slice(0, 200);
@@ -186,8 +231,8 @@ export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow
   try {
     await client.query("begin");
     const ins = await client.query(
-      `insert into public.email_campaigns (created_by, kind, subject, body_text, eyebrow, cta_label, cta_path, footer, include_offer, from_support, filters, q, exclude_recent, total)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) returning id`,
+      `insert into public.email_campaigns (created_by, kind, subject, body_text, eyebrow, cta_label, cta_path, footer, include_offer, from_support, bonus_percent, bonus_hours, filters, q, exclude_recent, total)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id`,
       [
         adminId,
         kind,
@@ -199,6 +244,8 @@ export async function createCampaign({ adminId, kind, subject, bodyText, eyebrow
         kind === "custom" ? String(footer ?? "").trim() : null,
         kind === "custom" && !!includeOffer,
         kind === "custom" && !!fromSupport,
+        bonus.percent,
+        bonus.percent ? bonus.hours : null,
         JSON.stringify(f),
         term || null,
         !!excludeRecent,

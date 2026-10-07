@@ -110,6 +110,55 @@ describe("AdminCampaignComposer", () => {
     expect(arg.content.bodyText).toMatch(/Попросить родителя оплатить/);
   });
 
+  it("заготовка «Скидка тем, кто не купил»: подбирается по фильтру «подтвердил, не оплатил», есть поля дополнительной скидки со сводкой по получателям", async () => {
+    vi.mocked(previewCampaign).mockResolvedValue(preview({ count: 20, expiredOffer: 7 }));
+    setup({ filters: { ...EMPTY_USER_FILTERS, funnel: { ...EMPTY_USER_FILTERS.funnel, confirmed: "yes", paid: "no" } } });
+    await screen.findByText("Анна Иванова");
+    expect(screen.getByRole("tab", { name: "Скидка тем, кто не купил" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText(/Тема письма/)).toHaveValue("Тариф ЕГЭ·ПРО со скидкой на первую оплату");
+    expect(screen.getByRole("checkbox", { name: /Показать блок с текущей приветственной скидкой/ })).toBeChecked();
+    expect(screen.getByLabelText(/Скидка, %/)).toHaveValue(10);
+    expect(screen.getByLabelText(/Действует, часов/)).toHaveValue(72);
+    const summary = await screen.findByTestId("bonus-summary");
+    expect(summary).toHaveTextContent("−10% на 72 ч получат 7 из 20");
+  });
+
+  it("дополнительная скидка уходит в рассылку; тот же процент и число получателей повторены в подтверждении перед отправкой", async () => {
+    vi.mocked(previewCampaign).mockResolvedValue(preview({ count: 20, expiredOffer: 7 }));
+    setup({ filters: { ...EMPTY_USER_FILTERS, funnel: { ...EMPTY_USER_FILTERS.funnel, confirmed: "yes", paid: "no" } } });
+    await screen.findByText("Анна Иванова");
+    fireEvent.change(screen.getByLabelText(/Скидка, %/), { target: { value: "25" } });
+    fireEvent.change(screen.getByLabelText(/Действует, часов/), { target: { value: "48" } });
+    await waitFor(() => expect(screen.getByTestId("bonus-summary")).toHaveTextContent("−25% на 48 ч"));
+    const ackLabel = screen.getByRole("checkbox", { name: /Я проверил/ }).closest("label")!;
+    expect(ackLabel).toHaveTextContent("Дополнительную скидку −25% на 48 ч получат 7 из них");
+    fireEvent.click(ackBox());
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
+    const arg = vi.mocked(createCampaign).mock.calls[0][0];
+    expect(arg.content).toMatchObject({ includeOffer: true, bonusPercent: 25, bonusHours: 48, ctaPath: "/tariffs" });
+  });
+
+  it("если выключить блок скидки, дополнительная скидка сбрасывается и поля пропадают (подарок без блока в письме невозможен)", async () => {
+    setup({ filters: { ...EMPTY_USER_FILTERS, funnel: { ...EMPTY_USER_FILTERS.funnel, confirmed: "yes", paid: "no" } } });
+    await screen.findByText("Анна Иванова");
+    expect(screen.getByTestId("bonus-box")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Показать блок с текущей приветственной скидкой/ }));
+    expect(screen.queryByTestId("bonus-box")).not.toBeInTheDocument();
+    fireEvent.click(ackBox());
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(createCampaign).mock.calls[0][0].content).toMatchObject({ includeOffer: false, bonusPercent: 0 });
+  });
+
+  it("с нулевой скидкой сводки по получателям нет — письмо уйдёт только с обычной скидкой", async () => {
+    setup({ filters: { ...EMPTY_USER_FILTERS, funnel: { ...EMPTY_USER_FILTERS.funnel, confirmed: "yes", paid: "no" } } });
+    await screen.findByText("Анна Иванова");
+    fireEvent.change(screen.getByLabelText(/Скидка, %/), { target: { value: "0" } });
+    expect(screen.queryByTestId("bonus-summary")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Действует, часов/)).toBeDisabled();
+  });
+
   it("у обычных заготовок отправка от имени поддержки выключена и её можно включить вручную", async () => {
     setup();
     await screen.findByText("Анна Иванова");

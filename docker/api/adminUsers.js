@@ -41,9 +41,10 @@ const BOOL_EXPR = {
     "(exists (select 1 from public.payments pa where pa.user_id = u.id and pa.status in ('pending', 'canceled')) and not exists (select 1 from public.payments pb where pb.user_id = u.id and pb.status = 'succeeded'))",
   // повторяет логику getWelcomeOffer (offers.js) в SQL — держать в одном месте нельзя (та функция
   // читает app_settings и diagnostics асинхронно, для списочного фильтра нужно именно SQL-выражение).
-  // Если поменяешь условие в getWelcomeOffer — поменяй и здесь.
+  // Если поменяешь условие в getWelcomeOffer — поменяй и здесь. Подаренная рассылкой скидка (user_bonus_discounts,
+  // миграция 0043) тоже считается действующей скидкой — её учитывает последняя часть через «or».
   offer_active:
-    `(not p.is_admin
+    `((not p.is_admin
       and u.email_confirmed_at is not null
       and not exists (select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded')
       and coalesce((select (value->>'enabled')::boolean from public.app_settings where key = 'welcome_offer'), true)
@@ -52,7 +53,7 @@ const BOOL_EXPR = {
         > now()
       and (coalesce((select (value->>'confirmPercent')::int from public.app_settings where key = 'welcome_offer'), 10)
            + case when p.onboarded_at is not null then coalesce((select (value->>'onboardingPercent')::int from public.app_settings where key = 'welcome_offer'), 10) else 0 end
-           + case when exists (select 1 from public.diagnostics dd where dd.user_id = u.id) then coalesce((select (value->>'diagnosticPercent')::int from public.app_settings where key = 'welcome_offer'), 10) else 0 end) > 0)`,
+           + case when exists (select 1 from public.diagnostics dd where dd.user_id = u.id) then coalesce((select (value->>'diagnosticPercent')::int from public.app_settings where key = 'welcome_offer'), 10) else 0 end) > 0) or (not p.is_admin and u.email_confirmed_at is not null and not exists (select 1 from public.payments pay2 where pay2.user_id = u.id and pay2.status = 'succeeded') and exists (select 1 from public.user_bonus_discounts bb where bb.user_id = u.id and bb.expires_at > now())))`,
 };
 export const USER_BOOL_FILTERS = Object.keys(BOOL_EXPR);
 

@@ -1389,6 +1389,8 @@ app.post("/admin/campaigns", authMiddleware, requireAdmin, async (req, res) => {
       footer: b.footer,
       includeOffer: b.includeOffer === true,
       fromSupport: b.fromSupport === true,
+      bonusPercent: b.bonusPercent,
+      bonusHours: b.bonusHours,
       filters: b.filters,
       q: b.q,
       excludeRecent: b.excludeRecent !== false,

@@ -65,7 +65,7 @@ export async function resolveWelcomeOfferConfig() {
  *    steps: [{ key, percent, earned }] }.
  *  Оффер только для тех, кто ещё ни разу не платил и не админ; тариф на момент проверки роли не
  *  играет — оплатившему уже выставлен succeeded-платёж. */
-export async function getWelcomeOffer(userId) {
+async function computeWelcomeOffer(userId) {
   const cfg = await resolveWelcomeOfferConfig();
   if (!cfg.enabled) return { active: false };
   const { rows } = await pool.query(
@@ -98,3 +98,48 @@ export async function getWelcomeOffer(userId) {
     steps,
   };
 }
+
+// ─────────── дополнительная скидка из рассылки ───────────
+// Рассылка может подарить тем, у кого приветственная скидка уже закончилась, новую скидку на первую оплату на
+// ограниченный срок (campaigns.js, миграция 0043). Для остального приложения она неотличима от оффера:
+// getWelcomeOffer ниже отдаёт её в том же виде (без шагов), и цена при оплате, плашки и письма работают как есть.
+const ELIGIBLE_SQL = `not p.is_admin and u.email_confirmed_at is not null
+  and not exists (select 1 from public.payments pay where pay.user_id = u.id and pay.status = 'succeeded')`;
+
+/** Действующая дополнительная скидка пользователя (для ещё не платившего подтвердившего почту) или null. */
+async function activeBonus(userId) {
+  const { rows } = await pool.query(
+    `select b.percent, b.expires_at from public.user_bonus_discounts b
+       join auth.users u on u.id = b.user_id join public.profiles p on p.id = u.id
+      where b.user_id = $1 and b.expires_at > now() and ${ELIGIBLE_SQL}
+      order by b.percent desc, b.expires_at desc limit 1`,
+    [userId]
+  );
+  return rows[0] ? { percent: rows[0].percent, expiresAt: new Date(rows[0].expires_at).toISOString() } : null;
+}
+
+/** Выдаёт скидку percent % на hours часов от сейчас. Только тому, кто подходит под оффер (подтвердил почту,
+ *  не админ, ещё не платил); одна выдача на пару «рассылка + пользователь». true — выдана. */
+export async function grantBonusDiscount(userId, campaignId, percent, hours) {
+  const { rows } = await pool.query(
+    `insert into public.user_bonus_discounts (user_id, percent, expires_at, campaign_id)
+     select u.id, $2, now() + make_interval(hours => $3), $4 from auth.users u join public.profiles p on p.id = u.id
+      where u.id = $1 and ${ELIGIBLE_SQL}
+     on conflict (campaign_id, user_id) where campaign_id is not null do nothing
+     returning id`,
+    [userId, percent, hours, campaignId]
+  );
+  return rows.length > 0;
+}
+
+/** Оффер пользователя: приветственный (за шаги) и/или подаренный рассылкой — действует больший процент.
+ *  Подаренный отдаётся без шагов ({ steps: [], bonus: true }), maxPercent = percent. */
+export async function getWelcomeOffer(userId) {
+  const welcome = await computeWelcomeOffer(userId);
+  const bonus = await activeBonus(userId);
+  if (bonus && (!welcome.active || bonus.percent > welcome.percent)) {
+    return { active: true, percent: bonus.percent, maxPercent: bonus.percent, expiresAt: bonus.expiresAt, steps: [], bonus: true };
+  }
+  return welcome;
+}
+
