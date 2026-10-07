@@ -49,7 +49,7 @@ export async function previewLifecycleTemplate(kind: LifecycleKind, t: Lifecycle
   return (await resp.json()) as { subject: string; html: string };
 }
 
-export async function sendTestLifecycleEmail(kind: LifecycleKind, t: LifecycleTexts): Promise<{ error?: string }> {
-  const resp = await post(`/admin/lifecycle-email/${kind}/test`, "POST", t);
-  return resp.ok ? {} : { error: await errorOf(resp) };
+export async function sendTestLifecycleEmail(kind: LifecycleKind, t: LifecycleTexts, to?: string): Promise<{ error?: string; to?: string }> {
+  const resp = await post(`/admin/lifecycle-email/${kind}/test`, "POST", to ? { ...t, to } : t);
+  return resp.ok ? { to: ((await resp.json().catch(() => ({}))) as { to?: string }).to } : { error: await errorOf(resp) };
 }

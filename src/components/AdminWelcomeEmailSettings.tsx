@@ -12,6 +12,7 @@ import {
   DEFAULT_WELCOME_EMAIL_SETTINGS,
   type WelcomeEmailSettings,
 } from "../lib/welcomeEmailSettings";
+import { useTestRecipient } from "../lib/testRecipient";
 import { Icon, useToast } from "./ui";
 
 export default function AdminWelcomeEmailSettings() {
@@ -20,6 +21,7 @@ export default function AdminWelcomeEmailSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const recipient = useTestRecipient(profile?.email);
   const [settings, setSettings] = useState<WelcomeEmailSettings>(DEFAULT_WELCOME_EMAIL_SETTINGS);
 
   useEffect(() => {
@@ -40,11 +42,12 @@ export default function AdminWelcomeEmailSettings() {
 
   const sendTest = async () => {
     if (!settings.subject.trim() || !settings.bodyText.trim() || !settings.onboardingReminderText.trim()) return push("Заполни тему и оба текста письма", "err");
+    if (!recipient.valid) return push("Проверь адрес для тестовых писем вверху страницы", "err");
     setTesting(true);
-    const res = await sendTestWelcomeEmail(settings);
+    const res = await sendTestWelcomeEmail(settings, recipient.to);
     setTesting(false);
     if (res.error) push(res.error, "err");
-    else push(`Тестовое письмо ушло на ${profile?.email}`, "ok");
+    else push(`Тестовое письмо ушло на ${res.to ?? recipient.label}`, "ok");
   };
 
   if (loading) {
@@ -107,8 +110,8 @@ export default function AdminWelcomeEmailSettings() {
         <button onClick={save} disabled={saving} className="btn btn-blue px-5 py-2.5 text-[13px]">
           <Icon name="check" size={14} /> {saving ? "Сохраняем…" : "Сохранить"}
         </button>
-        <button onClick={sendTest} disabled={testing || !isSupabaseConfigured} className="btn btn-ghost px-5 py-2.5 text-[13px]">
-          <Icon name="send" size={14} /> {testing ? "Отправляем…" : `Отправить тестовое на ${profile?.email ?? "мою почту"}`}
+        <button onClick={sendTest} disabled={testing || !isSupabaseConfigured || !recipient.valid} className="btn btn-ghost px-5 py-2.5 text-[13px]">
+          <Icon name="send" size={14} /> {testing ? "Отправляем…" : `Отправить тестовое на ${recipient.label}`}
         </button>
       </div>
     </div>

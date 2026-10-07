@@ -59,17 +59,17 @@ export async function saveWelcomeEmailSettings(settings: WelcomeEmailSettings, u
   return error ? { error: error.message } : {};
 }
 
-/** Шлёт письмо с ТЕКУЩИМ (необязательно сохранённым) текстом формы на почту самого админа — идёт
+/** Шлёт письмо с ТЕКУЩИМ (необязательно сохранённым) текстом формы на указанный адрес (по умолчанию — на почту самого админа) — идёт
  * через docker/api (нужен реальный SMTP-транспорт из mailer.js), не через PostgREST, в отличие от
  * load/save выше (см. POST /admin/welcome-email/test в server.js). Уходит с блоком-напоминанием
  * об онбординге всегда — сервер сам решает так (onboarded:false), чтобы админ видел полную версию. */
-export async function sendTestWelcomeEmail(settings: WelcomeEmailSettings): Promise<{ error?: string }> {
+export async function sendTestWelcomeEmail(settings: WelcomeEmailSettings, to?: string): Promise<{ error?: string; to?: string }> {
   const resp = await apiFetch("/admin/welcome-email/test", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(settings),
+    body: JSON.stringify(to ? { ...settings, to } : settings),
   });
-  if (resp.ok) return {};
+  if (resp.ok) return { to: ((await resp.json().catch(() => ({}))) as { to?: string }).to };
   const json = await resp.json().catch(() => ({}) as { error?: string });
   return { error: json.error ?? resp.statusText };
 }

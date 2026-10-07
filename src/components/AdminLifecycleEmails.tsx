@@ -13,6 +13,7 @@ import {
   type LifecycleTemplate,
   type LifecycleTexts,
 } from "../lib/lifecycleEmails";
+import { useTestRecipient } from "../lib/testRecipient";
 import { Icon, useToast } from "./ui";
 
 export default function AdminLifecycleEmails() {
@@ -24,6 +25,7 @@ export default function AdminLifecycleEmails() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const recipient = useTestRecipient(profile?.email);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewSubject, setPreviewSubject] = useState("");
   const [previewing, setPreviewing] = useState(false);
@@ -99,11 +101,12 @@ export default function AdminLifecycleEmails() {
   };
 
   const sendTest = async () => {
+    if (!recipient.valid) return push("Проверь адрес для тестовых писем вверху страницы", "err");
     setTesting(true);
-    const res = await sendTestLifecycleEmail(active, draft);
+    const res = await sendTestLifecycleEmail(active, draft, recipient.to);
     setTesting(false);
     if (res.error) push(res.error, "err");
-    else push(`Тестовое письмо ушло на ${profile?.email}`, "ok");
+    else push(`Тестовое письмо ушло на ${res.to ?? recipient.label}`, "ok");
   };
 
   return (
@@ -186,8 +189,8 @@ export default function AdminLifecycleEmails() {
             <button onClick={() => refreshPreview(active, draft)} disabled={previewing} className="btn btn-ghost px-4 py-2.5 text-[13px]">
               <Icon name="eye" size={14} /> {previewing ? "Обновляем…" : "Обновить предпросмотр"}
             </button>
-            <button onClick={sendTest} disabled={testing} className="btn btn-ghost px-4 py-2.5 text-[13px]">
-              <Icon name="send" size={14} /> {testing ? "Отправляем…" : `Тестовое на ${profile?.email ?? "мою почту"}`}
+            <button onClick={sendTest} disabled={testing || !recipient.valid} className="btn btn-ghost px-4 py-2.5 text-[13px]">
+              <Icon name="send" size={14} /> {testing ? "Отправляем…" : `Тестовое на ${recipient.label}`}
             </button>
             <button onClick={() => setDraft({ ...tpl.defaults })} disabled={isDefault} className="btn btn-ghost px-4 py-2.5 text-[13px]">
               <Icon name="refresh" size={14} /> К дефолту

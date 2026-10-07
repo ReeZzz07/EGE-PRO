@@ -34,6 +34,7 @@ import {
   DEFAULT_POLICY,
 } from "./prompt.js";
 import { MATH_FORMAT_RULE, normalizeMath } from "./mathFormat.js";
+import { resolveTestRecipient } from "./testRecipient.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision, settingsForTask } from "./taskImages.js";
@@ -1229,7 +1230,10 @@ app.get("/payments/:id/status", authMiddleware, async (req, res) => {
 
 app.post("/admin/welcome-email/test", authMiddleware, requireAdmin, async (req, res) => {
   try {
-    const email = await getUserEmail(req.user.sub);
+    // to — необязательный адрес для теста (любой), иначе почта самого админа
+    const target = resolveTestRecipient(req.body?.to, await getUserEmail(req.user.sub));
+    if (target.error) return res.status(400).json({ error: target.error });
+    const email = target.to;
     const subject = String(req.body?.subject ?? "").trim();
     const bodyText = String(req.body?.bodyText ?? "").trim();
     const onboardingReminderText = String(req.body?.onboardingReminderText ?? "").trim();
@@ -1240,7 +1244,7 @@ app.post("/admin/welcome-email/test", authMiddleware, requireAdmin, async (req, 
     // onboarded:false — показываем админу САМУЮ полную версию письма (с блоком-напоминанием), а
     // не гадаем, прошёл ли лично он онбординг когда-то давно.
     await sendWelcomeEmail(email, { siteUrl, subject, bodyText, onboardingReminderText, onboarded: false });
-    res.json({ ok: true });
+    res.json({ ok: true, to: email });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
@@ -1305,15 +1309,16 @@ app.post("/admin/lifecycle-email/:kind/preview", authMiddleware, requireAdmin, a
   }
 });
 
-// Тестовая отправка на почту самого админа (образцовые данные, скидка показана)
+// Тестовая отправка (образцовые данные, скидка показана) — на указанный адрес, по умолчанию на почту самого админа
 app.post("/admin/lifecycle-email/:kind/test", authMiddleware, requireAdmin, async (req, res) => {
   const kind = req.params.kind;
   if (!LIFECYCLE_KINDS.includes(kind)) return res.status(404).json({ error: "Неизвестное письмо" });
   try {
-    const email = await getUserEmail(req.user.sub);
+    const target = resolveTestRecipient(req.body?.to, await getUserEmail(req.user.sub));
+    if (target.error) return res.status(400).json({ error: target.error });
     const m = await buildSampleEmail(kind, { subject: req.body?.subject, bodyText: req.body?.bodyText, footer: req.body?.footer });
-    await sendMail({ to: email, ...m, subject: `[тест] ${m.subject}` });
-    res.json({ ok: true });
+    await sendMail({ to: target.to, ...m, subject: `[тест] ${m.subject}` });
+    res.json({ ok: true, to: target.to });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }

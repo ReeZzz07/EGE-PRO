@@ -16,6 +16,7 @@ import AdminScoreScales from "./AdminScoreScales";
 import AdminMailSettings from "./AdminMailSettings";
 import AdminWelcomeEmailSettings from "./AdminWelcomeEmailSettings";
 import AdminLifecycleEmails from "./AdminLifecycleEmails";
+import TestRecipientField from "./TestRecipientField";
 import AdminCampaigns from "./AdminCampaigns";
 import AdminBlog from "./AdminBlog";
 import AdminReviews from "./AdminReviews";
@@ -321,6 +322,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
 
       {tab === "mail" && (
         <div className="mt-6 space-y-6">
+          <TestRecipientField />
           <AdminMailSettings />
           <AdminWelcomeEmailSettings />
           <AdminLifecycleEmails />
