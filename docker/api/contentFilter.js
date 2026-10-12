@@ -15,8 +15,8 @@
 import { createHash } from "node:crypto";
 import { pool } from "./db.js";
 
-export const TARGETS = ["feedback", "reviews"];
-export const TARGET_LABEL = { feedback: "Обращения", reviews: "Отзывы" };
+export const TARGETS = ["feedback", "reviews", "comments"];
+export const TARGET_LABEL = { feedback: "Обращения", reviews: "Отзывы", comments: "Комментарии к статьям" };
 
 export const DEFAULT_WORDS_TEXT = `# Одно слово в строке. «слово» — основа с производными (окончания и приставки), «=слово» — только это слово целиком,
 # «~фраза» — фраза целиком. Строки, начинающиеся с #, — комментарии. Список можно менять как угодно.
@@ -148,7 +148,7 @@ export const DEFAULT_CONFIG = {
   words: DEFAULT_WORDS_TEXT,
   allow: DEFAULT_ALLOW_TEXT,
   allowedDomains: "ege-tutor.ru",
-  targets: { feedback: { ...DEFAULT_TARGET_RULES }, reviews: { ...DEFAULT_TARGET_RULES } },
+  targets: { feedback: { ...DEFAULT_TARGET_RULES }, reviews: { ...DEFAULT_TARGET_RULES }, comments: { ...DEFAULT_TARGET_RULES } },
 };
 
 export class ContentFilterError extends Error {
@@ -399,7 +399,9 @@ export function userMessage(violations, target) {
     parts.push(
       target === "reviews"
         ? `В отзыве нельзя оставлять контакты и ссылки. Уберите: ${what}.`
-        : `В сообщении нельзя оставлять контакты и ссылки — ответ придёт на почту из формы. Уберите: ${what}.`
+        : target === "comments"
+          ? `В комментарии нельзя оставлять контакты и ссылки. Уберите: ${what}.`
+          : `В сообщении нельзя оставлять контакты и ссылки — ответ придёт на почту из формы. Уберите: ${what}.`
     );
   }
   if (violations.some((v) => v.kind === "word")) {

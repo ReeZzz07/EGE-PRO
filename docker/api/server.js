@@ -35,6 +35,8 @@ import {
 } from "./prompt.js";
 import { MATH_FORMAT_RULE, normalizeMath } from "./mathFormat.js";
 import { resolveTestRecipient } from "./testRecipient.js";
+import { getPublicMailNotice } from "./siteNotice.js";
+import { EngagementError, viewerOf, publishedArticleId, recordView, toggleLike, recordShare as recordArticleShare, getStats as getArticleStats, getAllStats as getAllArticleStats, listComments as listArticleComments, addComment as addArticleComment, deleteComment as deleteArticleComment, listRecentCommentsAdmin, getAllStatsAdmin as getAllArticleStatsAdmin } from "./blogEngagement.js";
 import { callText, callTool } from "./providers.js";
 import { parseImportArchive, readZipFile } from "./importArchive.js";
 import { buildTaskAttachments, buildUserContent, supportsVision, settingsForTask } from "./taskImages.js";
@@ -118,6 +120,11 @@ const paymentsLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeader
 // начнёт слать туда мусорные id: каждый такой запрос дёргает fetchYookassaPayment (реальный
 // исходящий HTTP к ЮKassa), без лимита это было бы дешёвым способом нагрузить наш сервер чужими
 // исходящими запросами.
+// База знаний: чтение открыто всем, поэтому свои лимиты на IP — читать можно часто, действия (просмотр, лайк, репост)
+// реже, комментарии — ещё реже (и дополнительно ограничены в blogEngagement.js: не больше пяти в час на пользователя).
+const blogReadLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false });
+const blogActionLimiter = rateLimit({ windowMs: 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false });
+const blogCommentLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 15, standardHeaders: true, legacyHeaders: false });
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 
 function signToken(user, tokenVersion) {
@@ -148,6 +155,22 @@ async function authMiddleware(req, res, next) {
     return res.status(500).json({ error: String(e?.message ?? e) });
   }
   req.user = payload;
+  next();
+}
+
+/** Как authMiddleware, но без отказа: валидный токен — req.user заполнен, нет токена или он недействителен — гость.
+ *  Нужен публичным роутам, где вошедший получает чуть больше (например, видит свой лайк и кнопку «удалить»). */
+async function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    try {
+      const payload = jwt.verify(header.slice(7), JWT_SECRET);
+      const { rows } = await pool.query("select token_version from public.profiles where id = $1", [payload.sub]);
+      if (!(rows[0] && (payload.tv ?? 0) < rows[0].token_version)) req.user = payload;
+    } catch {
+      /* недействительный токен — просто гость */
+    }
+  }
   next();
 }
 
@@ -1101,6 +1124,138 @@ app.post("/payments/addon", authMiddleware, paymentsLimiter, async (req, res) =>
     const result = await initiateAddon(req.user.sub, req.body?.count, siteUrl);
     if (result.error) return res.status(400).json({ error: result.error });
     res.json({ paymentId: result.paymentId, confirmationUrl: result.confirmationUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ─────────────────────── база знаний: просмотры, лайки, репосты, комментарии (blogEngagement.js) ───────────────────────
+// Путь /blog-engagement, а не /blog: адреса /blog и /blog/<slug> — страницы сайта, их проксировать на API нельзя.
+// Смотреть, лайкать, делиться и читать комментарии может любой (посетитель без входа — по идентификатору из браузера,
+// заголовок X-Visitor-Id); писать комментарии — только вошедший.
+async function engagementCtx(req) {
+  const userId = req.user?.sub ?? null;
+  let isAdmin = false;
+  if (userId) isAdmin = !!(await pool.query("select is_admin from public.profiles where id = $1", [userId])).rows[0]?.is_admin;
+  return { userId, isAdmin, viewer: viewerOf({ userId, visitorId: req.get("x-visitor-id") }) };
+}
+
+function engagementError(res, e) {
+  if (e instanceof EngagementError || e instanceof ContentFilterError) return res.status(e.status ?? 400).json({ error: e.message });
+  console.warn("blog engagement:", e?.message ?? e);
+  return res.status(500).json({ error: "Не удалось выполнить запрос" });
+}
+
+// Объявление о сбое почты для экранов регистрации/входа (docker/api/siteNotice.js). Открыто всем: самого
+// текста в БД нет, пока админ не включил объявление в /admin → Почта. Сбой чтения не должен ломать форму
+// входа — отдаём «объявления нет».
+app.get("/site-notice/mail", blogReadLimiter, async (_req, res) => {
+  try {
+    res.set("Cache-Control", "public, max-age=15");
+    res.json(await getPublicMailNotice());
+  } catch (e) {
+    console.warn("не удалось прочитать объявление о почте:", e?.message ?? e);
+    res.json({ active: false, text: "" });
+  }
+});
+
+app.get("/blog-engagement/stats", blogReadLimiter, async (_req, res) => {
+  try {
+    res.set("Cache-Control", "public, max-age=30");
+    res.json({ stats: await getAllArticleStats() });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.get("/blog-engagement/:slug", blogReadLimiter, optionalAuth, async (req, res) => {
+  try {
+    const id = await publishedArticleId(req.params.slug);
+    if (!id) return res.status(404).json({ error: "Статья не найдена" });
+    const { userId, viewer } = await engagementCtx(req);
+    const [stats, page] = await Promise.all([getArticleStats(id, viewer), listArticleComments(id, { me: userId })]);
+    res.json({ stats, comments: page.comments, nextBeforeId: page.nextBeforeId });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.post("/blog-engagement/:slug/view", blogActionLimiter, optionalAuth, async (req, res) => {
+  try {
+    const id = await publishedArticleId(req.params.slug);
+    if (!id) return res.status(404).json({ error: "Статья не найдена" });
+    const { viewer, isAdmin } = await engagementCtx(req);
+    // админ листает свои статьи постоянно — его просмотры в статистику не идут
+    if (viewer && !isAdmin) await recordView(id, viewer);
+    res.json({ stats: await getArticleStats(id, viewer) });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.post("/blog-engagement/:slug/like", blogActionLimiter, optionalAuth, async (req, res) => {
+  try {
+    const id = await publishedArticleId(req.params.slug);
+    if (!id) return res.status(404).json({ error: "Статья не найдена" });
+    const { viewer } = await engagementCtx(req);
+    if (!viewer) return res.status(400).json({ error: "Не удалось определить посетителя — обнови страницу" });
+    const r = await toggleLike(id, viewer);
+    res.json({ liked: r.liked, likes: r.likes });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.post("/blog-engagement/:slug/share", blogActionLimiter, optionalAuth, async (req, res) => {
+  try {
+    const id = await publishedArticleId(req.params.slug);
+    if (!id) return res.status(404).json({ error: "Статья не найдена" });
+    const { viewer } = await engagementCtx(req);
+    if (!viewer) return res.status(400).json({ error: "Не удалось определить посетителя — обнови страницу" });
+    await recordArticleShare(id, viewer, String(req.body?.channel ?? ""));
+    res.json({ stats: await getArticleStats(id, viewer) });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.get("/blog-engagement/:slug/comments", blogReadLimiter, optionalAuth, async (req, res) => {
+  try {
+    const id = await publishedArticleId(req.params.slug);
+    if (!id) return res.status(404).json({ error: "Статья не найдена" });
+    const page = await listArticleComments(id, { beforeId: req.query.before, me: req.user?.sub ?? null });
+    res.json({ comments: page.comments, nextBeforeId: page.nextBeforeId });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.post("/blog-engagement/:slug/comments", blogCommentLimiter, authMiddleware, async (req, res) => {
+  try {
+    const id = await publishedArticleId(req.params.slug);
+    if (!id) return res.status(404).json({ error: "Статья не найдена" });
+    const comment = await addArticleComment(id, req.user.sub, req.body?.body, { ip: req.ip });
+    res.json({ comment, stats: await getArticleStats(id, null) });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+// свой комментарий удаляет автор, любой — админ (модерация)
+app.delete("/blog-engagement/comments/:id", blogActionLimiter, authMiddleware, async (req, res) => {
+  try {
+    const { isAdmin } = await engagementCtx(req);
+    const ok = await deleteArticleComment(req.params.id, { userId: req.user.sub, isAdmin });
+    if (!ok) return res.status(404).json({ error: "Комментарий не найден" });
+    res.json({ ok: true });
+  } catch (e) {
+    engagementError(res, e);
+  }
+});
+
+app.get("/admin/blog/engagement", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json({ stats: await getAllArticleStatsAdmin(), comments: await listRecentCommentsAdmin(50) });
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }

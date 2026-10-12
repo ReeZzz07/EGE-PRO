@@ -46,6 +46,11 @@ const apiProxy = backendHost
       // «попросить родителя оплатить»: ученик — POST /parent-link[/shared|/email], родитель без входа —
       // /public/parent-link/<токен>[/pay|/payments/<id>] (docker/api/parentPay.js). Страница родителя
       // /pay-for/<токен> — обычный SPA-путь и сюда не проксируется.
+      // база знаний: просмотры, лайки, репосты, комментарии (docker/api/blogEngagement.js). Не /blog: адреса /blog и
+      // /blog/<slug> — страницы сайта.
+      // объявление о сбое почты на экранах регистрации/входа (docker/api/siteNotice.js)
+      "/site-notice": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/blog-engagement": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/parent-link": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/public/parent-link": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       // Раньше — статические файлы в public/ (см. src/lib/seo.ts, docker/api/server.js) — теперь

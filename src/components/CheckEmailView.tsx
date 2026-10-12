@@ -9,6 +9,7 @@ import { useAuth } from "../lib/auth";
 import { mailboxLink } from "../lib/mailboxLink";
 import { reachGoalOnce } from "../lib/metrika";
 import { Icon } from "./ui";
+import MailNotice from "./MailNotice";
 import type { View } from "./Header";
 
 /** Сколько секунд после отправки письмо нельзя запросить снова: защита от спама себе и нам. */
@@ -22,6 +23,8 @@ export default function CheckEmailView({ email, onNav }: { email: string; onNav:
   // первое письмо ушло только что — повторно просить его сразу бессмысленно
   const [wait, setWait] = useState(RESEND_COOLDOWN_S);
   const mailbox = mailboxLink(email);
+  // идёт сбой почты (объявление включено в /admin → Почта): подсказки «поищи в Спаме» были бы неправдой
+  const [outage, setOutage] = useState(false);
 
   useEffect(() => {
     reachGoalOnce("check_email_seen", "check_email_seen");
@@ -53,17 +56,27 @@ export default function CheckEmailView({ email, onNav }: { email: string; onNav:
           <Icon name="send" size={20} />
         </span>
         <h1 className="font-display mt-4 text-xl font-bold">Подтверди почту</h1>
-        <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
-          Мы отправили письмо на <strong className="break-all text-ink">{email}</strong>. Открой его и нажми кнопку — аккаунт заработает, и можно будет сразу
-          пройти диагностику.
-        </p>
+        {outage ? (
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
+            Аккаунт для <strong className="break-all text-ink">{email}</strong> создан. Письмо с кнопкой подтверждения придёт сюда, как только заработает
+            почта, — нажмёшь её, и можно будет сразу пройти диагностику.
+          </p>
+        ) : (
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
+            Мы отправили письмо на <strong className="break-all text-ink">{email}</strong>. Открой его и нажми кнопку — аккаунт заработает, и можно будет сразу
+            пройти диагностику.
+          </p>
+        )}
 
-        {mailbox && (
+        <MailNotice className="mt-5" onActive={setOutage} />
+
+        {mailbox && !outage && (
           <a href={mailbox.url} target="_blank" rel="noopener noreferrer" className="btn btn-blue mt-5 w-full justify-center px-5 py-3 text-sm">
             {mailbox.label} <Icon name="arrowR" size={16} />
           </a>
         )}
 
+        {!outage && (
         <div className="mt-5 border-2 border-dashed border-ink/25 p-3.5 text-left text-[12.5px] leading-relaxed text-ink2">
           <p className="font-bold text-ink">Письма нет больше пары минут?</p>
           <ul className="mt-1.5 list-disc space-y-1 pl-4">
@@ -74,6 +87,7 @@ export default function CheckEmailView({ email, onNav }: { email: string; onNav:
             <li>Адрес с опечаткой? Зарегистрируйся заново с правильным.</li>
           </ul>
         </div>
+        )}
 
         {sent && (
           <p className="anim-rise mt-4 flex items-center justify-center gap-2 text-[13px] font-bold text-blue">

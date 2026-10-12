@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { DEFAULT_SMTP_SETTINGS, loadSmtpSettings, saveSmtpSettings, type SmtpSettings } from "../lib/mailSettings";
 import { isValidEmail } from "../lib/validation";
+import { DEFAULT_MAIL_NOTICE, DEFAULT_MAIL_NOTICE_TEXT, MAIL_NOTICE_MAX, loadMailNoticeSettings, saveMailNoticeSettings, type MailNoticeSettings } from "../lib/mailNotice";
 import { Icon, useToast } from "./ui";
 
 export default function AdminMailSettings() {
@@ -14,12 +15,15 @@ export default function AdminMailSettings() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<SmtpSettings>(DEFAULT_SMTP_SETTINGS);
   const [showPassword, setShowPassword] = useState(false);
+  const [notice, setNotice] = useState<MailNoticeSettings>(DEFAULT_MAIL_NOTICE);
+  const [noticeSaving, setNoticeSaving] = useState(false);
 
   useEffect(() => {
     loadSmtpSettings().then((s) => {
       setSettings(s);
       setLoading(false);
     });
+    loadMailNoticeSettings().then(setNotice);
   }, []);
 
   const save = async () => {
@@ -36,11 +40,55 @@ export default function AdminMailSettings() {
     else push("Сохранено — новые письма сразу пойдут через этот сервер", "ok");
   };
 
+  const saveNotice = async (next: MailNoticeSettings) => {
+    if (!profile) return;
+    setNoticeSaving(true);
+    const res = await saveMailNoticeSettings(next, profile.id);
+    setNoticeSaving(false);
+    if (res.error) return push(res.error, "err");
+    setNotice(next);
+    push(next.enabled ? "Объявление включено — посетители увидят его через несколько секунд" : "Объявление выключено", "ok");
+  };
+
   if (loading) {
     return <p className="py-8 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
   }
 
   return (
+    <div className="space-y-5">
+    <div className="sheet p-5 sm:p-6" data-testid="mail-notice-admin">
+      <h2 className="font-display text-lg font-bold">Объявление «письма временно не приходят»</h2>
+      <p className="mt-1 text-[12.5px] text-ink2">
+        Пока почта не работает, включи объявление: его увидят все на экранах регистрации, входа, восстановления пароля и «Подтверди почту». Когда почта
+        заработает — выключи его здесь же.
+      </p>
+      <div className={`mt-3 flex items-center gap-3 border-2 p-3 ${notice.enabled ? "border-amber bg-amber/10" : "border-ink/15"}`}>
+        <span className="text-[13px] font-bold">{notice.enabled ? "Сейчас показывается посетителям" : "Сейчас не показывается"}</span>
+        <button
+          onClick={() => saveNotice({ ...notice, enabled: !notice.enabled })}
+          disabled={noticeSaving}
+          className={`btn ${notice.enabled ? "btn-ghost" : "btn-blue"} ml-auto px-4 py-2 text-[12.5px]`}
+        >
+          {noticeSaving ? "Сохраняем…" : notice.enabled ? "Выключить" : "Включить"}
+        </button>
+      </div>
+      <label className="mt-3 block">
+        <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">
+          Текст <span className="font-normal normal-case">(пусто — стандартный; {notice.text.length}/{MAIL_NOTICE_MAX})</span>
+        </span>
+        <textarea
+          value={notice.text}
+          onChange={(e) => setNotice((n) => ({ ...n, text: e.target.value.slice(0, MAIL_NOTICE_MAX) }))}
+          rows={5}
+          placeholder={DEFAULT_MAIL_NOTICE_TEXT}
+          className="input-blank mt-1.5 w-full rounded-sm px-3.5 py-2.5 text-[13px] leading-relaxed"
+        />
+      </label>
+      <button onClick={() => saveNotice(notice)} disabled={noticeSaving} className="btn btn-ghost mt-3 px-4 py-2 text-[12.5px]">
+        <Icon name="check" size={14} /> Сохранить текст
+      </button>
+    </div>
+
     <div className="sheet p-5 sm:p-6">
       <h2 className="font-display text-lg font-bold">Почта: SMTP-сервер</h2>
       <p className="mt-1 text-[12.5px] text-ink2">
@@ -125,6 +173,7 @@ export default function AdminMailSettings() {
       <button onClick={save} disabled={saving} className="btn btn-blue mt-4 px-5 py-2.5 text-[13px]">
         <Icon name="check" size={14} /> {saving ? "Сохраняем…" : "Сохранить"}
       </button>
+    </div>
     </div>
   );
 }

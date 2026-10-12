@@ -297,7 +297,7 @@ export async function sendSupportSenderTest(to: string): Promise<{ from?: string
 
 // ───────────── фильтр запрещённых слов и контактов ─────────────
 
-export type FilterTarget = "feedback" | "reviews";
+export type FilterTarget = "feedback" | "reviews" | "comments";
 export type FilterRuleKey = "words" | "phones" | "emails" | "links" | "handles";
 
 export interface FilterConfig {
@@ -333,7 +333,7 @@ export const FILTER_RULE_LABEL: Record<FilterRuleKey, string> = {
   links: "Ссылки",
   handles: "@-ники и приглашения в мессенджеры",
 };
-export const FILTER_TARGET_LABEL: Record<FilterTarget, string> = { feedback: "Обращения", reviews: "Отзывы" };
+export const FILTER_TARGET_LABEL: Record<FilterTarget, string> = { feedback: "Обращения", reviews: "Отзывы", comments: "Комментарии к статьям" };
 export const FILTER_KIND_LABEL: Record<FilterViolation["kind"], string> = { word: "слово", phones: "телефон", emails: "почта", links: "ссылка", handles: "ник / мессенджер" };
 
 export async function loadContentFilter(): Promise<{ config: FilterConfig; defaults: { words: string; allow: string; allowedDomains: string }; log: FilterLogItem[] } | null> {

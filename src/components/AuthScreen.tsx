@@ -3,6 +3,7 @@ import { useAuth, type Gender } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { emailProblem, isValidAge, MIN_PASSWORD_LENGTH } from "../lib/validation";
 import { Icon } from "./ui";
+import MailNotice from "./MailNotice";
 import type { View } from "./Header";
 
 const GENDER_OPTS: { v: Gender; l: string }[] = [
@@ -106,6 +107,9 @@ export default function AuthScreen({
             <strong className="text-ink">Демо-режим:</strong> Supabase не подключён, поэтому это локальный гостевой профиль в этом браузере, без проверки пароля. Как только подключишь бэкенд (см. SETUP.md), заработают настоящие аккаунты.
           </p>
         )}
+
+        {/* пока не приходят письма (подтверждение, сброс пароля), честно говорим об этом до отправки формы — /admin → Почта */}
+        <MailNotice className="mt-4" />
 
         {mode === "forgot" && forgotSent ? (
           <>

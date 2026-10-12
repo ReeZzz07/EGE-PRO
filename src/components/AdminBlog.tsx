@@ -17,6 +17,7 @@ import {
   type BlogArticle,
   type BlogArticleInput,
 } from "../lib/blog";
+import { loadAdminEngagement, removeComment, type AdminComment, type EngagementStats } from "../lib/blogEngagement";
 import { Icon, useToast } from "./ui";
 import { SITE_URL } from "../lib/seo";
 import RichTextEditor from "./RichTextEditor";
@@ -172,9 +173,22 @@ export default function AdminBlog() {
   // не часть формы редактирования: планирование доступно и без входа в "Редактировать".
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [scheduleValue, setScheduleValue] = useState("");
+  // просмотры/лайки/репосты/комментарии по статьям и последние комментарии для модерации (docker/api/blogEngagement.js)
+  const [engagement, setEngagement] = useState<Record<string, Omit<EngagementStats, "liked">>>({});
+  const [recentComments, setRecentComments] = useState<AdminComment[]>([]);
 
   const refresh = () => loadAllArticlesAdmin().then((a) => { setArticles(a); setLoading(false); });
   useEffect(() => { refresh(); }, []);
+  const refreshEngagement = () => loadAdminEngagement().then((r) => { if (r) { setEngagement(r.stats); setRecentComments(r.comments); } });
+  useEffect(() => { refreshEngagement(); }, []);
+
+  const deleteComment = async (c: AdminComment) => {
+    if (!window.confirm(`Удалить комментарий пользователя ${c.author}?`)) return;
+    const res = await removeComment(c.id);
+    if (res.error) return push(res.error, "err");
+    push("Комментарий удалён", "ok");
+    refreshEngagement();
+  };
 
   const saveEdit = async (id: string, v: BlogArticleInput) => {
     setSaving(true);
@@ -278,6 +292,11 @@ export default function AdminBlog() {
                 <p className="mt-1 truncate font-mono text-[11.5px] text-ink2">
                   /blog/{a.slug} {a.publishedAt && `· ${new Date(a.publishedAt).toLocaleDateString("ru-RU")}`}
                 </p>
+                {engagement[a.id] && (
+                  <p data-testid={`admin-stats-${a.slug}`} className="mt-1 font-mono text-[11.5px] text-ink2">
+                    Просмотры {engagement[a.id].views} · Лайки {engagement[a.id].likes} · Репосты {engagement[a.id].shares} · Комментарии {engagement[a.id].comments}
+                  </p>
+                )}
                 {schedulingId === a.id && (
                   <div className="mt-2.5 flex flex-wrap items-center gap-2">
                     <input
@@ -340,6 +359,30 @@ export default function AdminBlog() {
         )}
         {articles.length === 0 && <p className="text-[13px] text-ink2">Статей пока нет.</p>}
       </div>
+
+      <section aria-labelledby="blog-comments-mod" className="mt-8">
+        <h3 id="blog-comments-mod" className="font-display text-[15px] font-bold">Последние комментарии</h3>
+        <p className="mt-1 text-[12.5px] text-ink2">Комментарии пишут только зарегистрированные пользователи; ссылки, контакты и запрещённые выражения отсекает фильтр (правила — во вкладке «Обращения», «Фильтр»). Здесь можно удалить любой.</p>
+        {recentComments.length === 0 ? (
+          <p className="mt-3 text-[13px] text-ink2">Комментариев пока нет.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {recentComments.map((c) => (
+              <li key={c.id} data-testid="admin-comment" className="flex flex-wrap items-start justify-between gap-3 border-2 border-ink/15 p-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-[11px] text-ink2">
+                    {c.author} · {c.email} · {new Date(c.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} · к статье «{c.articleTitle}»
+                  </p>
+                  <p className="mt-1 whitespace-pre-line break-words text-[13px]">{c.body}</p>
+                </div>
+                <button onClick={() => deleteComment(c)} className="btn btn-ghost shrink-0 px-3 py-1.5 text-[12px]">
+                  <Icon name="trash" size={13} /> Удалить
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="mt-4">
         {addingNew ? (

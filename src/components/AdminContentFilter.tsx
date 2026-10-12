@@ -10,7 +10,7 @@ import {
 import { useToast } from "./ui";
 
 const RULE_KEYS: FilterRuleKey[] = ["words", "phones", "emails", "links", "handles"];
-const TARGETS: FilterTarget[] = ["feedback", "reviews"];
+const TARGETS: FilterTarget[] = ["feedback", "reviews", "comments"];
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 const label = "font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2";
 

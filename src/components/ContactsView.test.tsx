@@ -225,7 +225,7 @@ describe("AdminFeedback", () => {
       words: "# комментарий\nхуй\n=хер\n",
       allow: "себастьян*\n",
       allowedDomains: "ege-tutor.ru",
-      targets: { feedback: { ...on }, reviews: { ...on } },
+      targets: { feedback: { ...on }, reviews: { ...on }, comments: { ...on } },
     };
     vi.mocked(fb.loadContentFilter).mockResolvedValue({
       config,
@@ -273,7 +273,7 @@ describe("AdminFeedback", () => {
     vi.mocked(fb.loadAdminFeedback).mockResolvedValue(list([]));
     const on = { words: true, phones: true, emails: true, links: true, handles: true };
     vi.mocked(fb.loadContentFilter).mockResolvedValue({
-      config: { enabled: true, words: "хуй\n", allow: "", allowedDomains: "ege-tutor.ru", targets: { feedback: { ...on }, reviews: { ...on } } },
+      config: { enabled: true, words: "хуй\n", allow: "", allowedDomains: "ege-tutor.ru", targets: { feedback: { ...on }, reviews: { ...on }, comments: { ...on } } },
       defaults: { words: "хуй\n", allow: "", allowedDomains: "ege-tutor.ru" },
       log: [
         { id: 2, createdAt: new Date().toISOString(), target: "feedback", field: "message", reasons: ["phones"], snippet: "Звоните мне срочно" },

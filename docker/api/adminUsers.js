@@ -281,6 +281,11 @@ export async function anonymizeUser(id) {
     // ссылки «попросить родителя оплатить» после анонимизации больше не работают (миграция 0041)
     await client.query("delete from public.parent_links where user_id = $1", [id]);
     await client.query("delete from public.parent_email_log where user_id = $1", [id]);
+    // комментарии, лайки, просмотры и репосты под статьями (миграция 0044) — персональные, стираем
+    await client.query("delete from public.blog_comments where user_id = $1", [id]);
+    await client.query("delete from public.blog_article_likes where user_id = $1", [id]);
+    await client.query("delete from public.blog_article_views where user_id = $1", [id]);
+    await client.query("delete from public.blog_article_shares where user_id = $1", [id]);
     await client.query("commit");
     return {};
   } catch (e) {

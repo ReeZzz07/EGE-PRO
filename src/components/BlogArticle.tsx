@@ -6,6 +6,7 @@ import { loadArticleBySlug, markArticleRead, sanitizeArticleHtml, type BlogArtic
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { useAuth } from "../lib/auth";
 import { Icon } from "./ui";
+import ArticleEngagement from "./ArticleEngagement";
 import type { View } from "./Header";
 
 export default function BlogArticle({ slug, onNav }: { slug: string; onNav: (v: View) => void }) {
@@ -67,6 +68,9 @@ export default function BlogArticle({ slug, onNav }: { slug: string; onNav: (v: 
           <div className="article-content mt-6 text-[13.5px]" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(data.content) }} />
         </div>
       </div>
+
+      {/* просмотры, лайки, репосты и комментарии; у черновика (предпросмотр админа) блока нет */}
+      <ArticleEngagement slug={data.slug} title={data.title} published={data.isPublished} onNav={onNav} />
     </div>
   );
 }
