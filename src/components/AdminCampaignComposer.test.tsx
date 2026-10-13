@@ -93,6 +93,8 @@ describe("AdminCampaignComposer", () => {
     // начал, но не завершил платёж: без активной скидки — опрос «что помешало», со скидкой — письмо про скидку
     expect(await pick({ abandoned: "yes" })).toBe("Что помешало оплатить?");
     expect(await pick({ abandoned: "yes", offer_active: "yes" })).toBe("Скидка ещё действует");
+    // скидка уже закончилась — письмо с новой допскидкой
+    expect(await pick({ abandoned: "yes", offer_active: "no" })).toBe("Новая скидка после окончания");
   });
 
   it("заготовка «Что помешало оплатить?»: письмо от имени поддержки, без блока скидки, ведёт на тарифы и уходит с флагом fromSupport", async () => {
@@ -108,6 +110,19 @@ describe("AdminCampaignComposer", () => {
     const arg = vi.mocked(createCampaign).mock.calls[0][0];
     expect(arg.content).toMatchObject({ fromSupport: true, includeOffer: false, ctaPath: "/tariffs" });
     expect(arg.content.bodyText).toMatch(/Попросить родителя оплатить/);
+  });
+
+  it("заготовка «Новая скидка после окончания»: для начавших оплату без активной скидки, с блоком скидки и допскидкой 10% на 72 часа", async () => {
+    vi.mocked(previewCampaign).mockResolvedValue(preview({ count: 12, expiredOffer: 12 }));
+    setup({ filters: { ...EMPTY_USER_FILTERS, funnel: { ...EMPTY_USER_FILTERS.funnel, abandoned: "yes", offer_active: "no" } } });
+    await screen.findByText("Анна Иванова");
+    expect(screen.getByRole("tab", { name: "Новая скидка после окончания" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText(/Тема письма/)).toHaveValue("Новая скидка на тариф ЕГЭ·ПРО — для тебя");
+    expect(screen.getByRole("checkbox", { name: /Показать блок с текущей приветственной скидкой/ })).toBeChecked();
+    expect(screen.getByLabelText(/Скидка, %/)).toHaveValue(10);
+    expect(screen.getByLabelText(/Действует, часов/)).toHaveValue(72);
+    expect(screen.getByLabelText(/Куда ведёт кнопка/)).toHaveValue("/tariffs");
+    expect((screen.getByLabelText(/пустая строка — новый абзац/) as HTMLTextAreaElement).value).toMatch(/приветственная скидка уже закончилась/);
   });
 
   it("заготовка «Скидка тем, кто не купил»: подбирается по фильтру «подтвердил, не оплатил», есть поля дополнительной скидки со сводкой по получателям", async () => {

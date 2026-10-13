@@ -83,7 +83,7 @@ export default function AdminCampaignComposer({ filters, onApplyFilters, onClose
   // заготовку подбираем по фильтру таблицы: не подтвердил почту → ссылка, не прошёл онбординг → анкета,
   // не проходил диагностику → диагностика; иначе пустое «своё письмо» (случайно не отправить чужой текст)
   const [presetId, setPresetId] = useState<CampaignPreset["id"]>(() =>
-    filters.funnel.confirmed === "no" ? "verify" : filters.funnel.confirmed === "yes" && filters.funnel.paid === "no" ? "unpaid_bonus" : filters.funnel.abandoned === "yes" ? (filters.funnel.offer_active === "yes" ? "discount_abandoned" : "payment_survey") : filters.funnel.onboarded === "no" ? "onboarding" : filters.funnel.diagnostic === "no" ? "diagnostic" : "custom"
+    filters.funnel.confirmed === "no" ? "verify" : filters.funnel.confirmed === "yes" && filters.funnel.paid === "no" ? "unpaid_bonus" : filters.funnel.abandoned === "yes" ? (filters.funnel.offer_active === "yes" ? "discount_abandoned" : filters.funnel.offer_active === "no" ? "expired_bonus" : "payment_survey") : filters.funnel.onboarded === "no" ? "onboarding" : filters.funnel.diagnostic === "no" ? "diagnostic" : "custom"
   );
   const [drafts, setDrafts] = useState<Record<string, CampaignContent>>(() => Object.fromEntries(CAMPAIGN_PRESETS.map((p) => [p.id, { ...p.content }])));
   const [excludeRecent, setExcludeRecent] = useState(true);

@@ -164,7 +164,7 @@ export async function cancelCampaign(id: string): Promise<{ error?: string }> {
 // ─────────────── шаблоны-заготовки ───────────────
 
 export interface CampaignPreset {
-  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "payment_survey" | "unpaid_bonus" | "custom";
+  id: "verify" | "onboarding" | "diagnostic" | "discount_abandoned" | "payment_survey" | "unpaid_bonus" | "expired_bonus" | "custom";
   title: string;
   hint: string;
   kind: CampaignKind;
@@ -280,6 +280,30 @@ export const CAMPAIGN_PRESETS: CampaignPreset[] = [
       bonusHours: 72,
     },
     suggested: { funnel: { confirmed: "yes", paid: "no" }, label: "Подтвердил аккаунт — Да, Оплатил тариф — Нет" },
+  },
+  {
+    id: "expired_bonus",
+    title: "Новая скидка после окончания",
+    hint: "Тем, кто начал оплату и не завершил её, а приветственная скидка уже закончилась: в письме сказано, что старая скидка истекла, и предложена новая. Процент и срок новой скидки задаются ниже и начисляются в момент отправки.",
+    kind: "custom",
+    content: {
+      subject: "Новая скидка на тариф ЕГЭ·ПРО — для тебя",
+      eyebrow: "новая скидка",
+      bodyText: `Это команда ЕГЭ·ПРО. Ты уже попробовал(а) возможности нашего репетитора, но это лишь малая часть того, что он умеет. Дай ему поработать в полную силу!
+
+С платным тарифом ИИ-репетитор отвечает на вопросы без дневного лимита: объясняет темы, наводит на решение и помогает заниматься каждый день, сколько нужно. А в тарифах ВУЗ и ВУЗ+ ещё и больше предметов.
+
+Мы помним, что твоя приветственная скидка уже закончилась. Чтобы это не мешало начать, мы приготовили для тебя новую скидку на первую оплату. Она в блоке ниже, вместе со сроком действия.
+
+Оплата разовая, на 30 дней, без автопродления. Если нет карты — на странице тарифов есть кнопка «Попросить родителя оплатить», а ещё можно заплатить через СБП.`,
+      ctaLabel: "Выбрать тариф →",
+      ctaPath: "/tariffs",
+      footer: "Это разовое сообщение от ЕГЭ·ПРО — повторять его мы не будем.",
+      includeOffer: true,
+      bonusPercent: 10,
+      bonusHours: 72,
+    },
+    suggested: { funnel: { abandoned: "yes", offer_active: "no" }, label: "Начал, но не завершил платёж — Да, Скидка ещё активна — Нет" },
   },
   {
     id: "custom",
