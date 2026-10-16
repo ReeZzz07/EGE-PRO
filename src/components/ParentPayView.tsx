@@ -7,6 +7,7 @@ import { getParentPaymentStatus, loadParentView, rub, startParentPayment, type P
 import { reachGoal, reachGoalOnce, trackPurchase } from "../lib/metrika";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
+import { LEVEL_LABEL } from "../lib/diagnostic";
 import { Icon } from "./ui";
 import type { View } from "./Header";
 
@@ -167,6 +168,27 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
         </p>
       )}
 
+      {view.diagnostic && (view.diagnostic.level || view.diagnostic.weakTopics.length > 0) && (
+        <div data-testid="parent-diagnostic" className="mt-4 border-2 border-ink/15 p-4">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ink2">
+            Результат диагностики{view.diagnostic.subjectName ? ` · ${view.diagnostic.subjectName}` : ""}
+          </p>
+          {view.diagnostic.level && (
+            <p className="mt-2 text-[14px]">
+              Уровень: <strong>{LEVEL_LABEL[view.diagnostic.level]}</strong>
+              {view.diagnostic.scoreMin != null && view.diagnostic.scoreMax != null ? ` · ориентировочно ${view.diagnostic.scoreMin}–${view.diagnostic.scoreMax} баллов` : ""}
+            </p>
+          )}
+          {view.diagnostic.weakTopics.length > 0 && (
+            <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
+              Над чем стоит поработать: <strong className="text-ink">{view.diagnostic.weakTopics.join(", ")}</strong>. На бесплатном тарифе ИИ-репетитор отвечает три раза в день, на платном лимита нет:
+              эти темы можно разбирать по шагам каждый день.
+            </p>
+          )}
+          <p className="mt-2 text-[11.5px] text-ink2">Это грубая оценка по короткой диагностике, не гарантия результата.</p>
+        </div>
+      )}
+
       <h2 className="font-display mt-8 text-lg font-black">Выберите тариф</h2>
       {view.discountPercent ? (
         <p className="mt-1 text-[13px] text-ink2">
@@ -226,7 +248,7 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
         <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Платёж разовый, на 30 дней. Автопродления нет, карту мы не сохраняем.</li>
         <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Оплата проходит на стороне ЮKassa, данные карты мы не видим.</li>
         <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Тариф включается ребёнку сразу после оплаты.</li>
-        <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Родитель видит только имя ребёнка и счётчики занятий, в аккаунт зайти нельзя.</li>
+        <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Родитель видит только имя ребёнка, счётчики занятий и итог диагностики, в аккаунт зайти нельзя.</li>
       </ul>
 
       <p className="mt-6 text-[12px] leading-relaxed text-ink2">

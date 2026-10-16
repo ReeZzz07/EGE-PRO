@@ -12,10 +12,11 @@ async function postJson(path: string, body: unknown) {
   return { ok: resp.ok, json };
 }
 
-/** Ссылка для родителя (одна действующая на ученика). */
-export async function createParentLink(): Promise<{ url?: string; error?: string }> {
+/** Ссылка для родителя (одна действующая на ученика). place — откуда нажата кнопка (для статистики в админке:
+ *  "ai-limit", "diagnostic-result", "tariffs", "reminder"…; «paywall:…» сервер сводит к "paywall"). */
+export async function createParentLink(place?: string): Promise<{ url?: string; error?: string }> {
   try {
-    const { ok, json } = await postJson("/parent-link", {});
+    const { ok, json } = await postJson("/parent-link", place ? { place } : {});
     return ok ? { url: json.url } : { error: json.error ?? "Не удалось создать ссылку" };
   } catch {
     return { error: "Нет связи с сервером — попробуй ещё раз" };
@@ -33,6 +34,27 @@ export async function emailParent(email: string): Promise<{ ok?: boolean; error?
     return ok ? { ok: true } : { error: json.error ?? "Не удалось отправить письмо" };
   } catch {
     return { error: "Нет связи с сервером — попробуй ещё раз" };
+  }
+}
+
+/** none — ссылку не отправляли; sent — отправили недавно; waiting — отправили давно, родитель не открыл; opened — открыл; paid — оплатил. */
+export type ParentLinkState = "none" | "sent" | "waiting" | "opened" | "paid";
+
+export interface ParentLinkStatus {
+  state: ParentLinkState;
+  sentAt?: string;
+  expiresAt?: string;
+}
+
+/** Состояние ссылки ученика (для плашки-напоминания). Любой сбой — «ничего не отправляли»: плашка просто не покажется. */
+export async function getParentLinkStatus(): Promise<ParentLinkStatus> {
+  try {
+    const resp = await apiFetch("/parent-link/status");
+    if (!resp.ok) return { state: "none" };
+    const json = (await resp.json()) as Partial<ParentLinkStatus>;
+    return { state: json.state ?? "none", sentAt: json.sentAt, expiresAt: json.expiresAt };
+  } catch {
+    return { state: "none" };
   }
 }
 
@@ -56,6 +78,16 @@ export interface ParentTariff {
   features: string[];
 }
 
+/** Итог последней диагностики ученика для страницы родителя (docker/api/parentPay.js, diagnosticSummary). */
+export interface ParentDiagnostic {
+  subject: string | null;
+  subjectName: string | null;
+  level: "low" | "mid" | "high" | null;
+  scoreMin: number | null;
+  scoreMax: number | null;
+  weakTopics: string[];
+}
+
 export interface ParentPublicView {
   expired: boolean;
   studentName?: string | null;
@@ -63,6 +95,7 @@ export interface ParentPublicView {
   currentTariffId?: string;
   tasksSolved?: number;
   diagnosticDone?: boolean;
+  diagnostic?: ParentDiagnostic | null;
   discountPercent?: number | null;
   discountUntil?: string | null;
   tariffs?: ParentTariff[];

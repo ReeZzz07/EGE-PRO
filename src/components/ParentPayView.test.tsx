@@ -45,6 +45,24 @@ describe("ParentPayView", () => {
     expect(screen.getByRole("radio", { name: /ВУЗ/ })).toBeChecked();
   });
 
+  it("итог диагностики ребёнка: предмет, уровень, балл и слабые темы; без итога блока нет", async () => {
+    vi.mocked(api.loadParentView).mockResolvedValue({
+      view: { ...VIEW, diagnostic: { subject: "math", subjectName: "Математика (профиль)", level: "mid", scoreMin: 50, scoreMax: 64, weakTopics: ["производная", "стереометрия"] } },
+    });
+    const { unmount } = render(<ParentPayView token={TOKEN} onNav={vi.fn()} />);
+    const box = await screen.findByTestId("parent-diagnostic");
+    expect(box).toHaveTextContent("Математика (профиль)");
+    expect(box).toHaveTextContent(/Уровень:\s*средний/);
+    expect(box).toHaveTextContent("ориентировочно 50–64 баллов");
+    expect(box).toHaveTextContent("производная, стереометрия");
+    expect(box).toHaveTextContent("не гарантия");
+    unmount();
+    vi.mocked(api.loadParentView).mockResolvedValue({ view: { ...VIEW, diagnostic: null } });
+    render(<ParentPayView token={TOKEN} onNav={vi.fn()} />);
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByTestId("parent-diagnostic")).not.toBeInTheDocument();
+  });
+
   it("кнопки оплаты недоступны, пока не указана почта для чека; потом СБП идёт с выбранным тарифом и способом", async () => {
     render(<ParentPayView token={TOKEN} onNav={vi.fn()} />);
     await screen.findByRole("heading", { level: 1 });

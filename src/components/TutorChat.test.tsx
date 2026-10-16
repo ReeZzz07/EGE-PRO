@@ -13,6 +13,8 @@ vi.mock("../lib/store", () => ({
 vi.mock("../lib/aiTutor", () => ({ loadAiQuota: vi.fn(), callAiTutor: vi.fn() }));
 // приглашение оставить отзыв требует AuthProvider — к квоте чата отношения не имеет (см. ReviewView.test.tsx)
 vi.mock("./ReviewPrompt", () => ({ default: () => null }));
+// кнопка «Попросить родителя оплатить» тоже требует AuthProvider; её собственное поведение — в ParentPayLink.test.tsx
+vi.mock("./ParentPayLink", () => ({ default: ({ place }: { place: string }) => <button data-testid="parent-pay-link">родитель · {place}</button> }));
 
 describe("TutorChat — бейдж квоты", () => {
   it("безлимитный тариф — обычная подпись, без упоминания лимита", async () => {
@@ -46,6 +48,17 @@ describe("TutorChat — бейдж квоты", () => {
     expect(await screen.findByText("Бесплатные обращения на сегодня закончились")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Открыть без лимита" }));
     expect(onNavigate).toHaveBeenCalledWith("tariffs");
+  });
+
+  it("free, лимит исчерпан — рядом с «без лимита» есть «попросить родителя оплатить» с местом ai-limit; при остатке её нет", async () => {
+    vi.mocked(loadAiQuota).mockResolvedValue({ limited: true, limit: 3, used: 3, remaining: 0 });
+    const { unmount } = render(<TutorChat />);
+    expect(await screen.findByTestId("parent-pay-link")).toHaveTextContent("ai-limit");
+    unmount();
+    vi.mocked(loadAiQuota).mockResolvedValue({ limited: true, limit: 3, used: 1, remaining: 2 });
+    render(<TutorChat />);
+    await screen.findByRole("button", { name: /осталось 2 из 3 на сегодня/ });
+    expect(screen.queryByTestId("parent-pay-link")).not.toBeInTheDocument();
   });
 
   it("free, остаток есть — блока про исчерпанный лимит нет", async () => {

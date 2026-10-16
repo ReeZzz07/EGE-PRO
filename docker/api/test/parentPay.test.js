@@ -12,6 +12,11 @@ import {
   sendParentEmail,
   buildParentEmail,
   getParentPayStats,
+  getLinkStatus,
+  findParentWaitingCandidates,
+  diagnosticSummary,
+  normalizePlace,
+  REMIND_AFTER_HOURS,
   firstName,
   isValidToken,
   linkUrl,
@@ -203,5 +208,154 @@ test("getParentPayStats: считает созданные, поделились
     assert.equal(after.revenue - before.revenue, 2793);
   } finally {
     await deleteTestUser(userId);
+  }
+});
+
+test("normalizePlace: известные места как есть, «paywall:…» сводится к paywall, незнакомое — other, пусто — null", () => {
+  assert.equal(normalizePlace("ai-limit"), "ai-limit");
+  assert.equal(normalizePlace("diagnostic-result"), "diagnostic-result");
+  assert.equal(normalizePlace("paywall:Чтобы план не упёрся в лимит"), "paywall");
+  assert.equal(normalizePlace("  TARIFFS "), "tariffs");
+  assert.equal(normalizePlace("что-то-новое"), "other");
+  assert.equal(normalizePlace(""), null);
+  assert.equal(normalizePlace(undefined), null);
+});
+
+test("getOrCreateLink с местом: «запросил» пишется по месту, повтор того же места за 10 минут не считается, без места — не пишется", async () => {
+  const userId = await createTestUser();
+  try {
+    const first = await getOrCreateLink(userId); // без места: например, пересылка из recordShare
+    const count = async (place) => (await pool.query("select count(*)::int as n from public.parent_link_events where link_id = $1 and kind = 'requested' and place = $2", [first.id, place])).rows[0].n;
+    assert.equal((await pool.query("select count(*)::int as n from public.parent_link_events where link_id = $1 and kind = 'requested'", [first.id])).rows[0].n, 0);
+    await getOrCreateLink(userId, "ai-limit");
+    await getOrCreateLink(userId, "ai-limit");
+    await getOrCreateLink(userId, "diagnostic-result");
+    await getOrCreateLink(userId, "paywall:Любая подпись");
+    await getOrCreateLink(userId, "выдумка");
+    assert.equal(await count("ai-limit"), 1);
+    assert.equal(await count("diagnostic-result"), 1);
+    assert.equal(await count("paywall"), 1);
+    assert.equal(await count("other"), 1);
+    // через 10 минут то же место считается заново
+    await pool.query("update public.parent_link_events set created_at = now() - interval '11 minutes' where link_id = $1 and kind = 'requested' and place = 'ai-limit'", [first.id]);
+    await getOrCreateLink(userId, "ai-limit");
+    assert.equal(await count("ai-limit"), 2);
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("diagnosticSummary: только безопасное для родителя — уровень из списка, числа, до трёх слабых тем; мусор отбрасывается", () => {
+  assert.equal(diagnosticSummary(null), null);
+  assert.deepEqual(diagnosticSummary({ subject: "math", result: { level: "mid", estimatedScoreMin: 52.4, estimatedScoreMax: 68, weakTopics: ["производная", "стереометрия", "логарифмы", "вероятность"], strongTopics: ["секрет"] } }), {
+    subject: "math",
+    subjectName: "Математика (профиль)",
+    level: "mid",
+    scoreMin: 52,
+    scoreMax: 68,
+    weakTopics: ["производная", "стереометрия", "логарифмы"],
+  });
+  assert.deepEqual(diagnosticSummary({ subject: "rus", result: { level: "сверхразум", estimatedScoreMin: "abc", weakTopics: [1, "", "  ", { x: 1 }] } }), { subject: "rus", subjectName: "Русский язык", level: null, scoreMin: null, scoreMax: null, weakTopics: [] });
+  assert.deepEqual(diagnosticSummary({ subject: "rus", result: null }), { subject: "rus", subjectName: "Русский язык", level: null, scoreMin: null, scoreMax: null, weakTopics: [] });
+});
+
+test("getPublicView: родитель видит итог последней диагностики ребёнка, а ответы и сильные темы — нет", async () => {
+  const userId = await createTestUser();
+  try {
+    await pool.query("insert into public.diagnostics (user_id, subject, answers, result, finished_at) values ($1, 'math', '[]', $2, now() - interval '2 days')", [
+      userId,
+      JSON.stringify({ level: "low", estimatedScoreMin: 20, estimatedScoreMax: 30, weakTopics: ["старая тема"] }),
+    ]);
+    await pool.query("insert into public.diagnostics (user_id, subject, answers, result) values ($1, 'rus', '[{\"секрет\":1}]', $2)", [
+      userId,
+      JSON.stringify({ level: "mid", estimatedScoreMin: 50, estimatedScoreMax: 64, weakTopics: ["пунктуация", "орфография"], strongTopics: ["секрет"] }),
+    ]);
+    const link = await getOrCreateLink(userId);
+    const view = await getPublicView(link.token);
+    assert.equal(view.diagnosticDone, true);
+    assert.deepEqual(view.diagnostic, { subject: "rus", subjectName: "Русский язык", level: "mid", scoreMin: 50, scoreMax: 64, weakTopics: ["пунктуация", "орфография"] });
+    assert.ok(!JSON.stringify(view).includes("секрет"));
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("getLinkStatus: none → sent → waiting (через сутки без открытия) → opened → paid", async () => {
+  const userId = await createTestUser();
+  try {
+    assert.equal((await getLinkStatus(userId)).state, "none");
+    const link = await getOrCreateLink(userId);
+    assert.equal((await getLinkStatus(userId)).state, "none", "ссылку создали, но не отправили");
+    await recordShare(userId, "whatsapp");
+    assert.equal((await getLinkStatus(userId)).state, "sent");
+    await pool.query("update public.parent_link_events set created_at = now() - make_interval(hours => $2) where link_id = $1 and kind = 'shared'", [link.id, REMIND_AFTER_HOURS + 1]);
+    const waiting = await getLinkStatus(userId);
+    assert.equal(waiting.state, "waiting");
+    assert.ok(waiting.sentAt && waiting.expiresAt);
+    await getPublicView(link.token);
+    assert.equal((await getLinkStatus(userId)).state, "opened");
+    const payId = await createTestPayment(userId, { status: "succeeded" });
+    await pool.query("update public.payments set parent_link_id = $2 where id = $1", [payId, link.id]);
+    assert.equal((await getLinkStatus(userId)).state, "paid");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("findParentWaitingCandidates: отправил 24–72 часа назад, не открыли, тариф free, почта подтверждена — и только один раз", async () => {
+  const userId = await createTestUser();
+  const ids = () => findParentWaitingCandidates(500).then((rows) => rows.map((r) => r.id));
+  const backdate = (link, hours) => pool.query("update public.parent_link_events set created_at = now() - make_interval(hours => $2) where link_id = $1 and kind = 'shared'", [link.id, hours]);
+  try {
+    await pool.query("update auth.users set email_confirmed_at = now() where id = $1", [userId]);
+    const link = await getOrCreateLink(userId);
+    await recordShare(userId, "telegram");
+    assert.ok(!(await ids()).includes(userId), "отправлено только что — рано");
+    await backdate(link, 30);
+    assert.ok((await ids()).includes(userId));
+    await backdate(link, 100);
+    assert.ok(!(await ids()).includes(userId), "прошло больше трёх суток — поздно");
+    await backdate(link, 30);
+
+    await pool.query("update public.profiles set tariff_id = 'attestat' where id = $1", [userId]);
+    assert.ok(!(await ids()).includes(userId), "тариф уже платный");
+    await pool.query("update public.profiles set tariff_id = 'free' where id = $1", [userId]);
+    assert.ok((await ids()).includes(userId));
+
+    await pool.query("insert into public.lifecycle_emails (user_id, kind) values ($1, 'parent_waiting')", [userId]);
+    assert.ok(!(await ids()).includes(userId), "напоминание уже отправлялось");
+    await pool.query("delete from public.lifecycle_emails where user_id = $1", [userId]);
+
+    await getPublicView(link.token);
+    assert.ok(!(await ids()).includes(userId), "родитель открыл ссылку");
+  } finally {
+    await deleteTestUser(userId);
+  }
+});
+
+test("getParentPayStats: разбивка по местам (запросили → открыли → оплатили) и число напоминаний", async () => {
+  const a = await createTestUser();
+  const b = await createTestUser();
+  try {
+    const before = await getParentPayStats();
+    const get = (st, place) => st.places.find((x) => x.place === place) ?? { requested: 0, opened: 0, paid: 0 };
+    const linkA = await getOrCreateLink(a, "ai-limit");
+    const linkB = await getOrCreateLink(b, "ai-limit");
+    await getOrCreateLink(b, "diagnostic-result");
+    await getPublicView(linkA.token);
+    const payId = await createTestPayment(a, { status: "succeeded", amountRub: 1990 });
+    await pool.query("update public.payments set parent_link_id = $2 where id = $1", [payId, linkA.id]);
+    await pool.query("insert into public.lifecycle_emails (user_id, kind) values ($1, 'parent_waiting')", [b]);
+    const after = await getParentPayStats();
+    assert.equal(get(after, "ai-limit").requested - get(before, "ai-limit").requested, 2);
+    assert.equal(get(after, "ai-limit").opened - get(before, "ai-limit").opened, 1);
+    assert.equal(get(after, "ai-limit").paid - get(before, "ai-limit").paid, 1);
+    assert.equal(get(after, "diagnostic-result").requested - get(before, "diagnostic-result").requested, 1);
+    assert.equal(get(after, "diagnostic-result").opened - get(before, "diagnostic-result").opened, 0);
+    assert.equal(after.reminders - before.reminders, 1);
+    assert.ok(linkB.id);
+  } finally {
+    await deleteTestUser(a);
+    await deleteTestUser(b);
   }
 });

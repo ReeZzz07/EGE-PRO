@@ -6,6 +6,7 @@
 //    вовсе (см. разбор воронки 26.09.2026: 11 реальных пользователей дошли до плана, ни один не
 //    получил ни одного письма);
 //  • payment_abandoned — тому, кто начал оплату тарифа, но не довёл её до конца;
+//  • parent_waiting — ученику, который отправил родителю ссылку на оплату, а родитель её не открыл (через 1–3 суток);
 //  • review_request — через сутки-неделю после того, как человек выполнил условия для отзыва (онбординг,
 //    диагностика, 5 обращений к репетитору — см. reviews.js) и так и не написал его; платным тоже;
 //  • expiring:<дата> / expired:<дата> — платному пользователю за 3 дня до окончания тарифа и в первые
@@ -16,27 +17,13 @@
 // продублирует письмо; цена этого — при сбое SMTP письмо не повторяется (лучше потерять напоминание,
 // чем засыпать человека копиями). Отключить целиком — переменная окружения LIFECYCLE_EMAILS=off.
 import { pool } from "./db.js";
-import { sendActivationEmail, sendPlanNudgeEmail, sendPaymentAbandonedEmail, sendSubscriptionExpiryEmail, sendReviewRequestEmail } from "./lifecycleEmails.js";
+import { sendActivationEmail, sendPlanNudgeEmail, sendPaymentAbandonedEmail, sendSubscriptionExpiryEmail, sendReviewRequestEmail, sendParentWaitingEmail } from "./lifecycleEmails.js";
+import { findParentWaitingCandidates } from "./parentPay.js";
+import { SUBJECT_NAMES } from "./subjectNames.js";
 import { REQUIRED_AI_REQUESTS } from "./reviews.js";
 import { getSubscription } from "./subscription.js";
 import { getWelcomeOffer } from "./offers.js";
 
-// Только для текста письма (не для логики предмета нигде больше в backend) — те же названия, что в
-// src/data/tasks.ts SUBJECTS[...].name, но этот файл фронтенду не доступен напрямую из docker/api.
-const SUBJECT_NAMES = {
-  math: "Математика (профиль)",
-  rus: "Русский язык",
-  inf: "Информатика",
-  fiz: "Физика",
-  soc: "Обществознание",
-  bio: "Биология",
-  eng: "Английский язык",
-  geo: "География",
-  chem: "Химия",
-  hist: "История",
-  lit: "Литература",
-  math_base: "Математика (базовый уровень)",
-};
 
 const BATCH = 30;
 const TICK_MS = 15 * 60 * 1000;
@@ -196,9 +183,9 @@ async function sendExpiryBatch(expired, siteUrl) {
 }
 
 export async function runLifecycleEmails({ ignoreQuietHours = false } = {}) {
-  if (!ignoreQuietHours && !inSendingWindow()) return { activation: 0, planNudge: 0, abandoned: 0, review: 0, expiry: 0 };
+  if (!ignoreQuietHours && !inSendingWindow()) return { activation: 0, planNudge: 0, abandoned: 0, parent: 0, review: 0, expiry: 0 };
   const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
-  const sent = { activation: 0, planNudge: 0, abandoned: 0, review: 0, expiry: 0 };
+  const sent = { activation: 0, planNudge: 0, abandoned: 0, parent: 0, review: 0, expiry: 0 };
 
   for (const c of await findActivationCandidates()) {
     if (!(await claim(c.id, "activation_d1"))) continue;
@@ -237,6 +224,16 @@ export async function runLifecycleEmails({ ignoreQuietHours = false } = {}) {
     }
   }
 
+  for (const c of await findParentWaitingCandidates(BATCH)) {
+    if (!(await claim(c.id, "parent_waiting"))) continue;
+    try {
+      await sendParentWaitingEmail(c.email, { fullName: c.full_name, siteUrl, offer: await getWelcomeOffer(c.id) });
+      sent.parent++;
+    } catch (e) {
+      console.warn("не удалось отправить напоминание про ссылку родителю (parent_waiting):", e?.message ?? e);
+    }
+  }
+
   for (const c of await findReviewRequestCandidates()) {
     if (!(await claim(c.id, "review_request"))) continue;
     try {
@@ -249,8 +246,8 @@ export async function runLifecycleEmails({ ignoreQuietHours = false } = {}) {
 
   sent.expiry = (await sendExpiryBatch(false, siteUrl)) + (await sendExpiryBatch(true, siteUrl));
 
-  if (sent.activation || sent.planNudge || sent.abandoned || sent.review || sent.expiry)
-    console.log(`[lifecycle] отправлено: напоминаний ${sent.activation}, про план ${sent.planNudge}, о брошенной оплате ${sent.abandoned}, просьб об отзыве ${sent.review}, о сроке тарифа ${sent.expiry}`);
+  if (sent.activation || sent.planNudge || sent.abandoned || sent.parent || sent.review || sent.expiry)
+    console.log(`[lifecycle] отправлено: напоминаний ${sent.activation}, про план ${sent.planNudge}, о брошенной оплате ${sent.abandoned}, про ссылку родителю ${sent.parent}, просьб об отзыве ${sent.review}, о сроке тарифа ${sent.expiry}`);
   return sent;
 }
 

@@ -1,4 +1,5 @@
 import ReviewPrompt from "./ReviewPrompt";
+import ParentPayLink from "./ParentPayLink";
 import { useEffect, useRef, useState } from "react";
 import type { EgeTask } from "../data/tasks";
 import { taskById, SUBJECTS } from "../data/tasks";
@@ -303,6 +304,7 @@ export default function TutorChat({
             <button onClick={() => onNavigate?.("tariffs")} className="mt-2.5 rounded-sm bg-hl px-3.5 py-2 text-[12.5px] font-bold text-night transition hover:brightness-110">
               Открыть без лимита
             </button>
+            <ParentPayLink place="ai-limit" className="mt-2.5 block text-[12.5px] font-bold text-paper/70 underline decoration-dotted underline-offset-2 hover:text-hl" />
           </div>
         )}
         {!examMode && !compact && <ReviewPrompt variant="strip" onOpen={() => onNavigate?.("review")} />}

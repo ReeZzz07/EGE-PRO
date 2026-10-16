@@ -107,6 +107,7 @@ export type GoalName =
   | "offer_seen"
   | "parent_link_shared"
   | "parent_email_sent"
+  | "parent_reminder_seen"
   | "parent_page_opened"
   | "parent_pay_start";
 

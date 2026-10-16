@@ -64,7 +64,7 @@ import { previewRecipients, createCampaign, cancelCampaign, listCampaigns, getCa
 import { KINDS as LIFECYCLE_KINDS, TEMPLATES as LIFECYCLE_TEMPLATES, resolveLifecycleTemplates, buildSampleEmail, offerBlock } from "./lifecycleEmails.js";
 import { getSubscription } from "./subscription.js";
 import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook, getPaymentStatus, getPaymentSummary } from "./payments.js";
-import { getOrCreateLink, recordShare, sendParentEmail, getPublicView, startParentPayment, getParentPaymentStatus, getParentPayStats, linkUrl, isValidToken } from "./parentPay.js";
+import { getOrCreateLink, getLinkStatus, recordShare, sendParentEmail, getPublicView, startParentPayment, getParentPaymentStatus, getParentPayStats, linkUrl, isValidToken } from "./parentPay.js";
 import { createActionToken, consumeActionToken, inspectActionToken } from "./authTokens.js";
 import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, sendMail, resolveWelcomeEmailSettings } from "./mailer.js";
 
@@ -1274,8 +1274,16 @@ app.post("/parent-link", authMiddleware, paymentsLimiter, async (req, res) => {
   const siteUrl = siteUrlOrFail(res);
   if (!siteUrl) return;
   try {
-    const link = await getOrCreateLink(req.user.sub);
+    const link = await getOrCreateLink(req.user.sub, req.body?.place);
     res.json({ url: linkUrl(siteUrl, link.token), expiresAt: link.expiresAt });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/parent-link/status", authMiddleware, paymentsLimiter, async (req, res) => {
+  try {
+    res.json(await getLinkStatus(req.user.sub));
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }

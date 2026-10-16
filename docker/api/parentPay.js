@@ -3,8 +3,10 @@
 // выбирает тариф и платит картой или через СБП. Платёж записывается на аккаунт ученика (тариф включается
 // ему), чек уходит родителю. Миграция 0041_parent_pay.sql; сам платёж — payments.js (initiatePayment).
 //
-// Безопасность: по ссылке можно только оплатить тариф этому ученику и увидеть его имя и два счётчика
-// (решённых заданий, пройдена ли диагностика). Ссылка живёт 14 дней. Письма родителю — только по
+// Безопасность: по ссылке можно только оплатить тариф этому ученику и увидеть его имя, счётчик решённых
+// заданий и краткий итог последней диагностики (уровень, ориентировочный балл, до трёх слабых тем) — это
+// то, ради чего родитель решает платить; ученик знает об этом (см. подсказку в окне «Попросить родителя»).
+// Ссылка живёт 14 дней. Письма родителю — только по
 // действию ученика, не чаще раза в час, не больше трёх в сутки и трёх на один адрес; адрес хранится
 // хешем (нужен только для лимитов), в письме сказано, как отказаться.
 import crypto from "node:crypto";
@@ -13,13 +15,25 @@ import { initiatePayment, getPaymentStatus, getPaymentSummary, priceWithDiscount
 import { getWelcomeOffer } from "./offers.js";
 import { sendMail, escapeHtml, wrapBrandedHtml } from "./mailer.js";
 import { emailProblem, normalizeEmail } from "./validators.js";
+import { SUBJECT_NAMES } from "./subjectNames.js";
 
 export const LINK_TTL_DAYS = 14;
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 export const SHARE_CHANNELS = ["copy", "whatsapp", "telegram", "email", "other"];
+/** Откуда ученик нажал «Попросить родителя оплатить» (для статистики в админке). Неизвестное — "other". */
+export const PLACES = ["tariffs", "ai-limit", "diagnostic-result", "payment-canceled", "reminder", "paywall"];
+/** Метка места от клиента → из списка или "other"; пусто — null (событие «запросил» не пишем). Часть после «:» отбрасываем. */
+export function normalizePlace(place) {
+  const s = String(place ?? "").split(":")[0].trim().toLowerCase();
+  if (!s) return null;
+  return PLACES.includes(s) ? s : "other";
+}
 const MAX_EMAILS_PER_DAY = 3;
 const MAX_EMAILS_PER_ADDRESS = 3;
 const EMAIL_COOLDOWN_MS = 60 * 60 * 1000;
+/** Через сколько часов после отправки ссылки, если родитель её не открыл, напоминаем ученику (плашка и письмо). */
+export const REMIND_AFTER_HOURS = 24;
+const REMIND_MAX_HOURS = 72;
 
 const hashEmail = (email) => crypto.createHash("sha256").update(normalizeEmail(email)).digest("hex");
 
@@ -37,13 +51,30 @@ export function linkUrl(siteUrl, token) {
   return `${siteUrl}/pay-for/${token}`;
 }
 
-async function logEvent(linkId, kind, channel = null) {
-  await pool.query("insert into public.parent_link_events (link_id, kind, channel) values ($1, $2, $3)", [linkId, kind, channel]);
+async function logEvent(linkId, kind, channel = null, place = null) {
+  await pool.query("insert into public.parent_link_events (link_id, kind, channel, place) values ($1, $2, $3, $4)", [linkId, kind, channel, place]);
+}
+
+/** «Ученик нажал кнопку в таком-то месте»: повтор того же места на той же ссылке в течение 10 минут не считаем. */
+async function logRequest(linkId, place) {
+  await pool.query(
+    `insert into public.parent_link_events (link_id, kind, place)
+     select $1, 'requested', $2
+      where not exists (select 1 from public.parent_link_events where link_id = $1 and kind = 'requested' and place = $2 and created_at > now() - interval '10 minutes')`,
+    [linkId, place]
+  );
 }
 
 /** Действующая ссылка ученика или новая. Одна живая на ученика: повторное нажатие «Попросить родителя»
  *  даёт ту же ссылку, а не плодит новые. */
-export async function getOrCreateLink(userId) {
+export async function getOrCreateLink(userId, place = null) {
+  const link = await findOrCreateLink(userId);
+  const p = normalizePlace(place);
+  if (p) await logRequest(link.id, p);
+  return link;
+}
+
+async function findOrCreateLink(userId) {
   const cur = await pool.query(
     "select id, token, expires_at from public.parent_links where user_id = $1 and expires_at > now() + interval '1 day' order by created_at desc limit 1",
     [userId]
@@ -78,13 +109,29 @@ async function findLink(token) {
   return r;
 }
 
+const LEVELS = ["low", "mid", "high"];
+const num = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Math.round(Number(v)) : null);
+
+/** Краткий итог диагностики из строки diagnostics (result — jsonb, что угодно): только то, что безопасно показать родителю. */
+export function diagnosticSummary(row) {
+  if (!row) return null;
+  const r = row.result && typeof row.result === "object" ? row.result : {};
+  return {
+    subject: typeof row.subject === "string" ? row.subject : null,
+    subjectName: SUBJECT_NAMES[row.subject] ?? null,
+    level: LEVELS.includes(r.level) ? r.level : null,
+    scoreMin: num(r.estimatedScoreMin),
+    scoreMax: num(r.estimatedScoreMax),
+    weakTopics: Array.isArray(r.weakTopics) ? r.weakTopics.filter((t) => typeof t === "string" && t.trim()).slice(0, 3).map((t) => t.slice(0, 80)) : [],
+  };
+}
+
 async function studentStats(userId) {
-  const { rows } = await pool.query(
-    `select (select count(*) from public.attempts where user_id = $1)::int as tasks,
-            exists(select 1 from public.diagnostics where user_id = $1) as diagnostic`,
-    [userId]
-  );
-  return { tasksSolved: rows[0]?.tasks ?? 0, diagnosticDone: !!rows[0]?.diagnostic };
+  const [counts, diag] = await Promise.all([
+    pool.query("select count(*)::int as tasks from public.attempts where user_id = $1", [userId]),
+    pool.query("select subject, result from public.diagnostics where user_id = $1 order by finished_at desc limit 1", [userId]),
+  ]);
+  return { tasksSolved: counts.rows[0]?.tasks ?? 0, diagnosticDone: !!diag.rows[0], diagnostic: diagnosticSummary(diag.rows[0]) };
 }
 
 /** Платные тарифы с итоговыми ценами для этого ученика (персональная скидка и приветственный оффер
@@ -131,6 +178,48 @@ export async function getPublicView(token) {
     ...stats,
     ...quotes,
   };
+}
+
+/** Состояние ссылки для ученика: none — не отправлял; sent — отправил меньше суток назад; waiting — отправил давно, а родитель
+ *  так и не открыл (пора напомнить); opened — родитель смотрит; paid — оплатил. Для плашки на главной (ParentLinkReminder.tsx). */
+export async function getLinkStatus(userId) {
+  const { rows } = await pool.query(
+    `select l.expires_at,
+            (select max(e.created_at) from public.parent_link_events e where e.link_id = l.id and e.kind in ('shared', 'email_sent')) as sent_at,
+            exists(select 1 from public.parent_link_events e where e.link_id = l.id and e.kind = 'opened') as opened,
+            exists(select 1 from public.payments p where p.parent_link_id = l.id and p.status = 'succeeded') as paid
+       from public.parent_links l
+      where l.user_id = $1 and l.expires_at > now()
+      order by l.created_at desc limit 1`,
+    [userId]
+  );
+  const r = rows[0];
+  if (!r || !r.sent_at) return { state: "none" };
+  if (r.paid) return { state: "paid" };
+  if (r.opened) return { state: "opened" };
+  const hours = (Date.now() - new Date(r.sent_at).getTime()) / 3600000;
+  return { state: hours >= REMIND_AFTER_HOURS ? "waiting" : "sent", sentAt: r.sent_at, expiresAt: r.expires_at };
+}
+
+/** Кому напомнить письмом: отправил ссылку 24–72 часа назад, родитель не открыл, платного тарифа нет, ссылка ещё поживёт. */
+export async function findParentWaitingCandidates(limit = 30) {
+  const { rows } = await pool.query(
+    `select u.id, u.email, p.full_name
+       from public.parent_links l
+       join auth.users u on u.id = l.user_id
+       join public.profiles p on p.id = u.id
+      where l.expires_at > now() + interval '2 days'
+        and u.email_confirmed_at is not null
+        and p.anonymized_at is null and not p.is_admin and p.tariff_id = 'free'
+        and (select max(e.created_at) from public.parent_link_events e where e.link_id = l.id and e.kind in ('shared', 'email_sent'))
+              between now() - interval '${REMIND_MAX_HOURS} hours' and now() - interval '${REMIND_AFTER_HOURS} hours'
+        and not exists (select 1 from public.parent_link_events e where e.link_id = l.id and e.kind = 'opened')
+        and not exists (select 1 from public.lifecycle_emails el where el.user_id = u.id and el.kind = 'parent_waiting')
+      order by l.created_at
+      limit $1`,
+    [limit]
+  );
+  return rows;
 }
 
 /** Платёж родителя: тариф включится ученику, чек уйдёт на email родителя. */
@@ -279,5 +368,30 @@ export async function getParentPayStats({ from, to } = {}) {
          from public.payments where parent_link_id is not null and status = 'succeeded'`
     )
   ).rows[0];
-  return { ...ev, paid: pay.paid, revenue: pay.revenue };
+  const placeParams = params.slice();
+  const places = (
+    await pool.query(
+      `select e.place,
+              count(distinct e.link_id)::int as requested,
+              count(distinct e.link_id) filter (where exists (select 1 from public.parent_link_events o where o.link_id = e.link_id and o.kind = 'opened'))::int as opened,
+              count(distinct e.link_id) filter (where exists (select 1 from public.payments p where p.parent_link_id = e.link_id and p.status = 'succeeded'))::int as paid
+         from public.parent_link_events e
+        where e.kind = 'requested' and ${w}
+        group by e.place
+        order by requested desc, e.place`,
+      placeParams
+    )
+  ).rows;
+  const rParams = [];
+  const rWhere = ["kind = 'parent_waiting'"];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from ?? "")) {
+    rParams.push(from);
+    rWhere.push(`sent_at >= $${rParams.length}::date`);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(to ?? "")) {
+    rParams.push(to);
+    rWhere.push(`sent_at < ($${rParams.length}::date + 1)`);
+  }
+  const reminders = (await pool.query(`select count(*)::int as n from public.lifecycle_emails where ${rWhere.join(" and ")}`, rParams)).rows[0].n;
+  return { ...ev, paid: pay.paid, revenue: pay.revenue, places, reminders };
 }

@@ -12,6 +12,7 @@ import type { View } from "./Header";
 import { Icon, ProgressRing, Reveal, statementPreview, useToast } from "./ui";
 import WelcomeContentModal from "./WelcomeContentModal";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
+import ParentLinkReminder from "./ParentLinkReminder";
 import SubscriptionBanner from "./SubscriptionBanner";
 import PlanUpgradeBanner from "./PlanUpgradeBanner";
 import ReviewPrompt from "./ReviewPrompt";
@@ -342,6 +343,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
       {showPlanUpgrade && primarySubject && <PlanUpgradeBanner subjectName={SUBJECTS[primarySubject].name} weakTopics={diagnosticDone?.weakTopics ?? []} offer={offer} onNav={onNav} />}
 
       {offer && profile?.tariffId === "free" && !showPlanUpgrade && <WelcomeOfferBanner offer={offer} onNav={onNav} />}
+      {profile && !profile.isAdmin && profile.tariffId === "free" && <ParentLinkReminder />}
 
       {profile && !isGuestMode && !profile.isAdmin && <ReviewPrompt variant="card" onOpen={() => onNav({ name: "review" })} />}
 

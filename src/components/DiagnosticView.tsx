@@ -8,6 +8,7 @@ import { saveDiagnosticResult, mirrorDiagnosticToSupabase } from "../lib/planSto
 import { useAuth } from "../lib/auth";
 import { getDiagnosticPick, hydrateDiagnosticTasks, isDiagnosticLoading, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal, TaskStatement } from "./ui";
+import DiagnosticParentCard from "./DiagnosticParentCard";
 import { OfferStepHint } from "./WelcomeOfferBanner";
 
 type Phase = "setup" | "running" | "result";
@@ -152,6 +153,8 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
               <p className="mt-2 text-[12.5px] text-ink2">Вот темы, которые дадут наибольший рост баллов. Начнём с них в плане подготовки.</p>
             </div>
           )}
+
+          <DiagnosticParentCard />
 
           <button onClick={() => onFinish(result)} className="btn btn-blue mt-7 px-6 py-3 text-sm">Смотреть план подготовки <Icon name="arrowR" size={16} /></button>
         </Reveal>

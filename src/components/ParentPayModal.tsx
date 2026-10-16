@@ -19,7 +19,7 @@ export default function ParentPayModal({ onClose, place }: { onClose: () => void
 
   useEffect(() => {
     let cancelled = false;
-    createParentLink().then((r) => {
+    createParentLink(place).then((r) => {
       if (cancelled) return;
       if (r.url) setUrl(r.url);
       else setError(r.error ?? "Не удалось создать ссылку");
@@ -27,6 +27,8 @@ export default function ParentPayModal({ onClose, place }: { onClose: () => void
     return () => {
       cancelled = true;
     };
+    // место нажатия фиксируется один раз, при открытии окна
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? null;
@@ -73,6 +75,9 @@ export default function ParentPayModal({ onClose, place }: { onClose: () => void
 
         <p className="mt-3 text-[13.5px] leading-relaxed text-ink2">
           Отправь родителю ссылку. Он откроет её без входа в аккаунт, выберет тариф и оплатит картой или через СБП, а тариф включится тебе. Чек придёт ему на почту.
+        </p>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-ink2">
+          На этой странице родителю будут видны твой уровень и слабые темы по диагностике, если ты её проходил(а): так проще понять, зачем нужен тариф.
         </p>
 
         {error && <p role="alert" className="mt-4 border-l-4 border-red bg-red/10 px-3 py-2 text-[13px] text-red">{error}</p>}
@@ -138,7 +143,7 @@ export default function ParentPayModal({ onClose, place }: { onClose: () => void
           </>
         )}
 
-        <p className="mt-4 text-[11.5px] leading-relaxed text-ink2">Ссылка действует 14 дней. По ней можно только оплатить тариф тебе, больше родитель ничего в твоём аккаунте не увидит.</p>
+        <p className="mt-4 text-[11.5px] leading-relaxed text-ink2">Ссылка действует 14 дней. По ней можно только оплатить тариф тебе; кроме имени, числа решённых заданий и итога диагностики родитель ничего в твоём аккаунте не увидит.</p>
       </div>
     </div>
   );

@@ -23,6 +23,13 @@ beforeEach(() => {
 });
 
 describe("ParentPayModal", () => {
+  it("место нажатия уходит на сервер вместе с запросом ссылки, а ученик видит, что родителю покажут его результат", async () => {
+    render(<ParentPayModal place="ai-limit" onClose={vi.fn()} />);
+    await screen.findByTestId("parent-share-text");
+    expect(api.createParentLink).toHaveBeenCalledWith("ai-limit");
+    expect(screen.getByText(/родителю будут видны твой уровень и слабые темы/)).toBeInTheDocument();
+  });
+
   it("показывает сообщение родителю с именем ученика и ссылкой, WhatsApp и Telegram ведут на отправку этого текста", async () => {
     render(<ParentPayModal place="tariffs" onClose={vi.fn()} />);
     const text = await screen.findByTestId("parent-share-text");

@@ -13,6 +13,10 @@ export interface ParentPayStats {
   pay_started: number;
   paid: number;
   revenue: number;
+  /** по местам, откуда ученик нажал кнопку: сколько ссылок запросили, открыли родители, оплатили */
+  places: { place: string | null; requested: number; opened: number; paid: number }[];
+  /** сколько напоминаний «родитель не открыл ссылку» ушло ученикам письмом */
+  reminders: number;
 }
 
 export async function loadParentPayStats(from?: string, to?: string): Promise<ParentPayStats | null> {
