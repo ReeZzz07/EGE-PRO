@@ -15,6 +15,8 @@ import { pool } from "./db.js";
 import { escapeHtml, renderBotHtml } from "./botHtml.js";
 import { getBlogIndex, getBlogArticle } from "./blogBot.js";
 import { getBotPage, BOT_PAGE_PATHS, DEFAULT_PAGE_SEO } from "./botPages.js";
+import { renderLlmsTxt } from "./botPages.js";
+import { sendPage, getSpaShell, memoize } from "./spaShell.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
   buildChatPrompt,
@@ -807,39 +809,57 @@ async function botStub(req, domain, verificationMetaTags) {
   return renderBotHtml({ title, description, canonicalUrl: `${domain}${req.path}`, ogImage: saved?.ogImage || "", verificationMetaTags });
 }
 
+// Страницы сайта отдаются ВСЕМ клиентам одним и тем же документом: готовое содержимое (h1, текст, цены, уникальные title/description/canonical,
+// JSON-LD) внутри настоящей оболочки сайта (docker/api/spaShell.js). Раньше готовый HTML получали только боты по User-Agent, а любой другой
+// клиент, например SEO-аудит или нейросеть с обычным User-Agent, видел пустой <div id="root"> с одинаковым title на всех адресах.
+// Caddy направляет сюда эти пути для любого User-Agent и, если api недоступен, отдаёт обычное приложение (см. @public в docker/Caddyfile).
+const siteDomain = () => (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+const verificationTags = () => memoize("verification-tags", 30000, resolveSiteVerificationMetaTags);
+
 app.get(BOT_PAGE_PATHS, async (req, res) => {
-  const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
-  const verificationMetaTags = await resolveSiteVerificationMetaTags();
-  res.setHeader("content-type", "text/html; charset=utf-8");
+  const domain = siteDomain();
   try {
-    const result = await getBotPage(req.path, { siteUrl: domain, verificationMetaTags });
-    if (result.status === 200) res.setHeader("Cache-Control", "public, max-age=300");
-    return res.status(result.status).send(result.html);
+    const verificationMetaTags = await verificationTags();
+    const result = await memoize(`page:${req.path}`, 30000, () => getBotPage(req.path, { siteUrl: domain, verificationMetaTags }));
+    return await sendPage(res, result.status, result.html);
   } catch (e) {
-    console.warn("не удалось собрать страницу для бота, отдаю заглушку:", req.path, e?.message ?? e);
-    const stub = await botStub(req, domain, verificationMetaTags).catch(() => null);
-    if (stub) return res.send(stub);
-    return res.status(503).type("text/plain").send("Страница временно недоступна");
+    console.warn("не удалось собрать страницу, отдаю заглушку:", req.path, e?.message ?? e);
+    const stub = await botStub(req, domain, await verificationTags().catch(() => "")).catch(() => null);
+    if (stub) return await sendPage(res, 200, stub);
+    // содержимого нет (БД недоступна): приложению оболочка всё равно нужна, статус 503 говорит роботам прийти позже
+    const shell = await getSpaShell().catch(() => null);
+    return shell ? res.status(503).type("html").send(shell) : res.status(503).type("text/plain").send("Страница временно недоступна");
+  }
+});
+
+// llms.txt для нейросетей: суть, механика, цены, условия и целевые действия одним текстом (docker/api/botPages.js, renderLlmsTxt)
+app.get("/llms.txt", async (_req, res) => {
+  try {
+    const text = await memoize("llms", 60000, () => renderLlmsTxt({ siteUrl: siteDomain() }));
+    res.setHeader("content-type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(text);
+  } catch (e) {
+    console.warn("не удалось собрать llms.txt:", e?.message ?? e);
+    res.status(503).type("text/plain").send("Недоступно");
   }
 });
 
 // /blog и /blog/<статья> для краулеров и нейросетей (docker/api/blogBot.js): Caddy шлёт сюда ботов по User-Agent, люди идут в SPA.
 // Нейросети и часть поисковых роботов не исполняют JS, а статьи в SPA рисуются именно им — без этого они видели бы пустую страницу.
 app.get(["/blog", "/blog/:slug"], async (req, res) => {
-  const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  const siteUrl = siteDomain();
   try {
-    const verificationMetaTags = await resolveSiteVerificationMetaTags();
-    res.setHeader("content-type", "text/html; charset=utf-8");
-    if (!req.params.slug) {
-      res.setHeader("Cache-Control", "public, max-age=300");
-      return res.send(await getBlogIndex({ siteUrl, verificationMetaTags }));
-    }
-    const { status, html } = await getBlogArticle(req.params.slug, { siteUrl, verificationMetaTags });
-    if (status === 200) res.setHeader("Cache-Control", "public, max-age=300");
-    res.status(status).send(html);
+    const verificationMetaTags = await verificationTags();
+    const slug = req.params.slug;
+    const result = await memoize(slug ? `blog:${slug}` : "blog:index", 30000, async () =>
+      slug ? getBlogArticle(slug, { siteUrl, verificationMetaTags }) : { status: 200, html: await getBlogIndex({ siteUrl, verificationMetaTags }) }
+    );
+    await sendPage(res, result.status, result.html);
   } catch (e) {
-    console.warn("не удалось собрать страницу блога для бота:", e?.message ?? e);
-    res.status(500).type("text/plain").send("Не удалось загрузить страницу");
+    console.warn("не удалось собрать страницу блога:", e?.message ?? e);
+    const shell = await getSpaShell().catch(() => null);
+    shell ? res.status(503).type("html").send(shell) : res.status(503).type("text/plain").send("Не удалось загрузить страницу");
   }
 });
 

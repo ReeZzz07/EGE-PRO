@@ -107,7 +107,7 @@ export function renderBlogArticlePage({ article, related = [], siteUrl = "", ver
 <h1>${escapeHtml(article.title)}</h1>
 ${published ? `<p><time datetime="${published}">${escapeHtml(dateRu(article.published_at))}</time></p>\n` : ""}${article.excerpt ? `<p><em>${escapeHtml(article.excerpt)}</em></p>\n` : ""}${sanitizeArticleHtml(article.content)}
 </article>
-<p><a href="/">Пройти бесплатную диагностику на ${siteName}</a></p>
+<p><a href="/diagnostic">Пройти бесплатную диагностику на ${siteName}</a></p>
 ${relatedHtml}</main>
 ${FOOTER}
 </body></html>

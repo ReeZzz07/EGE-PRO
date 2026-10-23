@@ -136,7 +136,7 @@ const page = (meta, bodyHtml) => head(meta) + `${NAV}\n<main>\n${bodyHtml}\n</ma
 
 // ─────────────────────── главная ───────────────────────
 
-export function renderHomePage({ seo, landing, subjects, tariffs, reviews, contactEmail, siteUrl = "", verificationMetaTags = "" }) {
+export function renderHomePage({ seo, landing, subjects, tariffs, reviews, contactEmail, paymentNote = "", siteUrl = "", verificationMetaTags = "" }) {
   const canonicalUrl = siteUrl ? `${siteUrl}/` : "";
   const total = subjects.reduce((n, s) => n + s.total, 0);
   const subjectsHtml = subjects.length
@@ -156,7 +156,7 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
           const l = tariffLine(t);
           return `<li><strong>${esc(t.name)}</strong>: ${esc(l.price)}${t.price > 0 ? " за 30 дней" : ""}, ${esc(l.subjects)}, ${esc(l.ai)}</li>`;
         })
-        .join("\n")}\n</ul>\n<p><a href="/tariffs">Все тарифы и условия оплаты</a></p>\n</section>`
+        .join("\n")}\n</ul>\n${paymentNote ? `<p>${esc(paymentNote)}</p>\n` : ""}<p><a href="/tariffs">Все тарифы и условия оплаты</a></p>\n</section>`
     : "";
   const reviewsHtml = reviews.length
     ? `<section>\n<h2>Отзывы учеников</h2>\n${reviews.map((r) => `<blockquote><p>${esc(r.body)}</p><footer>${esc(r.displayName || "Ученик")}${r.subject && SUBJECT_NAMES[r.subject] ? `, ${esc(SUBJECT_NAMES[r.subject])}` : ""}, оценка ${esc(r.rating)} из 5</footer></blockquote>`).join("\n")}\n</section>`
@@ -170,7 +170,7 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
 ${[subjectsHtml, processHtml, capsHtml, tariffsHtml, reviewsHtml, faqHtml].filter(Boolean).join("\n")}
 <section>
 <h2>${esc(LANDING_HEADINGS.cta)}</h2>
-<p>Зарегистрируйтесь на ${siteName}, пройдите диагностику за 7–10 минут и получите персональный план. Вопросы — на странице <a href="/contacts">контактов</a>.</p>
+<p><a href="/diagnostic">Пройти бесплатную диагностику</a>: зарегистрируйтесь на ${siteName}, ответьте на 8–12 заданий за 7–10 минут и получите уровень, слабые темы и персональный план. Вопросы — на странице <a href="/contacts">контактов</a>.</p>
 </section>`;
   const orgLd = { "@context": "https://schema.org", ...org(siteUrl, ""), description: seo.pages.home.description, ...(contactEmail ? { contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: contactEmail, availableLanguage: "ru" } } : {}) };
   const siteLd = siteUrl ? { "@context": "https://schema.org", "@type": "WebSite", name: siteName, url: siteUrl, inLanguage: "ru" } : null;
@@ -202,6 +202,7 @@ ${t.features.map((f) => `<li>${esc(f)}</li>`).join("\n")}
 ${items}
 ${anyPaid && content.perSubjectNote ? `<p>${esc(content.perSubjectNote)}</p>` : ""}
 <p>${esc(content.paymentNote)}</p>
+<p><a href="/diagnostic">Начать бесплатно: пройти диагностику</a>. Тариф можно выбрать после неё.</p>
 <p>Условия: <a href="/oferta">публичная оферта</a>, <a href="/privacy">политика конфиденциальности</a>. Для родителей: <a href="/parents">как оплатить за ребёнка</a>.</p>`;
   const list = tariffs.length
     ? {
@@ -236,6 +237,7 @@ export function renderParentsPage({ seo, tariffs, siteUrl = "", verificationMeta
     : "";
   const body = `<h1>${esc(PARENTS.h1)}</h1>
 <p>${esc(PARENTS.intro)}</p>
+<p><a href="/diagnostic">Начать бесплатно: ребёнок проходит диагностику</a> · <a href="/tariffs">Посмотреть тарифы</a></p>
 <section>
 <h2>${esc(PARENTS.vsTitle)}</h2>
 <p>${esc(PARENTS.vsIntro)}</p>
@@ -352,7 +354,9 @@ export async function getBotPage(pathname, { siteUrl = "", verificationMetaTags 
       listPublicReviews(6).then((r) => r.reviews).catch(() => []),
       getPublicContactInfo().catch(() => null),
     ]);
-    return { status: 200, html: renderHomePage({ seo, landing, subjects, tariffs, reviews, contactEmail: info?.supportEmail ?? "", ...opts }) };
+    const tariffsSaved = await contentBlock("tariffsPage").catch(() => null);
+    const paymentNote = { ...TARIFFS_PAGE, ...(tariffsSaved ?? {}) }.paymentNote;
+    return { status: 200, html: renderHomePage({ seo, landing, subjects, tariffs, reviews, contactEmail: info?.supportEmail ?? "", paymentNote, ...opts }) };
   }
   if (pathname === "/tariffs") {
     const saved = await contentBlock("tariffsPage").catch(() => null);
@@ -371,4 +375,45 @@ export async function getBotPage(pathname, { siteUrl = "", verificationMetaTags 
   const { rows } = await pool.query("select title, content, updated_at from public.legal_documents where key = $1", [key]);
   if (!rows[0]) return { status: 404, html: renderLegalPage({ key, doc: { title: LEGAL_SEO[key].title, content: "Документ пока недоступен.", updated_at: null }, seo, ...opts }) };
   return { status: 200, html: renderLegalPage({ key, doc: rows[0], seo, ...opts }) };
+}
+
+// ─────────────────────── llms.txt ───────────────────────
+
+/** Текст для нейросетей по стандарту llms.txt: коротко и по пунктам, что за сервис (УТП), как он работает, сколько стоит, на каких условиях и
+ *  какие целевые действия доступны. Собирается из тех же данных, что и страницы (БД, общие JSON), поэтому не расходится с сайтом. */
+export async function renderLlmsTxt({ siteUrl = "" } = {}) {
+  const [seo, landing, tariffs, saved, info, articles] = await Promise.all([
+    loadSeo(),
+    loadLanding(),
+    loadTariffs().catch(() => []),
+    contentBlock("tariffsPage").catch(() => null),
+    getPublicContactInfo().catch(() => null),
+    pool
+      .query("select slug, title, excerpt from public.blog_articles where is_published = true and visible_to_guests = true order by is_pinned desc, published_at desc nulls last limit 60")
+      .then((r) => r.rows)
+      .catch(() => []),
+  ]);
+  const tp = { ...TARIFFS_PAGE, ...(saved ?? {}) };
+  const url = (p) => `${siteUrl}${p}`;
+  const lines = [];
+  lines.push(`# ${siteName}`, "", `> ${seo.pages.home.description}`, "");
+  lines.push("## В чём суть", "", `- ${landing.hero.title}`, `- ${landing.hero.subtitle}`);
+  for (const c of landing.capabilities) lines.push(`- ${c.t}: ${c.d}`);
+  lines.push("", "## Как это работает", "");
+  landing.process.forEach((s, i) => lines.push(`${i + 1}. ${s.t}: ${s.d}`));
+  lines.push("", "## Цены и тарифы", "");
+  for (const t of tariffs) {
+    const l = tariffLine(t);
+    lines.push(`- ${t.name}: ${l.price}${t.price > 0 ? " за 30 дней" : ""}, ${l.subjects}, ${l.ai}`);
+  }
+  lines.push("", "## Условия оплаты", "", `- ${tp.paymentNote}`, "- Оплата банковской картой или через СБП (ЮKassa); ссылку на оплату ребёнок может отправить родителю.", `- Подробнее: оферта ${url("/oferta")}`);
+  lines.push("", "## Целевые действия", "", `- Пройти бесплатную диагностику: ${url("/diagnostic")}`, `- Выбрать тариф: ${url("/tariffs")}`, `- Для родителей, как оплатить за ребёнка: ${url("/parents")}`, `- Написать нам: ${url("/contacts")}`);
+  lines.push("", "## Разделы сайта", "", `- Главная: ${url("/")}`, `- Тарифы: ${url("/tariffs")}`, `- Родителям: ${url("/parents")}`, `- Контакты: ${url("/contacts")}`, `- База знаний: ${url("/blog")}`);
+  if (articles.length) {
+    lines.push("", "## Статьи", "");
+    for (const a of articles) lines.push(`- [${a.title}](${url(`/blog/${a.slug}`)})${a.excerpt ? `: ${String(a.excerpt).replace(/\s+/g, " ").trim()}` : ""}`);
+  }
+  if (info?.supportEmail) lines.push("", "## Контакты", "", `- Почта: ${info.supportEmail}`);
+  lines.push("", "## Важно", "", "- Это независимый учебный проект: задания из открытого банка ФИПИ, сервис не является официальным ресурсом ФИПИ или Рособрнадзора.", "- Результат на экзамене не гарантируется: он зависит от самого ученика.", "");
+  return lines.join("\n");
 }

@@ -28,28 +28,26 @@ www.{$SITE_HOST} {
 		format console
 	}
 
-	# Боты соцсетей (Telegram/VK/WhatsApp/Facebook и т.п.) не исполняют JS, поэтому не увидели бы
-	# og:image (он подставляется через useEffect, см. src/lib/useDocumentHead.ts) — на / и /tariffs
-	# их отдельно направляем на api, который отдаёт готовый HTML с актуальными og-тегами из БД (см.
-	# docker/api/server.js). Обычные браузеры на тех же путях продолжают идти в SPA как раньше —
-	# matcher строго по User-Agent, ничего в поведении для людей не меняется.
-	# "google" отдельно от "bot": верификатор Search Console шлёт
-	# "Mozilla/5.0 (compatible; Google-Site-Verification/1.0)" — без слова "bot" вообще, "bot" там
-	# ловит только настоящий Googlebot-краулер. Без этого слова верификация подтверждения домена
-	# через /admin → SEO молча не работала (страница ловила статический index.html без meta-тега,
-	# см. историю коммитов про Google-site-verification).
-	# Все публичные страницы (/, /tariffs, /parents, /contacts, /oferta, /privacy, /blog, /blog/*) — готовый HTML от api (docker/api/botPages.js,
-	# docker/api/blogBot.js). Причина: статьи в SPA рисует JavaScript, а нейросети (GPTBot, PerplexityBot, ClaudeBot,
-	# Яндекс и др.) его не исполняют. Им api отдаёт готовый HTML с текстом статьи и разметкой JSON-LD (docker/api/blogBot.js).
-	# К слову "bot" добавлены краулеры нейросетей и поисковиков, у которых в User-Agent его нет (Perplexity-User, ChatGPT-User,
-	# Claude-User, Bing). "yandex" нарочно не добавлен: YandexBot и др. уже ловятся по "bot", а проверяющий Директа (YandexDirect)
-	# должен видеть страницу как раньше.
-	@bot {
-		header_regexp User-Agent "(?i)(bot|google|facebookexternalhit|telegrambot|vkshare|whatsapp|twitterbot|slackbot|discordbot|linkedinbot|redditbot|skypeuripreview|viber|odnoklassniki|pinterest|perplexity|chatgpt|claude|bingpreview|duckassist)"
-		path / /tariffs /parents /contacts /oferta /privacy /blog /blog/*
+	# Публичные страницы отдаёт api ВСЕМ клиентам, а не только ботам: готовый HTML с настоящим содержимым (h1, текст, цены, уникальные
+	# title/description/canonical, JSON-LD) внутри оболочки сайта; React при старте заменяет его приложением (docker/api/spaShell.js,
+	# botPages.js, blogBot.js). Раньше сюда шли только боты по User-Agent, а остальные клиенты, например SEO-аудит или нейросеть с обычным
+	# User-Agent, видели пустую оболочку одинакового размера на любом адресе, и GEO настроить было нельзя. Превью в мессенджерах и верификация
+	# Search Console (раньше отдельные правила по User-Agent) работают теми же страницами.
+	#
+	# lb_policy first: пока api жив, ходим к нему; если он недоступен (перезапуск, сбой), Caddy сразу отдаёт то же приложение с web, то есть
+	# сайт для людей не зависит от api так, как зависели бы они от единственного upstream.
+	@public {
+		method GET HEAD
+		path / /tariffs /parents /contacts /oferta /privacy /blog /blog/* /llms.txt
 	}
-	handle @bot {
-		reverse_proxy api:8787
+	handle @public {
+		reverse_proxy api:8787 web:3000 {
+			lb_policy first
+			lb_try_duration 3s
+			lb_try_interval 250ms
+			fail_duration 10s
+			max_fails 1
+		}
 	}
 	handle {
 		reverse_proxy web:3000
