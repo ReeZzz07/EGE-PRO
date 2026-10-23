@@ -45,6 +45,15 @@ describe("ParentPayView", () => {
     expect(screen.getByRole("radio", { name: /ВУЗ/ })).toBeChecked();
   });
 
+  it("вопросы по оплате: без зашитого адреса почты, ведёт на страницу «Контакты» (единственное место, где показан адрес)", async () => {
+    const onNav = vi.fn();
+    render(<ParentPayView token={TOKEN} onNav={onNav} />);
+    await screen.findByRole("heading", { level: 1 });
+    expect(document.body.textContent).not.toMatch(/@/);
+    fireEvent.click(screen.getByRole("button", { name: "страница «Контакты»" }));
+    expect(onNav).toHaveBeenCalledWith({ name: "contacts" });
+  });
+
   it("итог диагностики ребёнка: предмет, уровень, балл и слабые темы; без итога блока нет", async () => {
     vi.mocked(api.loadParentView).mockResolvedValue({
       view: { ...VIEW, diagnostic: { subject: "math", subjectName: "Математика (профиль)", level: "mid", scoreMin: 50, scoreMax: 64, weakTopics: ["производная", "стереометрия"] } },

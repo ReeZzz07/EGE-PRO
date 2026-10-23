@@ -33,7 +33,12 @@ function Notice({ tone, title, children }: { tone: "ok" | "err" | "wait"; title:
   );
 }
 
-function PaymentResult({ token, paymentId, onBack }: { token: string; paymentId: string; onBack: () => void }) {
+function PaymentResult({ token, paymentId, onBack, onNav }: { token: string; paymentId: string; onBack: () => void; onNav: (v: View) => void }) {
+  const contactsLink = (
+    <button onClick={() => onNav({ name: "contacts" })} className="link-slide font-bold hover:text-ink">
+      страницу «Контакты»
+    </button>
+  );
   const [state, setState] = useState<"pending" | "succeeded" | "canceled" | "timeout" | "error">("pending");
   const [name, setName] = useState<string | null>(null);
   const polls = useRef(0);
@@ -77,12 +82,12 @@ function PaymentResult({ token, paymentId, onBack }: { token: string; paymentId:
   if (state === "timeout")
     return (
       <Notice tone="err" title="Оплата обрабатывается дольше обычного">
-        <p>Если деньги списались, тариф включится в течение нескольких минут. Если нет, напишите нам на support@ege-tutor.ru, и мы поможем.</p>
+        <p>Если деньги списались, тариф включится в течение нескольких минут. Если нет, напишите нам через {contactsLink}, и мы поможем.</p>
       </Notice>
     );
   return (
     <Notice tone="err" title="Не удалось проверить оплату">
-      <p>Обновите страницу через минуту. Если деньги списались, тариф включится сам; если что-то не так, напишите на support@ege-tutor.ru.</p>
+      <p>Обновите страницу через минуту. Если деньги списались, тариф включится сам; если что-то не так, напишите нам через {contactsLink}.</p>
     </Notice>
   );
 }
@@ -128,7 +133,7 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
     };
   }, [token]);
 
-  if (paymentId && !showForm) return <PaymentResult token={token} paymentId={paymentId} onBack={() => { setShowForm(true); onNav({ name: "parent-pay", token }); }} />;
+  if (paymentId && !showForm) return <PaymentResult token={token} paymentId={paymentId} onNav={onNav} onBack={() => { setShowForm(true); onNav({ name: "parent-pay", token }); }} />;
   if (loading) return <Shell><p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p></Shell>;
   if (notFound) return <Notice tone="err" title="Ссылка не найдена">Проверьте, что она скопирована целиком, или попросите ребёнка отправить её ещё раз.</Notice>;
   if (problem) return <Notice tone="err" title="Страница не загрузилась">{problem}</Notice>;
@@ -255,7 +260,7 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
         Нажимая «Оплатить», вы соглашаетесь с{" "}
         <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold hover:text-ink">публичной офертой</button> и{" "}
         <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide font-bold hover:text-ink">политикой конфиденциальности</button>.
-        Вопросы по оплате: <a href="mailto:support@ege-tutor.ru" className="link-slide font-bold hover:text-ink">support@ege-tutor.ru</a>, отвечаем в течение одного дня.
+        Вопросы по оплате: <button onClick={() => onNav({ name: "contacts" })} className="link-slide font-bold hover:text-ink">страница «Контакты»</button>, отвечаем в течение одного дня.
       </p>
     </Shell>
   );

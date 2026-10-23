@@ -254,7 +254,7 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
             <ul className="mt-2 space-y-1.5 text-[13px]">
               <li>
                 <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold text-ink2 hover:text-ink">
-                  Условия оплаты и возврата — в оферте
+                  Условия оплаты — в оферте
                 </button>
               </li>
               <li>
