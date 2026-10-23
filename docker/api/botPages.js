@@ -19,6 +19,7 @@ const TARIFFS_PAGE = readJson("tariffsPage.json");
 const PARENTS = readJson("parents.json");
 const CONTACTS = readJson("contacts.json");
 const SUBJECT_PAGES = readJson("subjects.json");
+const LANDING_STATIC = readJson("landingStatic.json");
 
 /** Заголовки и описания по умолчанию — те же, что в админке «SEO» (src/lib/seo.ts), если там ничего не сохранено. */
 export const DEFAULT_PAGE_SEO = {
@@ -39,7 +40,7 @@ export const LANDING_HEADINGS = {
   process: "Четыре шага от диагностики до пробника",
   capabilities: "Не решебник, а нормальная подготовка",
   faq: "Коротко о главном",
-  cta: "Пройди диагностику и получи план подготовки",
+  cta: LANDING_STATIC.ctaFinal.title,
 };
 
 const rubles = (n) => `${Math.round(Number(n)).toLocaleString("ru-RU")} ₽`;
@@ -102,11 +103,14 @@ async function loadTariffs() {
 }
 
 async function loadSubjects() {
-  const { rows } = await pool.query("select subject, count(*)::int as n from public.tasks where published = true group by subject");
-  const counts = new Map(rows.map((r) => [r.subject, r.n]));
+  const { rows } = await pool.query(
+    `select subject, count(*)::int as n, coalesce(sum(points), 0)::int as points, (count(*) filter (where bucket = 'essay'))::int as essay
+       from public.tasks where published = true group by subject`
+  );
+  const by = new Map(rows.map((r) => [r.subject, r]));
   return Object.keys(SUBJECT_NAMES)
-    .filter((id) => (counts.get(id) ?? 0) > 0)
-    .map((id) => ({ id, name: SUBJECT_NAMES[id], total: counts.get(id) }));
+    .filter((id) => (by.get(id)?.n ?? 0) > 0)
+    .map((id) => ({ id, name: SUBJECT_NAMES[id], total: by.get(id).n, points: by.get(id).points, essay: by.get(id).essay }));
 }
 
 // ─────────────────────── общие куски разметки ───────────────────────
@@ -141,8 +145,8 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
   const canonicalUrl = siteUrl ? `${siteUrl}/` : "";
   const total = subjects.reduce((n, s) => n + s.total, 0);
   const subjectsHtml = subjects.length
-    ? `<section>\n<h2>${esc(LANDING_HEADINGS.subjects)}</h2>\n<p>В банке ${total.toLocaleString("ru-RU")} ${plural(total, "задание", "задания", "заданий")} из открытого банка ФИПИ по ${subjects.length} ${plural(subjects.length, "предмету", "предметам", "предметам")}.</p>\n<ul>\n${subjects
-        .map((s) => `<li>${SUBJECT_PAGES.landingSubjects.includes(s.id) ? `<a href="/ege/${SUBJECT_PAGES.subjects[s.id].slug}">${esc(s.name)}</a>` : esc(s.name)}: ${s.total.toLocaleString("ru-RU")} ${plural(s.total, "задание", "задания", "заданий")}</li>`)
+    ? `<section>\n<h2>${esc(LANDING_HEADINGS.subjects)}</h2>\n<p>В банке ${total.toLocaleString("ru-RU")} ${plural(total, "задание", "задания", "заданий")} из открытого банка ФИПИ по ${subjects.length} ${plural(subjects.length, "предмету", "предметам", "предметам")}. ${esc(LANDING_STATIC.subjectsIntro.replace("{n}", String(subjects.length)))}</p>\n<ul>\n${subjects
+        .map((s) => `<li>${SUBJECT_PAGES.landingSubjects.includes(s.id) ? `<a href="/ege/${SUBJECT_PAGES.subjects[s.id].slug}">${esc(s.name)}</a>` : esc(s.name)}: ${s.total.toLocaleString("ru-RU")} ${plural(s.total, "задание", "задания", "заданий")}${SUBJECT_PAGES.subjects[s.id]?.desc ? ` — ${esc(SUBJECT_PAGES.subjects[s.id].desc)}` : ""}</li>`)
         .join("\n")}\n</ul>\n</section>`
     : "";
   const processHtml = landing.process.length
@@ -165,13 +169,39 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
   const faqHtml = landing.faq.length
     ? `<section>\n<h2>${esc(LANDING_HEADINGS.faq)}</h2>\n${landing.faq.map((f) => `<h3>${esc(f.q)}</h3>\n<p>${esc(f.a)}</p>`).join("\n")}\n</section>`
     : "";
+  const points = subjects.reduce((n, x) => n + (x.points ?? 0), 0);
+  const essay = subjects.reduce((n, x) => n + (x.essay ?? 0), 0);
+  const statValues = [total.toLocaleString("ru-RU"), String(subjects.length), points.toLocaleString("ru-RU"), essay.toLocaleString("ru-RU")];
+  const statsHtml = subjects.length ? `<ul>\n${statValues.map((v, i) => `<li><strong>${esc(v)}</strong> ${esc(LANDING_STATIC.statLabels[i])}</li>`).join("\n")}\n</ul>` : "";
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const pv = LANDING_STATIC.preview;
+  const previewHtml = `<section>
+<h2>${esc(cap(LANDING_STATIC.previewTitle))}</h2>
+<p><strong>${esc(pv.subjectName)}</strong>, № ${esc(pv.fipiId)} в банке ФИПИ. Тема: ${esc(pv.topic)}.</p>
+<p>${esc(pv.statement)}</p>
+<p>Ответ: ${esc(pv.answer)} (${esc(pv.note)}, ${esc(pv.points)} п.б.)</p>
+</section>`;
+  const pr = LANDING_STATIC.principle;
+  const principleHtml = `<section>
+<h2>${esc(cap(pr.eyebrow))}: ${esc(pr.title)}</h2>
+<p>${esc(pr.text)}</p>
+<blockquote>
+<p>Ученик: ${esc(pr.dialog[0])}</p>
+<p>ИИ-репетитор: ${esc(pr.dialog[1])}</p>
+</blockquote>
+</section>
+<p><strong>${esc(LANDING_STATIC.method.label)}</strong> ${esc(LANDING_STATIC.method.text)}</p>`;
   const body = `<h1>${esc(landing.hero.title)}</h1>
 <p>${esc(landing.hero.subtitle)}</p>
+<p><a href="/diagnostic">${esc(LANDING_STATIC.heroCtas[0])}</a> · <a href="/diagnostic">${esc(LANDING_STATIC.heroCtas[1])}</a></p>
+${statsHtml}
 <p><a href="/parents">Для родителей: чем это отличается от репетитора</a> · <a href="/blog">База знаний: статьи и разборы</a></p>
-${[subjectsHtml, processHtml, capsHtml, tariffsHtml, reviewsHtml, faqHtml].filter(Boolean).join("\n")}
+${previewHtml}
+${[subjectsHtml, processHtml, capsHtml, tariffsHtml, principleHtml, reviewsHtml, faqHtml].filter(Boolean).join("\n")}
 <section>
 <h2>${esc(LANDING_HEADINGS.cta)}</h2>
-<p><a href="/diagnostic">Пройти бесплатную диагностику</a>: зарегистрируйтесь на ${siteName}, ответьте на 8–12 заданий за 7–10 минут и получите уровень, слабые темы и персональный план. Вопросы — на странице <a href="/contacts">контактов</a>.</p>
+<p>${esc(LANDING_STATIC.ctaFinal.text)}</p>
+<p><a href="/diagnostic">${esc(LANDING_STATIC.ctaFinal.button)}</a>: зарегистрируйтесь на ${siteName}, ответьте на 8–12 заданий за 7–10 минут и получите уровень, слабые темы и персональный план. Вопросы — на странице <a href="/contacts">контактов</a>.</p>
 </section>`;
   const orgLd = { "@context": "https://schema.org", ...org(siteUrl, ""), description: seo.pages.home.description, ...(contactEmail ? { contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: contactEmail, availableLanguage: "ru" } } : {}) };
   const siteLd = siteUrl ? { "@context": "https://schema.org", "@type": "WebSite", name: siteName, url: siteUrl, inLanguage: "ru" } : null;
@@ -424,6 +454,14 @@ export async function renderLlmsTxt({ siteUrl = "" } = {}) {
   return lines.join("\n");
 }
 
+/** Страница для несуществующих адресов: код 404 отдаёт сервер (роботы не должны индексировать «мягкие» 404), а людям приложение само вернёт на главную. */
+export function renderNotFoundPage({ verificationMetaTags = "" } = {}) {
+  return page(
+    { title: "Страница не найдена — ЕГЭ·ПРО", description: "Такой страницы нет.", noindex: true, verificationMetaTags },
+    `<h1>Страница не найдена</h1>\n<p>Проверьте адрес или перейдите на <a href="/">главную</a>, в <a href="/tariffs">тарифы</a> или <a href="/blog">базу знаний</a>.</p>`
+  );
+}
+
 // ─────────────────────── посадочные страницы предметов: /ege/<адрес> ───────────────────────
 
 /** Предмет по адресу страницы (общий файл content/subjects.json — его же читает приложение). */
@@ -524,8 +562,7 @@ export async function getSubjectPage(slug, { siteUrl = "", verificationMetaTags 
   const subject = subjectBySlug(String(slug ?? ""));
   const content = subject ? await loadSubjectContent(subject.id) : null;
   if (!subject || !content) {
-    const html = page({ title: "Страница не найдена — ЕГЭ·ПРО", description: "Такой страницы нет.", noindex: true, verificationMetaTags }, `<h1>Страница не найдена</h1>\n<p><a href="/">На главную</a></p>`);
-    return { status: 404, html };
+    return { status: 404, html: renderNotFoundPage({ verificationMetaTags }) };
   }
   const [seo, landing, tariffs, saved, available] = await Promise.all([
     loadSeo(),

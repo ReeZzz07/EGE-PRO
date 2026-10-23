@@ -6,6 +6,7 @@ import {
   BOT_PAGE_PATHS,
   LANDING_HEADINGS,
   getBotPage,
+  renderNotFoundPage,
   getSubjectPage,
   getSubjectPageData,
   availableSubjectSlugs,
@@ -50,8 +51,8 @@ test("renderHomePage: заголовок и подзаголовок героя,
   });
   assert.match(html, /<h1>Подготовка к ЕГЭ с ИИ-репетитором<\/h1>/);
   assert.match(html, /<p>Диагностика, план и разборы\.<\/p>/);
-  assert.match(html, /<li><a href="\/ege\/matematika-profil">Математика \(профиль\)<\/a>: 4\s774 задания<\/li>/);
-  assert.match(html, /<li><a href="\/ege\/russkii-yazyk">Русский язык<\/a>: 7\s370 заданий<\/li>/);
+  assert.match(html, /<li><a href="\/ege\/matematika-profil">Математика \(профиль\)<\/a>: 4\s774 задания — /);
+  assert.match(html, /<li><a href="\/ege\/russkii-yazyk">Русский язык<\/a>: 7\s370 заданий — /);
   assert.match(html, /В банке 12\s144 задания из открытого банка ФИПИ по 2 предметам\./);
   assert.match(html, new RegExp(LANDING_HEADINGS.subjects));
   assert.match(html, /<h3>Диагностика<\/h3><p>7–10 минут\.<\/p>/);
@@ -182,7 +183,9 @@ test("страница родителей и контактов в React чит�
   assert.match(src("src/lib/content.ts"), /docker\/api\/content\/landing\.json/);
   assert.match(src("src/lib/tariffsContent.ts"), /docker\/api\/content\/tariffsPage\.json/);
   const landing = src("src/components/Landing.tsx");
-  for (const [key, text] of Object.entries(LANDING_HEADINGS)) assert.ok(landing.includes(text), `Landing.tsx: нет заголовка «${text}» (${key}) — обновите LANDING_HEADINGS в botPages.js`);
+  for (const [key, text] of Object.entries(LANDING_HEADINGS).filter(([k]) => k !== "cta")) assert.ok(landing.includes(text), `Landing.tsx: нет заголовка «${text}» (${key}) — обновите LANDING_HEADINGS в botPages.js`);
+  assert.match(landing, /docker\/api\/content\/landingStatic\.json/);
+  assert.match(landing, /landingStatic\.ctaFinal\.title/);
 });
 
 // ─────────────────────── посадочные страницы предметов ───────────────────────
@@ -259,4 +262,48 @@ test("subjects.json: названия и описания предметов —
     assert.ok(tasksTs.includes(`name: "${data.subjects[id].name}"`), `${id}: имя`);
     assert.ok(tasksTs.includes(`desc: "${data.subjects[id].desc}"`), `${id}: описание разошлось с tasks.ts`);
   }
+});
+
+// ─────────────────────── главная для роботов = то, что видит человек ───────────────────────
+
+test("renderHomePage: цифры банка, кнопки, пример задания, описания предметов, «принцип платформы» с диалогом, методическая опора и финальный призыв", () => {
+  const html = renderHomePage({
+    seo,
+    landing: { hero: { title: "Заголовок", subtitle: "Подзаголовок" }, capabilities: [], process: [], faq: [] },
+    subjects: [{ id: "math", name: "Математика (профиль)", total: 4774, points: 5000, essay: 100 }, { id: "fiz", name: "Физика", total: 2683, points: 3000, essay: 50 }],
+    tariffs,
+    reviews: [],
+    paymentNote: "Разовая оплата.",
+    siteUrl: SITE,
+  });
+  assert.match(html, /<a href="\/diagnostic">Определить свой уровень<\/a> · <a href="\/diagnostic">Начать бесплатно<\/a>/);
+  assert.match(html, /<li><strong>7\s457<\/strong> заданий в банке<\/li>/);
+  assert.match(html, /<li><strong>2<\/strong> предметов<\/li>/);
+  assert.match(html, /<li><strong>8\s000<\/strong> первичных баллов<\/li>/);
+  assert.match(html, /<li><strong>150<\/strong> заданий с развёрнутым ответом<\/li>/);
+  assert.match(html, /<h2>Так выглядит задание в тренажёре<\/h2>/);
+  assert.match(html, /№ 99566 в банке ФИПИ\. Тема: Логарифмические уравнения\./);
+  assert.match(html, /log₂\(x − 3\) = 4/);
+  assert.match(html, /Кинематика, динамика, законы сохранения, электричество<\/li>/, "описание предмета рядом с названием");
+  assert.match(html, /<h2>Принцип платформы: ИИ не решает за тебя, а помогает разобраться\.<\/h2>/);
+  assert.match(html, /Ученик: Просто скажи ответ, мне некогда/);
+  assert.match(html, /ИИ-репетитор: Я не могу дать готовый ответ/);
+  assert.match(html, /<strong>Методическая опора:<\/strong> задания и критерии ориентируются/);
+  assert.match(html, /Ошибаться нормально/);
+  assert.doesNotMatch(html, /Скоро добавим/);
+  assert.match(html, /Начни с любого из 2 предметов — дальше сможешь тренировать все\./);
+});
+
+test("renderNotFoundPage: noindex, понятный текст и ссылки на разделы; без canonical", () => {
+  const html = renderNotFoundPage();
+  assert.match(html, /<meta name="robots" content="noindex, follow">/);
+  assert.match(html, /<h1>Страница не найдена<\/h1>/);
+  assert.match(html, /<a href="\/tariffs">тарифы<\/a>/);
+  assert.doesNotMatch(html, /rel="canonical"/);
+});
+
+test("на главной (приложение) нет противоречия «Скоро добавим остальные предметы» рядом с «Начни с любого из N»", () => {
+  const landing = fs.readFileSync(new URL("../../../src/components/Landing.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(landing, /Скоро добавим/);
+  assert.match(landing, /landingStatic\.subjectsIntro/);
 });

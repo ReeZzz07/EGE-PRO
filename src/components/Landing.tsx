@@ -7,6 +7,10 @@ import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
 import BlogSection from "./BlogSection";
 import ReviewsSection from "./ReviewsSection";
+import landingStatic from "../../docker/api/content/landingStatic.json";
+import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
+import { loadTariffsContent } from "../lib/tariffsContent";
+import { plural } from "../lib/utils";
 import FaqAccordion from "./FaqAccordion";
 import type { View } from "./Header";
 
@@ -62,17 +66,17 @@ export default function Landing({
 
   useTasksVersion();
   const availableSubjects = getAvailableSubjects();
+  // тарифы и условия оплаты на главной: те же цены, что на /tariffs; роботам эти же данные отдаёт docker/api/botPages.js
+  const [tariffs, setTariffs] = useState<Tariff[]>([]);
+  const [paymentNote, setPaymentNote] = useState("");
+  useEffect(() => {
+    loadActiveTariffs().then(setTariffs).catch(() => {});
+    loadTariffsContent().then((c) => setPaymentNote(c.paymentNote)).catch(() => {});
+  }, []);
 
   // Иллюстративный образец для лендинга — не тянем из банка (гость видит эту страницу до того,
   // как банк вообще подгрузился), поэтому просто фиксированный пример «как выглядит задание».
-  const preview = {
-    subject: "math" as Subject,
-    fipiId: "99566",
-    topic: "Логарифмические уравнения",
-    statement: "Найдите корень уравнения:  log₂(x − 3) = 4",
-    answer: "19",
-    points: 1,
-  };
+  const preview = { ...landingStatic.preview, subject: landingStatic.preview.subject as Subject };
 
   return (
     <div className="mx-auto max-w-[1600px] px-4">
@@ -104,20 +108,20 @@ export default function Landing({
             <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-ink2">{content.hero.subtitle}</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <button onClick={() => onStart()} className="btn btn-blue px-6 py-3.5 text-sm">
-                Определить свой уровень <Icon name="arrowR" size={17} />
+                {landingStatic.heroCtas[0]} <Icon name="arrowR" size={17} />
               </button>
               <button onClick={() => onStart()} className="btn btn-ghost px-6 py-3.5 text-sm">
-                Начать бесплатно
+                {landingStatic.heroCtas[1]}
               </button>
             </div>
 
             {/* цифры банка заданий — конкретика вместо общих слов */}
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 border-t-2 border-dashed border-ink/20 pt-5">
               {[
-                [String(getGlobalTaskTotal()), "заданий в банке"],
-                [String(availableSubjects.length), "предметов"],
-                [String(getGlobalPointsTotal()), "первичных баллов"],
-                [String(getEssayTaskTotal()), "заданий с развёрнутым ответом"],
+                [String(getGlobalTaskTotal()), landingStatic.statLabels[0]],
+                [String(availableSubjects.length), landingStatic.statLabels[1]],
+                [String(getGlobalPointsTotal()), landingStatic.statLabels[2]],
+                [String(getEssayTaskTotal()), landingStatic.statLabels[3]],
               ].map(([v, l]) => (
                 <div key={l}>
                   <div className="font-display text-2xl font-black leading-none text-ink">{v}</div>
@@ -129,7 +133,7 @@ export default function Landing({
 
           {/* образец задания — наглядно показываем сам продукт */}
           <div className="card-lift relative mx-auto w-full min-w-0 max-w-md rotate-1 lg:max-w-lg">
-            <p className="mb-3 text-center font-mono text-[11.5px] font-bold uppercase tracking-[0.2em] text-ink2">так выглядит задание в тренажёре</p>
+            <p className="mb-3 text-center font-mono text-[11.5px] font-bold uppercase tracking-[0.2em] text-ink2">{landingStatic.previewTitle}</p>
             <div className="sheet sheet-margin relative p-7 pl-14 sm:p-8 sm:pl-16">
               <span className="pointer-events-none absolute right-4 top-4 z-10">
                 <Stamp text="Верно" tone="green" />
@@ -146,7 +150,7 @@ export default function Landing({
                   <Icon name="check" size={18} />
                 </span>
               </div>
-              <p className="mt-4 font-mono text-[12px] text-ink2">мгновенная проверка по эталону · {preview.points} п.б.</p>
+              <p className="mt-4 font-mono text-[12px] text-ink2">{preview.note} · {preview.points} п.б.</p>
             </div>
           </div>
         </div>
@@ -174,7 +178,7 @@ export default function Landing({
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">шаг 1</p>
           <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">С какого предмета начнём?</h2>
-          <p className="mt-1.5 max-w-xl text-[13.5px] text-ink2">Скоро добавим остальные предметы. Начни с любого из {availableSubjects.length} — дальше сможешь тренировать все.</p>
+          <p className="mt-1.5 max-w-xl text-[13.5px] text-ink2">{landingStatic.subjectsIntro.replace("{n}", String(availableSubjects.length))}</p>
         </Reveal>
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {availableSubjects.map((id, i) => {
@@ -241,24 +245,52 @@ export default function Landing({
         </div>
       </section>
 
+      {/* ─── Тарифы: те же цены, что на /tariffs; роботам этот блок отдаёт docker/api/botPages.js ─── */}
+      {tariffs.length > 0 && (
+        <section id="tariffs-home" className="mt-16 scroll-mt-20">
+          <Reveal>
+            <h2 className="font-display text-2xl font-black sm:text-3xl">{landingStatic.tariffsTitle}</h2>
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {tariffs.map((t) => {
+                const price = t.salePriceRub ?? t.priceRub;
+                return (
+                  <div key={t.id} className="sheet p-5">
+                    <h3 className="font-display text-[16px] font-black">{t.name}</h3>
+                    <p className="font-display mt-1 text-2xl font-black">{price === 0 ? "бесплатно" : `${Math.round(price).toLocaleString("ru-RU")} ₽`}</p>
+                    <p className="font-mono text-[11.5px] text-ink2">
+                      {price > 0 ? "на 30 дней · " : ""}
+                      {t.subjectsCount} {plural(t.subjectsCount, "предмет", "предмета", "предметов")}
+                    </p>
+                    <p className="mt-2 text-[12.5px] leading-relaxed text-ink2">{t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений к ИИ-репетитору в день` : "безлимитный ИИ-репетитор"}</p>
+                  </div>
+                );
+              })}
+            </div>
+            {paymentNote && <p className="mt-4 max-w-3xl text-[12.5px] leading-relaxed text-ink2">{paymentNote}</p>}
+            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-ghost mt-4 px-5 py-2.5 text-[13px]">
+              Все тарифы и условия оплаты
+            </button>
+          </Reveal>
+        </section>
+      )}
+
       {/* ─── Блок 4: принцип честной помощи ─── */}
       <section id="principle" className="mt-16 scroll-mt-20">
         <Reveal>
           <div className="gridpaper-dark relative overflow-hidden border-2 border-night bg-night px-6 py-9 text-paper sm:px-10">
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">принцип платформы</span>
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">{landingStatic.principle.eyebrow}</span>
             <p className="font-display mt-3 max-w-2xl text-xl font-bold leading-snug sm:text-2xl">
-              ИИ не решает за тебя, а помогает разобраться.
+              {landingStatic.principle.title}
             </p>
             <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-paper/70">
-              Готовый ответ не выдаётся ни при каких условиях — только наводящие вопросы, уровневые подсказки и разбор похожих
-              заданий. Так тренируется мышление, а не привычка списывать.
+              {landingStatic.principle.text}
             </p>
 
             {/* мини-пример диалога — принцип на конкретном примере */}
             <div className="mt-6 max-w-lg space-y-2">
-              <div className="ml-auto w-fit max-w-[85%] rounded-md rounded-br-none bg-blue px-3.5 py-2 text-[13px] text-white">Просто скажи ответ, мне некогда</div>
+              <div className="ml-auto w-fit max-w-[85%] rounded-md rounded-br-none bg-blue px-3.5 py-2 text-[13px] text-white">{landingStatic.principle.dialog[0]}</div>
               <div className="w-fit max-w-[85%] rounded-md rounded-bl-none border border-white/10 bg-night2 px-3.5 py-2 text-[13px] text-paper/85">
-                Я не могу дать готовый ответ, но помогу дойти до него самому. Смотри на знак дискриминанта — что это значит для количества корней?
+                {landingStatic.principle.dialog[1]}
               </div>
             </div>
           </div>
@@ -269,8 +301,7 @@ export default function Landing({
       <section className="mt-10">
         <Reveal>
           <p className="border-l-4 border-blue bg-blue/5 px-4 py-3 text-[13px] leading-relaxed text-ink2">
-            <strong className="text-ink">Методическая опора:</strong> задания и критерии ориентируются на открытый банк заданий и
-            демоверсии ФИПИ (fipi.ru). Учебный проект — не официальный ресурс ФИПИ или Рособрнадзора.
+            <strong className="text-ink">{landingStatic.method.label}</strong> {landingStatic.method.text}
           </p>
         </Reveal>
       </section>
@@ -300,10 +331,10 @@ export default function Landing({
       {/* ─── Блок 6: финальный CTA ─── */}
       <section className="mt-14 pb-16 text-center">
         <Reveal>
-          <h2 className="font-display mx-auto max-w-lg text-2xl font-black sm:text-3xl">Пройди диагностику и получи план подготовки</h2>
-          <p className="mt-2 text-[13.5px] text-ink2">7–10 минут. Ошибаться нормально — так мы поймём, что повторить в первую очередь.</p>
+          <h2 className="font-display mx-auto max-w-lg text-2xl font-black sm:text-3xl">{landingStatic.ctaFinal.title}</h2>
+          <p className="mt-2 text-[13.5px] text-ink2">{landingStatic.ctaFinal.text}</p>
           <button onClick={() => onStart()} className="btn btn-blue mx-auto mt-6 px-7 py-3.5 text-sm">
-            Пройти диагностику <Icon name="arrowR" size={17} />
+            {landingStatic.ctaFinal.button} <Icon name="arrowR" size={17} />
           </button>
         </Reveal>
       </section>

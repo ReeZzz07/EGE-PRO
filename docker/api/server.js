@@ -15,7 +15,7 @@ import { pool } from "./db.js";
 import { escapeHtml, renderBotHtml } from "./botHtml.js";
 import { getBlogIndex, getBlogArticle } from "./blogBot.js";
 import { getBotPage, BOT_PAGE_PATHS, DEFAULT_PAGE_SEO } from "./botPages.js";
-import { renderLlmsTxt, getSubjectPage, getSubjectPageData, availableSubjectSlugs } from "./botPages.js";
+import { renderNotFoundPage, renderLlmsTxt, getSubjectPage, getSubjectPageData, availableSubjectSlugs } from "./botPages.js";
 import { sendPage, getSpaShell, memoize } from "./spaShell.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
@@ -830,6 +830,15 @@ app.get(BOT_PAGE_PATHS, async (req, res) => {
     // содержимого нет (БД недоступна): приложению оболочка всё равно нужна, статус 503 говорит роботам прийти позже
     const shell = await getSpaShell().catch(() => null);
     return shell ? res.status(503).type("html").send(shell) : res.status(503).type("text/plain").send("Страница временно недоступна");
+  }
+});
+
+// Сюда Caddy переписывает любой неизвестный адрес (см. @notfound в docker/Caddyfile): код 404 для роботов, а людям приложение само вернёт на главную.
+app.get("/__not-found", async (_req, res) => {
+  try {
+    await sendPage(res, 404, renderNotFoundPage({ verificationMetaTags: await verificationTags().catch(() => "") }));
+  } catch (e) {
+    res.status(404).type("text/plain").send("Страница не найдена");
   }
 });
 
