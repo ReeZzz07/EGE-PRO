@@ -14,6 +14,7 @@ import {
 } from "../lib/feedback";
 import { Icon } from "./ui";
 import type { View } from "./Header";
+import contactsContent from "../../docker/api/content/contacts.json";
 
 const ID = "contacts-field";
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
@@ -67,8 +68,8 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
   const [mine, setMine] = useState<MyFeedback[]>([]);
 
   useDocumentHead({
-    title: "Контакты — ЕГЭ·ПРО",
-    description: "Связаться с командой ЕГЭ·ПРО: почта поддержки, мессенджеры и форма обратной связи. Отвечаем в течение одного дня.",
+    title: contactsContent.seo.title,
+    description: contactsContent.seo.description,
     path: "/contacts",
     ogImage: "",
   });
@@ -117,10 +118,10 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
   return (
     <div className="mx-auto max-w-5xl px-4 pb-20">
       <div className="mt-8 sm:mt-12">
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">контакты</p>
-        <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">Напиши нам</h1>
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{contactsContent.eyebrow}</p>
+        <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">{contactsContent.h1}</h1>
         <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-ink2">
-          Вопрос по оплате, ошибка в задании, идея или предложение — всё читает команда, а не робот. Ответим {reply}.
+          {contactsContent.intro.replace("{reply}", reply)}
         </p>
       </div>
 

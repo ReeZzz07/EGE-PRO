@@ -3,6 +3,7 @@
 // тарифов (цена/предметы/список преимуществ) — отдельно, см. lib/tariffs.ts. Ссылка на оферту/
 // политику под тарифами не входит сюда намеренно: это функциональные ссылки, а не просто текст.
 import { supabase, isSupabaseConfigured } from "./supabase";
+import tariffsDefaults from "../../docker/api/content/tariffsPage.json";
 
 export interface TariffsPageContent {
   eyebrow: string;
@@ -13,14 +14,8 @@ export interface TariffsPageContent {
   paymentNote: string;
 }
 
-export const DEFAULT_TARIFFS_CONTENT: TariffsPageContent = {
-  eyebrow: "тарифы",
-  title: "Выбери, сколько предметов готовить",
-  subtitle:
-    "Диагностика, план, задания из банка ФИПИ и ИИ-репетитор — на всех тарифах. Разница только в числе предметов и лимите обращений к репетитору.",
-  perSubjectNote: "при поштучной покупке — от 1290 ₽/мес за предмет",
-  paymentNote: "Платные тарифы — разовая оплата через ЮKassa на 30 дней, без сохранения карты и автосписаний. Продлить — новая оплата, когда срок подойдёт к концу.",
-};
+/** Источник текста — docker/api/content/tariffsPage.json: тот же файл читает сервер для страницы ботам (docker/api/botPages.js). */
+export const DEFAULT_TARIFFS_CONTENT: TariffsPageContent = tariffsDefaults;
 
 export async function loadTariffsContent(): Promise<TariffsPageContent> {
   if (!isSupabaseConfigured || !supabase) return DEFAULT_TARIFFS_CONTENT;

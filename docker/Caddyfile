@@ -38,14 +38,15 @@ www.{$SITE_HOST} {
 	# ловит только настоящий Googlebot-краулер. Без этого слова верификация подтверждения домена
 	# через /admin → SEO молча не работала (страница ловила статический index.html без meta-тега,
 	# см. историю коммитов про Google-site-verification).
-	# /blog и /blog/* — отдельная причина: статьи в SPA рисует JavaScript, а нейросети (GPTBot, PerplexityBot, ClaudeBot,
+	# Все публичные страницы (/, /tariffs, /parents, /contacts, /oferta, /privacy, /blog, /blog/*) — готовый HTML от api (docker/api/botPages.js,
+	# docker/api/blogBot.js). Причина: статьи в SPA рисует JavaScript, а нейросети (GPTBot, PerplexityBot, ClaudeBot,
 	# Яндекс и др.) его не исполняют. Им api отдаёт готовый HTML с текстом статьи и разметкой JSON-LD (docker/api/blogBot.js).
 	# К слову "bot" добавлены краулеры нейросетей и поисковиков, у которых в User-Agent его нет (Perplexity-User, ChatGPT-User,
 	# Claude-User, Bing). "yandex" нарочно не добавлен: YandexBot и др. уже ловятся по "bot", а проверяющий Директа (YandexDirect)
 	# должен видеть страницу как раньше.
 	@bot {
 		header_regexp User-Agent "(?i)(bot|google|facebookexternalhit|telegrambot|vkshare|whatsapp|twitterbot|slackbot|discordbot|linkedinbot|redditbot|skypeuripreview|viber|odnoklassniki|pinterest|perplexity|chatgpt|claude|bingpreview|duckassist)"
-		path / /tariffs /blog /blog/*
+		path / /tariffs /parents /contacts /oferta /privacy /blog /blog/*
 	}
 	handle @bot {
 		reverse_proxy api:8787

@@ -14,6 +14,7 @@ import path from "node:path";
 import { pool } from "./db.js";
 import { escapeHtml, renderBotHtml } from "./botHtml.js";
 import { getBlogIndex, getBlogArticle } from "./blogBot.js";
+import { getBotPage, BOT_PAGE_PATHS, DEFAULT_PAGE_SEO } from "./botPages.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
   buildChatPrompt,
@@ -767,18 +768,7 @@ app.get("/sitemap.xml", async (req, res) => {
 // docker/Caddyfile матчит User-Agent известных ботов и шлёт ИХ (только их — обычные браузеры
 // продолжают идти на web:3000, всё как раньше) на этот роут: здесь читаем то же
 // public.content_blocks (key='seo'), что и админка/лендинг, и отдаём минимальный HTML с актуальными
-// тегами. Тело страницы ботам не нужно — только <head> с og/twitter-метатегами.
-const DEFAULT_PAGE_SEO = {
-  home: {
-    title: "ЕГЭ·ПРО — тренажёр с ИИ-репетитором",
-    description:
-      "ЕГЭ·ПРО — тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания из Открытого банка ФИПИ: математика, русский язык, информатика, физика, обществознание и другие предметы.",
-  },
-  tariffs: {
-    title: "Тарифы — ЕГЭ·ПРО",
-    description: "Бесплатный и платные тарифы подготовки к ЕГЭ с ИИ-репетитором: банк заданий ФИПИ, персональный план, проверка сочинений по критериям.",
-  },
-};
+// тегами. Это теперь только ЗАПАСНОЙ вариант: настоящие страницы для ботов собирает botPages.js, заглушка — если БД недоступна.
 const PAGE_KEY_BY_PATH = { "/": "home", "/tariffs": "tariffs" };
 
 // Мета-теги подтверждения владения доменом (Яндекс.Вебмастер, Google Search Console и т.п.) —
@@ -799,9 +789,12 @@ async function resolveSiteVerificationMetaTags() {
   }
 }
 
-app.get(["/", "/tariffs"], async (req, res, next) => {
+// / , /tariffs , /parents , /contacts , /oferta , /privacy для краулеров и нейросетей: Caddy шлёт сюда ботов по User-Agent (см. @bot в
+// docker/Caddyfile), людей — в SPA. Настоящее содержимое страницы собирает docker/api/botPages.js. Если БД недоступна, на / и /tariffs
+// отдаём прежнюю короткую заглушку (заголовок и описание), на остальных — 503: боту лучше прийти позже, чем запомнить пустую страницу.
+async function botStub(req, domain, verificationMetaTags) {
   const pageKey = PAGE_KEY_BY_PATH[req.path];
-  const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  if (!pageKey) return null;
   let saved = null;
   try {
     const { rows } = await pool.query("select data from public.content_blocks where key = 'seo'");
@@ -811,12 +804,23 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
   }
   const title = saved?.pages?.[pageKey]?.title || DEFAULT_PAGE_SEO[pageKey].title;
   const description = saved?.pages?.[pageKey]?.description || DEFAULT_PAGE_SEO[pageKey].description;
-  const ogImage = saved?.ogImage || "";
-  const canonicalUrl = `${domain}${req.path}`;
-  const verificationMetaTags = await resolveSiteVerificationMetaTags();
+  return renderBotHtml({ title, description, canonicalUrl: `${domain}${req.path}`, ogImage: saved?.ogImage || "", verificationMetaTags });
+}
 
+app.get(BOT_PAGE_PATHS, async (req, res) => {
+  const domain = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  const verificationMetaTags = await resolveSiteVerificationMetaTags();
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.send(renderBotHtml({ title, description, canonicalUrl, ogImage, verificationMetaTags }));
+  try {
+    const result = await getBotPage(req.path, { siteUrl: domain, verificationMetaTags });
+    if (result.status === 200) res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(result.status).send(result.html);
+  } catch (e) {
+    console.warn("не удалось собрать страницу для бота, отдаю заглушку:", req.path, e?.message ?? e);
+    const stub = await botStub(req, domain, verificationMetaTags).catch(() => null);
+    if (stub) return res.send(stub);
+    return res.status(503).type("text/plain").send("Страница временно недоступна");
+  }
 });
 
 // /blog и /blog/<статья> для краулеров и нейросетей (docker/api/blogBot.js): Caddy шлёт сюда ботов по User-Agent, люди идут в SPA.
