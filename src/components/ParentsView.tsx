@@ -8,6 +8,7 @@ import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { plural } from "../lib/utils";
 import { Icon } from "./ui";
+import FaqAccordion from "./FaqAccordion";
 import parentsContent from "../../docker/api/content/parents.json";
 
 /** Источник текста — docker/api/content/parents.json: тот же файл читает сервер, когда отдаёт страницу ботам (docker/api/botPages.js). */
@@ -133,14 +134,7 @@ export default function ParentsView({ onNav }: { onNav: (v: View) => void }) {
       </div>
 
       <h2 className="font-display mt-12 text-xl font-black">{P.faqTitle}</h2>
-      <div className="mt-4 space-y-3">
-        {P.faq.map((f) => (
-          <div key={f.q} className="sheet p-4">
-            <h3 className="font-display text-[14.5px] font-bold">{f.q}</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink2">{f.a}</p>
-          </div>
-        ))}
-      </div>
+      <FaqAccordion items={P.faq} />
 
       <p className="mt-10 text-[13px] text-ink2">
         Остались вопросы?{" "}

@@ -36,6 +36,8 @@ import CheckEmailView from "./components/CheckEmailView";
 import VerifyEmailView from "./components/VerifyEmailView";
 import CookieBanner from "./components/CookieBanner";
 import { pathToView, viewToPath } from "./lib/routes";
+import SubjectPage from "./components/SubjectPage";
+import { hasSubjectPage } from "./lib/subjectPage";
 import ParentPayView from "./components/ParentPayView";
 import ParentsView from "./components/ParentsView";
 import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
@@ -87,7 +89,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
               return (
               <li key={s.id}>
                 <button
-                  onClick={() => onNav(profile ? { name: "bank", subject: s.id } : { name: "onboarding", subject: s.id })}
+                  onClick={() => onNav(profile ? { name: "bank", subject: s.id } : hasSubjectPage(s.id) ? { name: "subject-page", subject: s.id } : { name: "onboarding", subject: s.id })}
                   className="link-slide block w-full text-left text-[13px] font-semibold leading-snug text-paper/75 hover:text-paper break-words"
                 >
                   {s.name}
@@ -479,6 +481,7 @@ function AppShell() {
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
         {view.name === "parent-pay" && <ParentPayView key={`${view.token}:${view.paymentId ?? ""}`} token={view.token} paymentId={view.paymentId} onNav={setView} />}
         {view.name === "parents" && <ParentsView onNav={setView} />}
+        {view.name === "subject-page" && <SubjectPage subject={view.subject} onStart={(s) => setView({ name: "onboarding", subject: s })} onNav={setView} />}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
         {view.name === "admin" && profile?.isAdmin && (
           <Suspense fallback={<p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>}>

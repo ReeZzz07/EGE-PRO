@@ -7,6 +7,7 @@ import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
 import BlogSection from "./BlogSection";
 import ReviewsSection from "./ReviewsSection";
+import FaqAccordion from "./FaqAccordion";
 import type { View } from "./Header";
 
 /** Разбивает заголовок на части вокруг выделяемой подстроки и оборачивает её в hl-подсветку. */
@@ -280,16 +281,9 @@ export default function Landing({
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">частые вопросы</p>
           <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Коротко о главном</h2>
         </Reveal>
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {content.faq.map((f, i) => (
-            <Reveal key={f.q + i} delay={i * 60}>
-              <div className="sheet h-full p-5">
-                <h3 className="font-display text-[14.5px] font-bold leading-snug">{f.q}</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">{f.a}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
+        <Reveal>
+          <FaqAccordion items={content.faq} className="mt-6 mx-auto max-w-3xl space-y-3" />
+        </Reveal>
       <p className="mt-5 text-[13px] text-ink2">
           Не нашёл ответ?{" "}
           <button onClick={() => onNav({ name: "contacts" })} className="link-slide font-bold text-ink hover:text-blue">

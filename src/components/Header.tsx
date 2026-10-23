@@ -11,6 +11,7 @@ export type View =
   | { name: "landing"; section?: string; nonce?: number }
   | { name: "auth"; mode?: "signup" | "login" }
   | { name: "onboarding"; subject?: Subject }
+  | { name: "subject-page"; subject: Subject }
   | { name: "home" }
   | { name: "bank"; subject?: Subject }
   | { name: "tutor" }

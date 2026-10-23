@@ -15,7 +15,7 @@ import { pool } from "./db.js";
 import { escapeHtml, renderBotHtml } from "./botHtml.js";
 import { getBlogIndex, getBlogArticle } from "./blogBot.js";
 import { getBotPage, BOT_PAGE_PATHS, DEFAULT_PAGE_SEO } from "./botPages.js";
-import { renderLlmsTxt } from "./botPages.js";
+import { renderLlmsTxt, getSubjectPage, getSubjectPageData, availableSubjectSlugs } from "./botPages.js";
 import { sendPage, getSpaShell, memoize } from "./spaShell.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
@@ -753,6 +753,7 @@ app.get("/sitemap.xml", async (req, res) => {
     // только то, что видит гость: закрытая для гостей статья ботам недоступна (404), в sitemap ей делать нечего
     const { rows } = await pool.query("select slug from public.blog_articles where is_published = true and visible_to_guests = true");
     articleEntries = rows.map((r) => entry(`/blog/${r.slug}`, "monthly", "0.6")).join("");
+    articleEntries += (await availableSubjectSlugs()).map((slug) => entry(`/ege/${slug}`, "monthly", "0.8")).join("");
   } catch (e) {
     console.warn("не удалось прочитать blog_articles для sitemap.xml, отдаю без статей:", e?.message ?? e);
   }
@@ -829,6 +830,31 @@ app.get(BOT_PAGE_PATHS, async (req, res) => {
     // содержимого нет (БД недоступна): приложению оболочка всё равно нужна, статус 503 говорит роботам прийти позже
     const shell = await getSpaShell().catch(() => null);
     return shell ? res.status(503).type("html").send(shell) : res.status(503).type("text/plain").send("Страница временно недоступна");
+  }
+});
+
+// посадочные страницы предметов /ege/<адрес>: тот же документ для всех клиентов (docker/api/botPages.js, getSubjectPage)
+app.get("/ege/:slug", async (req, res) => {
+  try {
+    const verificationMetaTags = await verificationTags();
+    const result = await memoize(`ege:${req.params.slug}`, 30000, () => getSubjectPage(req.params.slug, { siteUrl: siteDomain(), verificationMetaTags }));
+    await sendPage(res, result.status, result.html);
+  } catch (e) {
+    console.warn("не удалось собрать страницу предмета:", e?.message ?? e);
+    const shell = await getSpaShell().catch(() => null);
+    shell ? res.status(503).type("html").send(shell) : res.status(503).type("text/plain").send("Страница временно недоступна");
+  }
+});
+
+// разделы и темы предмета для приложения (SubjectPage.tsx); открыто всем, как и страница
+app.get("/public/subject/:slug", blogReadLimiter, async (req, res) => {
+  try {
+    const data = await memoize(`subject-data:${req.params.slug}`, 60000, () => getSubjectPageData(req.params.slug));
+    if (!data) return res.status(404).json({ error: "Предмет не найден" });
+    res.set("Cache-Control", "public, max-age=300");
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: "Не удалось загрузить предмет" });
   }
 });
 

@@ -50,6 +50,8 @@ const apiProxy = backendHost
       // /blog/<slug> — страницы сайта.
       // объявление о сбое почты на экранах регистрации/входа (docker/api/siteNotice.js)
       "/site-notice": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      // разделы и темы предмета для страницы /ege/<адрес> (docker/api/botPages.js, getSubjectPageData); сами адреса /ege/* — страницы сайта
+      "/public/subject": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/blog-engagement": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/parent-link": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/public/parent-link": { target: `http://api:8787`, changeOrigin: true, ...XFWD },

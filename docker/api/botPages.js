@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import { pool } from "./db.js";
 import { escapeHtml } from "./botHtml.js";
-import { siteName, NAV, FOOTER, jsonLd, dateRu, head } from "./botLayout.js";
+import { siteName, NAV, FOOTER, jsonLd, dateRu, trimText, head } from "./botLayout.js";
 import { SUBJECT_NAMES } from "./subjectNames.js";
 import { getPublicContactInfo } from "./feedback.js";
 import { listPublicReviews } from "./reviews.js";
@@ -18,6 +18,7 @@ const LANDING = readJson("landing.json");
 const TARIFFS_PAGE = readJson("tariffsPage.json");
 const PARENTS = readJson("parents.json");
 const CONTACTS = readJson("contacts.json");
+const SUBJECT_PAGES = readJson("subjects.json");
 
 /** Заголовки и описания по умолчанию — те же, что в админке «SEO» (src/lib/seo.ts), если там ничего не сохранено. */
 export const DEFAULT_PAGE_SEO = {
@@ -141,7 +142,7 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
   const total = subjects.reduce((n, s) => n + s.total, 0);
   const subjectsHtml = subjects.length
     ? `<section>\n<h2>${esc(LANDING_HEADINGS.subjects)}</h2>\n<p>В банке ${total.toLocaleString("ru-RU")} ${plural(total, "задание", "задания", "заданий")} из открытого банка ФИПИ по ${subjects.length} ${plural(subjects.length, "предмету", "предметам", "предметам")}.</p>\n<ul>\n${subjects
-        .map((s) => `<li>${esc(s.name)}: ${s.total.toLocaleString("ru-RU")} ${plural(s.total, "задание", "задания", "заданий")}</li>`)
+        .map((s) => `<li>${SUBJECT_PAGES.landingSubjects.includes(s.id) ? `<a href="/ege/${SUBJECT_PAGES.subjects[s.id].slug}">${esc(s.name)}</a>` : esc(s.name)}: ${s.total.toLocaleString("ru-RU")} ${plural(s.total, "задание", "задания", "заданий")}</li>`)
         .join("\n")}\n</ul>\n</section>`
     : "";
   const processHtml = landing.process.length
@@ -382,7 +383,7 @@ export async function getBotPage(pathname, { siteUrl = "", verificationMetaTags 
 /** Текст для нейросетей по стандарту llms.txt: коротко и по пунктам, что за сервис (УТП), как он работает, сколько стоит, на каких условиях и
  *  какие целевые действия доступны. Собирается из тех же данных, что и страницы (БД, общие JSON), поэтому не расходится с сайтом. */
 export async function renderLlmsTxt({ siteUrl = "" } = {}) {
-  const [seo, landing, tariffs, saved, info, articles] = await Promise.all([
+  const [seo, landing, tariffs, saved, info, articles, subjects] = await Promise.all([
     loadSeo(),
     loadLanding(),
     loadTariffs().catch(() => []),
@@ -392,6 +393,7 @@ export async function renderLlmsTxt({ siteUrl = "" } = {}) {
       .query("select slug, title, excerpt from public.blog_articles where is_published = true and visible_to_guests = true order by is_pinned desc, published_at desc nulls last limit 60")
       .then((r) => r.rows)
       .catch(() => []),
+    loadSubjects().catch(() => []),
   ]);
   const tp = { ...TARIFFS_PAGE, ...(saved ?? {}) };
   const url = (p) => `${siteUrl}${p}`;
@@ -408,6 +410,10 @@ export async function renderLlmsTxt({ siteUrl = "" } = {}) {
   }
   lines.push("", "## Условия оплаты", "", `- ${tp.paymentNote}`, "- Оплата банковской картой или через СБП (ЮKassa); ссылку на оплату ребёнок может отправить родителю.", `- Подробнее: оферта ${url("/oferta")}`);
   lines.push("", "## Целевые действия", "", `- Пройти бесплатную диагностику: ${url("/diagnostic")}`, `- Выбрать тариф: ${url("/tariffs")}`, `- Для родителей, как оплатить за ребёнка: ${url("/parents")}`, `- Написать нам: ${url("/contacts")}`);
+  if (subjects.some((x) => SUBJECT_PAGES.landingSubjects.includes(x.id))) {
+    lines.push("", "## Подготовка по предметам", "");
+    for (const s of subjects.filter((x) => SUBJECT_PAGES.landingSubjects.includes(x.id))) lines.push(`- ${s.name}, ${s.total.toLocaleString("ru-RU")} ${plural(s.total, "задание", "задания", "заданий")}: ${url(`/ege/${SUBJECT_PAGES.subjects[s.id].slug}`)}`);
+  }
   lines.push("", "## Разделы сайта", "", `- Главная: ${url("/")}`, `- Тарифы: ${url("/tariffs")}`, `- Родителям: ${url("/parents")}`, `- Контакты: ${url("/contacts")}`, `- База знаний: ${url("/blog")}`);
   if (articles.length) {
     lines.push("", "## Статьи", "");
@@ -416,4 +422,126 @@ export async function renderLlmsTxt({ siteUrl = "" } = {}) {
   if (info?.supportEmail) lines.push("", "## Контакты", "", `- Почта: ${info.supportEmail}`);
   lines.push("", "## Важно", "", "- Это независимый учебный проект: задания из открытого банка ФИПИ, сервис не является официальным ресурсом ФИПИ или Рособрнадзора.", "- Результат на экзамене не гарантируется: он зависит от самого ученика.", "");
   return lines.join("\n");
+}
+
+// ─────────────────────── посадочные страницы предметов: /ege/<адрес> ───────────────────────
+
+/** Предмет по адресу страницы (общий файл content/subjects.json — его же читает приложение). */
+export function subjectBySlug(slug) {
+  const id = SUBJECT_PAGES.landingSubjects.find((k) => SUBJECT_PAGES.subjects[k].slug === slug);
+  return id ? { id, ...SUBJECT_PAGES.subjects[id] } : null;
+}
+
+/** Адреса страниц предметов, по которым в банке есть задания (для sitemap.xml): без заданий страницы нет. */
+export async function availableSubjectSlugs() {
+  const subjects = await loadSubjects();
+  return subjects.filter((s) => SUBJECT_PAGES.landingSubjects.includes(s.id)).map((s) => SUBJECT_PAGES.subjects[s.id].slug);
+}
+
+/** Содержание предмета из банка заданий: сколько заданий, разделы и самые большие темы с числом заданий. */
+export async function loadSubjectContent(id) {
+  const total = (await pool.query("select count(*)::int as n from public.tasks where published = true and subject = $1", [id])).rows[0].n;
+  if (!total) return null;
+  const sections = (
+    await pool.query(
+      `select section as name, count(*)::int as n from public.tasks
+        where published = true and subject = $1 and coalesce(section, '') <> '' group by section order by n desc, section limit 12`,
+      [id]
+    )
+  ).rows;
+  const topics = (
+    await pool.query(
+      `select topic as name, count(*)::int as n from public.tasks
+        where published = true and subject = $1 and coalesce(topic, '') <> '' group by topic order by n desc, topic limit 12`,
+      [id]
+    )
+  ).rows;
+  return { total, sections, topics };
+}
+
+const fill = (text, vars) => text.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
+
+export function renderSubjectPage({ subject, content, tariffs, steps, paymentNote, others, seo, siteUrl = "", verificationMetaTags = "" }) {
+  const path = `/ege/${subject.slug}`;
+  const canonicalUrl = siteUrl ? `${siteUrl}${path}` : "";
+  const n = content.total;
+  const taskWord = `${n.toLocaleString("ru-RU")} ${plural(n, "задание", "задания", "заданий")}`;
+  const title = `Подготовка к ЕГЭ по ${subject.dative} — ${siteName}`;
+  const lead = `${taskWord} из открытого банка ФИПИ по предмету «${subject.name}»: ${subject.desc.replace(/\.$/, "")}.`;
+  const description = trimText(`${lead} Диагностика, личный план и ИИ-репетитор, который объясняет, а не решает за тебя.`, 300);
+  const faq = SUBJECT_PAGES.faq.map((f) => ({ q: fill(f.q, { dative: subject.dative }), a: fill(f.a, { dative: subject.dative }) }));
+  const list = (items) => items.map((x) => `<li>${esc(x.name)}: ${x.n.toLocaleString("ru-RU")} ${plural(x.n, "задание", "задания", "заданий")}</li>`).join("\n");
+  const paid = tariffs.filter((t) => t.price > 0);
+  const tariffsHtml = tariffs.length
+    ? `<section>\n<h2>Сколько стоит подготовка</h2>\n<ul>\n${tariffs
+        .map((t) => {
+          const l = tariffLine(t);
+          return `<li><strong>${esc(t.name)}</strong>: ${esc(l.price)}${t.price > 0 ? " за 30 дней" : ""}, ${esc(l.subjects)}, ${esc(l.ai)}</li>`;
+        })
+        .join("\n")}\n</ul>\n${paid.length && paymentNote ? `<p>${esc(paymentNote)}</p>\n` : ""}<p><a href="/tariffs">Все тарифы и условия оплаты</a></p>\n</section>`
+    : "";
+  const body = `<h1>Подготовка к ЕГЭ по ${esc(subject.dative)}</h1>
+<p>${esc(lead)}</p>
+<p><a href="/diagnostic">Пройти бесплатную диагностику по предмету</a>: 8–12 заданий за 7–10 минут, уровень, слабые темы и персональный план. · <a href="/tariffs">Тарифы</a> · <a href="/parents">Родителям</a></p>
+${
+  content.sections.length
+    ? `<section>\n<h2>${esc(SUBJECT_PAGES.sectionsTitle)}</h2>\n<h3>Разделы</h3>\n<ul>\n${list(content.sections)}\n</ul>\n${content.topics.length ? `<h3>Самые большие темы</h3>\n<ul>\n${list(content.topics)}\n</ul>\n` : ""}</section>`
+    : content.topics.length
+      ? `<section>\n<h2>${esc(SUBJECT_PAGES.sectionsTitle)}</h2>\n<ul>\n${list(content.topics)}\n</ul>\n</section>`
+      : ""
+}
+${steps.length ? `<section>\n<h2>Как проходит подготовка</h2>\n<ol>\n${steps.map((s) => `<li><h3>${esc(s.t)}</h3><p>${esc(s.d)}</p></li>`).join("\n")}\n</ol>\n</section>` : ""}
+${tariffsHtml}
+<section>
+<h2>${esc(SUBJECT_PAGES.faqTitle)}</h2>
+${faq.map((f) => `<h3>${esc(f.q)}</h3>\n<p>${esc(f.a)}</p>`).join("\n")}
+</section>
+${others.length ? `<section>\n<h2>Другие предметы</h2>\n<ul>\n${others.map((o) => `<li><a href="/ege/${esc(o.slug)}">${esc(o.name)}</a></li>`).join("\n")}\n</ul>\n</section>` : ""}
+<section>
+<h2>${esc(SUBJECT_PAGES.uspTitle)}</h2>
+<ul>
+${SUBJECT_PAGES.usp.map((u) => `<li><strong>${esc(u.t)}</strong>: ${esc(u.d)}</li>`).join("\n")}
+</ul>
+<p><a href="/diagnostic">Пройти бесплатную диагностику по предмету «${esc(subject.name)}»</a></p>
+</section>`;
+  const course = {
+    "@context": "https://schema.org",
+    "@type": "Course",
+    name: `Подготовка к ЕГЭ по ${subject.dative}`,
+    description,
+    inLanguage: "ru",
+    provider: org(siteUrl, ""),
+    ...(canonicalUrl ? { url: canonicalUrl } : {}),
+  };
+  return page(
+    { title, description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(course, faqLd(faq), crumbsLd(siteUrl, [["Главная", "/"], [`ЕГЭ по ${subject.dative}`, path]])) },
+    body
+  );
+}
+
+/** { status, html } для /ege/<адрес>: 404, если адреса нет в списке или по предмету нет заданий. */
+export async function getSubjectPage(slug, { siteUrl = "", verificationMetaTags = "" } = {}) {
+  const subject = subjectBySlug(String(slug ?? ""));
+  const content = subject ? await loadSubjectContent(subject.id) : null;
+  if (!subject || !content) {
+    const html = page({ title: "Страница не найдена — ЕГЭ·ПРО", description: "Такой страницы нет.", noindex: true, verificationMetaTags }, `<h1>Страница не найдена</h1>\n<p><a href="/">На главную</a></p>`);
+    return { status: 404, html };
+  }
+  const [seo, landing, tariffs, saved, available] = await Promise.all([
+    loadSeo(),
+    loadLanding(),
+    loadTariffs().catch(() => []),
+    contentBlock("tariffsPage").catch(() => null),
+    loadSubjects().catch(() => []),
+  ]);
+  const others = available.filter((s) => s.id !== subject.id && SUBJECT_PAGES.landingSubjects.includes(s.id)).map((s) => ({ slug: SUBJECT_PAGES.subjects[s.id].slug, name: s.name }));
+  const paymentNote = { ...TARIFFS_PAGE, ...(saved ?? {}) }.paymentNote;
+  return { status: 200, html: renderSubjectPage({ subject, content, tariffs, steps: landing.process, paymentNote, others, seo, siteUrl, verificationMetaTags }) };
+}
+
+/** JSON для приложения (SubjectPage.tsx): те же разделы и темы, что на странице для роботов. null — нет такого предмета/заданий. */
+export async function getSubjectPageData(slug) {
+  const subject = subjectBySlug(String(slug ?? ""));
+  const content = subject ? await loadSubjectContent(subject.id) : null;
+  return content ? { id: subject.id, ...content } : null;
 }

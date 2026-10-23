@@ -6,6 +6,11 @@ import {
   BOT_PAGE_PATHS,
   LANDING_HEADINGS,
   getBotPage,
+  getSubjectPage,
+  getSubjectPageData,
+  availableSubjectSlugs,
+  renderSubjectPage,
+  subjectBySlug,
   legalTextToHtml,
   parentsUsText,
   renderContactsPage,
@@ -45,8 +50,8 @@ test("renderHomePage: заголовок и подзаголовок героя,
   });
   assert.match(html, /<h1>Подготовка к ЕГЭ с ИИ-репетитором<\/h1>/);
   assert.match(html, /<p>Диагностика, план и разборы\.<\/p>/);
-  assert.match(html, /<li>Математика \(профиль\): 4\s774 задания<\/li>/);
-  assert.match(html, /<li>Русский язык: 7\s370 заданий<\/li>/);
+  assert.match(html, /<li><a href="\/ege\/matematika-profil">Математика \(профиль\)<\/a>: 4\s774 задания<\/li>/);
+  assert.match(html, /<li><a href="\/ege\/russkii-yazyk">Русский язык<\/a>: 7\s370 заданий<\/li>/);
   assert.match(html, /В банке 12\s144 задания из открытого банка ФИПИ по 2 предметам\./);
   assert.match(html, new RegExp(LANDING_HEADINGS.subjects));
   assert.match(html, /<h3>Диагностика<\/h3><p>7–10 минут\.<\/p>/);
@@ -178,4 +183,80 @@ test("страница родителей и контактов в React чит�
   assert.match(src("src/lib/tariffsContent.ts"), /docker\/api\/content\/tariffsPage\.json/);
   const landing = src("src/components/Landing.tsx");
   for (const [key, text] of Object.entries(LANDING_HEADINGS)) assert.ok(landing.includes(text), `Landing.tsx: нет заголовка «${text}» (${key}) — обновите LANDING_HEADINGS в botPages.js`);
+});
+
+// ─────────────────────── посадочные страницы предметов ───────────────────────
+
+const subjectContent = { total: 11252, sections: [{ name: "Анатомия и физиология", n: 2284 }, { name: "Зоология", n: 1225 }], topics: [{ name: "Клетка", n: 300 }] };
+
+test("subjectBySlug: страницы только у русского, профильной математики, обществознания и биологии; у остальных предметов страниц нет", () => {
+  assert.deepEqual(["russkii-yazyk", "matematika-profil", "obschestvoznanie", "biologiya"].map((x) => subjectBySlug(x)?.id), ["rus", "math", "soc", "bio"]);
+  for (const slug of ["fizika", "himiya", "istoriya", "literatura", "angliiskii-yazyk", "geografiya", "informatika", "matematika-bazovyi-uroven", "", "x"]) assert.equal(subjectBySlug(slug), null, slug);
+});
+
+test("renderSubjectPage: h1 «по биологии», число заданий, разделы и темы, шаги, тарифы, вопросы со склонением, ссылки на другие предметы; Course, FAQPage, BreadcrumbList", () => {
+  const html = renderSubjectPage({
+    subject: subjectBySlug("biologiya"),
+    content: subjectContent,
+    tariffs,
+    steps: [{ n: "01", t: "Диагностика", d: "7–10 минут." }],
+    paymentNote: "Разовая оплата на 30 дней.",
+    others: [{ slug: "russkii-yazyk", name: "Русский язык" }],
+    seo,
+    siteUrl: SITE,
+  });
+  assert.match(html, /<title>Подготовка к ЕГЭ по биологии — ЕГЭ·ПРО<\/title>/);
+  assert.match(html, /<h1>Подготовка к ЕГЭ по биологии<\/h1>/);
+  assert.match(html, /11\s252 задания из открытого банка ФИПИ по предмету «Биология»/);
+  assert.match(html, /<li>Анатомия и физиология: 2\s284 задания<\/li>/);
+  assert.match(html, /<h3>Самые большие темы<\/h3>/);
+  assert.match(html, /<h3>Диагностика<\/h3><p>7–10 минут\.<\/p>/);
+  assert.match(html, /<strong>АТТЕСТАТ<\/strong>: 1\s990 ₽ за 30 дней/);
+  assert.match(html, /Разовая оплата на 30 дней\./);
+  assert.match(html, /<h3>С чего начать подготовку к ЕГЭ по биологии\?<\/h3>/);
+  assert.match(html, /<a href="\/diagnostic">Пройти бесплатную диагностику по предмету<\/a>/);
+  assert.match(html, /<a href="\/ege\/russkii-yazyk">Русский язык<\/a>/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/ege-tutor\.ru\/ege\/biologiya">/);
+  assert.deepEqual(ldBlocks(html).map((b) => b["@type"]), ["Course", "FAQPage", "BreadcrumbList"]);
+  assert.doesNotMatch(html, /возврат/i);
+  // УТП — последний раздел страницы, с кнопкой диагностики по предмету
+  const main = html.slice(html.indexOf("<main>"), html.indexOf("</main>"));
+  const lastH2 = main.lastIndexOf("<h2>");
+  assert.match(main.slice(lastH2), /^<h2>Почему ЕГЭ·ПРО<\/h2>/);
+  assert.match(main.slice(lastH2), /<strong>Объясняет, а не решает за тебя<\/strong>/);
+  assert.match(main.slice(lastH2), /<a href="\/diagnostic">Пройти бесплатную диагностику по предмету «Биология»<\/a>/);
+});
+
+test("getSubjectPage: четыре предмета — 200 с разными title; остальные предметы, неизвестный и пустой адрес — 404 с noindex (против локальной БД)", async () => {
+  const titles = new Set();
+  for (const slug of ["russkii-yazyk", "matematika-profil", "obschestvoznanie", "biologiya"]) {
+    const r = await getSubjectPage(slug, { siteUrl: SITE });
+    assert.equal(r.status, 200, slug);
+    assert.match(r.html, /<h1>Подготовка к ЕГЭ по [^<]+<\/h1>/, slug);
+    assert.match(r.html, /<h2>Разделы и темы в тренажёре<\/h2>/, slug);
+    titles.add(r.html.match(/<title>(.*?)<\/title>/)[1]);
+  }
+  assert.equal(titles.size, 4, "у каждой страницы свой title");
+  for (const slug of ["fizika", "informatika", "net-takoi", ""]) {
+    const r = await getSubjectPage(slug);
+    assert.equal(r.status, 404, slug);
+    assert.match(r.html, /noindex/);
+  }
+});
+
+test("availableSubjectSlugs и getSubjectPageData: в sitemap только четыре адреса; JSON для приложения с теми же разделами и темами", async () => {
+  assert.deepEqual((await availableSubjectSlugs()).sort(), ["biologiya", "matematika-profil", "obschestvoznanie", "russkii-yazyk"]);
+  const d = await getSubjectPageData("obschestvoznanie");
+  assert.equal(d.id, "soc");
+  assert.ok(d.total > 0 && d.sections.length > 0 && d.topics.length > 0);
+  assert.equal(await getSubjectPageData("fizika"), null);
+});
+
+test("subjects.json: названия и описания предметов — дословно как в src/data/tasks.ts (одно описание на сайте и на странице для роботов)", () => {
+  const tasksTs = fs.readFileSync(new URL("../../../src/data/tasks.ts", import.meta.url), "utf8");
+  const data = JSON.parse(fs.readFileSync(new URL("../content/subjects.json", import.meta.url), "utf8"));
+  for (const id of data.landingSubjects) {
+    assert.ok(tasksTs.includes(`name: "${data.subjects[id].name}"`), `${id}: имя`);
+    assert.ok(tasksTs.includes(`desc: "${data.subjects[id].desc}"`), `${id}: описание разошлось с tasks.ts`);
+  }
 });

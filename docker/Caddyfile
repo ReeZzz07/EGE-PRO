@@ -38,7 +38,7 @@ www.{$SITE_HOST} {
 	# сайт для людей не зависит от api так, как зависели бы они от единственного upstream.
 	@public {
 		method GET HEAD
-		path / /tariffs /parents /contacts /oferta /privacy /blog /blog/* /llms.txt
+		path / /tariffs /parents /contacts /oferta /privacy /blog /blog/* /ege/* /llms.txt
 	}
 	handle @public {
 		reverse_proxy api:8787 web:3000 {

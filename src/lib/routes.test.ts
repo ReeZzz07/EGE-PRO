@@ -137,3 +137,14 @@ describe("страницы родителя: /parents и /pay-for/<токен>",
     expect(pathToView(`/pay-for/${TOKEN}/x`)).toBeNull();
   });
 });
+
+describe("посадочные страницы предметов /ege/<адрес>", () => {
+  it("четыре предмета: адрес и экран соответствуют друг другу, остальные предметы и неизвестные адреса — не наши роуты", () => {
+    for (const [slug, subject] of [["russkii-yazyk", "rus"], ["matematika-profil", "math"], ["obschestvoznanie", "soc"], ["biologiya", "bio"]] as const) {
+      const view: View = { name: "subject-page", subject };
+      expect(pathToView(`/ege/${slug}`)).toEqual(view);
+      expect(viewToPath(view)).toBe(`/ege/${slug}`);
+    }
+    for (const bad of ["/ege/fizika", "/ege/informatika", "/ege/", "/ege/x/y", "/ege"]) expect(pathToView(bad)).toBeNull();
+  });
+});

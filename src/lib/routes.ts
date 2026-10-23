@@ -9,6 +9,7 @@
 // popstate) для двух десятков строк логичнее, чем тащить <BrowserRouter>/<Routes> ради
 // несуществующего в проекте паттерна (react-router-dom когда-то был в зависимостях неиспользуемым — убран).
 import type { View } from "../components/Header";
+import { subjectBySlug, subjectPagePath } from "./subjectPage";
 
 export function viewToPath(view: View): string {
   if (view.name === "tariffs") return "/tariffs";
@@ -29,6 +30,8 @@ export function viewToPath(view: View): string {
   // ?paymentId= — возврат после оплаты. Токен — длинная случайная строка, поэтому без encodeURIComponent
   // его не ломаем: base64url безопасен для пути.
   if (view.name === "parent-pay") return `/pay-for/${encodeURIComponent(view.token)}${view.paymentId ? `?paymentId=${encodeURIComponent(view.paymentId)}` : ""}`;
+  // /ege/<адрес> — посадочная страница предмета (публичная, есть в sitemap.xml), адреса — docker/api/content/subjects.json
+  if (view.name === "subject-page") return subjectPagePath(view.subject);
   if (view.name === "blog") return "/blog";
   if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
   // /payment/return не строится через setView() изнутри приложения — на него попадают только
@@ -56,6 +59,10 @@ export function pathToView(pathname: string, search = ""): View | null {
     const token = pathname.slice("/pay-for/".length);
     if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
     return { name: "parent-pay", token, paymentId: new URLSearchParams(search).get("paymentId") ?? undefined };
+  }
+  if (pathname.startsWith("/ege/")) {
+    const subject = subjectBySlug(pathname.slice("/ege/".length));
+    return subject ? { name: "subject-page", subject } : null;
   }
   if (pathname === "/blog") return { name: "blog" };
   if (pathname.startsWith("/blog/")) {

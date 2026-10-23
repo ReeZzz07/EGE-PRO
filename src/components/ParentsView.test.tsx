@@ -53,7 +53,7 @@ describe("ParentsView", () => {
   it("ответ про замену репетитору дружелюбный к платформе, но без обещаний результата", async () => {
     render(<ParentsView onNav={vi.fn()} />);
     const q = await screen.findByText("Это замена репетитору?");
-    const answer = norm(q.parentElement!.textContent);
+    const answer = norm(q.closest("details")!.textContent);
     expect(answer).toMatch(/основным способом подготовки/);
     expect(answer).not.toMatch(/гаранти(руем|я)/i);
   });
