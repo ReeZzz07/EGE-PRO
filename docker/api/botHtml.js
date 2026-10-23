@@ -35,7 +35,7 @@ ${
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
 </head><body>
-<header><nav><a href="/">ЕГЭ·ПРО</a> <a href="/tariffs">Тарифы</a></nav></header>
+<header><nav><a href="/">ЕГЭ·ПРО</a> <a href="/tariffs">Тарифы</a> <a href="/blog">База знаний</a></nav></header>
 <main>
 <h1>${escapeHtml(title)}</h1>
 <p>${escapeHtml(description)}</p>

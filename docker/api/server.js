@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pool } from "./db.js";
 import { escapeHtml, renderBotHtml } from "./botHtml.js";
+import { getBlogIndex, getBlogArticle } from "./blogBot.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
   buildChatPrompt,
@@ -746,7 +747,8 @@ app.get("/sitemap.xml", async (req, res) => {
   const entry = (path, freq, priority) => (domain ? `  <url>\n    <loc>${domain}${path}</loc>\n    <changefreq>${freq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n` : "");
   let articleEntries = "";
   try {
-    const { rows } = await pool.query("select slug from public.blog_articles where is_published = true");
+    // только то, что видит гость: закрытая для гостей статья ботам недоступна (404), в sitemap ей делать нечего
+    const { rows } = await pool.query("select slug from public.blog_articles where is_published = true and visible_to_guests = true");
     articleEntries = rows.map((r) => entry(`/blog/${r.slug}`, "monthly", "0.6")).join("");
   } catch (e) {
     console.warn("не удалось прочитать blog_articles для sitemap.xml, отдаю без статей:", e?.message ?? e);
@@ -815,6 +817,26 @@ app.get(["/", "/tariffs"], async (req, res, next) => {
 
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.send(renderBotHtml({ title, description, canonicalUrl, ogImage, verificationMetaTags }));
+});
+
+// /blog и /blog/<статья> для краулеров и нейросетей (docker/api/blogBot.js): Caddy шлёт сюда ботов по User-Agent, люди идут в SPA.
+// Нейросети и часть поисковых роботов не исполняют JS, а статьи в SPA рисуются именно им — без этого они видели бы пустую страницу.
+app.get(["/blog", "/blog/:slug"], async (req, res) => {
+  const siteUrl = (process.env.CORS_ORIGIN || "").split(",")[0].trim();
+  try {
+    const verificationMetaTags = await resolveSiteVerificationMetaTags();
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    if (!req.params.slug) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.send(await getBlogIndex({ siteUrl, verificationMetaTags }));
+    }
+    const { status, html } = await getBlogArticle(req.params.slug, { siteUrl, verificationMetaTags });
+    if (status === 200) res.setHeader("Cache-Control", "public, max-age=300");
+    res.status(status).send(html);
+  } catch (e) {
+    console.warn("не удалось собрать страницу блога для бота:", e?.message ?? e);
+    res.status(500).type("text/plain").send("Не удалось загрузить страницу");
+  }
 });
 
 // ─────────────────────── обратная связь (см. feedback.js, миграция 0038) ───────────────────────
