@@ -69,6 +69,17 @@ www.{$SITE_HOST} {
 			max_fails 1
 		}
 	}
+	# Страницы приложения, которым нечего делать в поиске (диагностика, онбординг, личные разделы, оплата, ссылки из писем): для роботов это пустая
+	# оболочка на JS, дублирующая главную. Закрываем заголовком X-Robots-Tag, а не robots.txt: с запретом в robots.txt робот не прочитает noindex.
+	# Человеку ничего не меняется: приложение то же самое. Список должен входить в страницы приложения из @notfound (держит caddyNotFound.test.js).
+	@private {
+		method GET HEAD
+		path /diagnostic /renew /onboarding /subjects /plan /review /payment/return /reset-password /verify-email /pay-for/*
+	}
+	handle @private {
+		header X-Robots-Tag "noindex, follow"
+		reverse_proxy web:3000
+	}
 	handle {
 		reverse_proxy web:3000
 	}

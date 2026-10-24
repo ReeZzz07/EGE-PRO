@@ -56,3 +56,18 @@ test("правило работает только для GET и HEAD и идё�
   assert.ok(caddy.indexOf("handle @public") < caddy.indexOf("handle @notfound"));
   assert.match(caddy, /handle @notfound \{\s*rewrite \* \/__not-found/);
 });
+
+test("служебные страницы приложения закрыты от индексации заголовком, остаются страницами приложения (не 404) и не пересекаются с публичными", () => {
+  const priv = caddy.slice(caddy.indexOf("@private {"), caddy.indexOf("}", caddy.indexOf("@private {")));
+  assert.ok(priv, "в Caddyfile есть @private");
+  const privPaths = priv.match(/^\s*path (.+)$/m)[1].trim().split(/\s+/);
+  const pub = caddy.slice(caddy.indexOf("@public {"), caddy.indexOf("}", caddy.indexOf("@public {")));
+  const pubPaths = pub.match(/^\s*path (.+)$/m)[1].trim().split(/\s+/);
+  assert.ok(privPaths.includes("/diagnostic"));
+  for (const p of privPaths) {
+    assert.equal(isNotFound(p === "/pay-for/*" ? "/pay-for/token" : p), false, `${p} — страница приложения, а не 404`);
+    assert.equal(pubPaths.includes(p), false, `${p} не должен быть и публичным`);
+  }
+  assert.match(caddy, /handle @private \{\s*header X-Robots-Tag "noindex, follow"\s*reverse_proxy web:3000/);
+  assert.ok(caddy.indexOf("handle @public") < caddy.indexOf("handle @private") && caddy.indexOf("handle @private") < caddy.lastIndexOf("\thandle {"));
+});

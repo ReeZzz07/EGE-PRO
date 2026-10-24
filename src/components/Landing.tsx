@@ -167,7 +167,7 @@ export default function Landing({
 
           {/* образец задания — наглядно показываем сам продукт */}
           <div className="card-lift relative mx-auto w-full min-w-0 max-w-md rotate-1 lg:max-w-lg">
-            <p className="mb-3 text-center font-mono text-[11.5px] font-bold uppercase tracking-[0.2em] text-ink2">{landingStatic.previewTitle}</p>
+            <h2 className="mb-3 text-center font-mono text-[11.5px] font-bold uppercase tracking-[0.2em] text-ink2">{landingStatic.previewTitle}</h2>
             <div className="sheet sheet-margin relative p-7 pl-14 sm:p-8 sm:pl-16">
               <span className="pointer-events-none absolute right-4 top-4 z-10">
                 <Stamp text="Верно" tone="green" />
@@ -324,8 +324,10 @@ export default function Landing({
           <div className="gridpaper-dark relative overflow-hidden border-2 border-night bg-night px-6 py-10 text-paper sm:px-10 sm:py-12">
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-14">
               <div>
-                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">{landingStatic.principle.eyebrow}</span>
-                <p className="font-display mt-3 text-2xl font-bold leading-snug sm:text-[2rem] sm:leading-tight">{landingStatic.principle.title}</p>
+                <h2 className="font-display text-2xl font-bold leading-snug sm:text-[2rem] sm:leading-tight">
+                  <span className="mb-3 block font-mono text-[11px] font-bold uppercase leading-normal tracking-[0.28em] text-hl">{landingStatic.principle.eyebrow}</span>
+                  {landingStatic.principle.title}
+                </h2>
                 <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-paper/75">{landingStatic.principle.text}</p>
 
                 {/* три уровня подсказок: от намёка до почти полного разбора */}

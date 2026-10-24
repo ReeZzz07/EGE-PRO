@@ -62,15 +62,21 @@ describe("Landing", () => {
 
   it("предметы: без «Скоро добавим…» рядом с «Начни с любого из N» — число совпадает с числом доступных предметов", async () => {
     render(<Landing onStart={vi.fn()} onLogin={vi.fn()} onNav={vi.fn()} />);
-    expect(await screen.findByText("Начни с любого из 3 предметов — дальше сможешь тренировать все.")).toBeInTheDocument();
+    expect(await screen.findByText("Начни с любого из 3 предметов, например с русского языка, профильной математики или обществознания: дальше сможешь тренировать все.")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Скоро добавим/);
+  });
+
+  it("заголовки H2 в браузерной версии: «Так выглядит задание…» и «Принцип платформы», как в серверной", async () => {
+    render(<Landing onStart={vi.fn()} onLogin={vi.fn()} onNav={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 2, name: "так выглядит задание в тренажёре ЕГЭ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /принцип платформы\s*ИИ не решает за тебя/i })).toBeInTheDocument();
   });
 
   it("герой: обе кнопки запускают диагностику, текст берётся из общего файла", async () => {
     const onStart = vi.fn();
     render(<Landing onStart={onStart} onLogin={vi.fn()} onNav={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Определить свой уровень/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Начать бесплатно" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Начать бесплатно" })[0]);
     expect(onStart).toHaveBeenCalledTimes(2);
     expect(DEFAULT_CONTENT.hero.title.length).toBeGreaterThan(0);
   });
@@ -95,13 +101,12 @@ describe("Landing", () => {
     const onStart = vi.fn();
     render(<Landing onStart={onStart} onLogin={vi.fn()} onNav={vi.fn()} />);
     await screen.findByText("АТТЕСТАТ");
-    // после «Как это устроено» и в конце страницы — обе с подписью «Пройти диагностику»; на первом экране — две кнопки героя
-    const bottom = screen.getAllByRole("button", { name: /Пройти диагностику/ });
-    expect(bottom).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: /Определить свой уровень|Начать бесплатно/ })).toHaveLength(2);
-    fireEvent.click(bottom[0]);
-    fireEvent.click(bottom[1]);
-    expect(onStart).toHaveBeenCalledTimes(2);
+    // «Начать бесплатно» ровно в трёх местах: первый экран, после «Как это устроено», конец страницы (плюс «Определить свой уровень» в герое)
+    const free = screen.getAllByRole("button", { name: "Начать бесплатно" });
+    expect(free).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Определить свой уровень/ })).toHaveLength(1);
+    for (const b of free) fireEvent.click(b);
+    expect(onStart).toHaveBeenCalledTimes(3);
   });
 
   it("ссылки из ТЗ: статья о диагностике, сравнение с живым репетитором — переходы без перезагрузки; /parents — страница для родителей", async () => {

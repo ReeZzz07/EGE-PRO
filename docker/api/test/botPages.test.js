@@ -286,7 +286,7 @@ test("renderHomePage: цифры банка, кнопки, пример зада
   assert.match(html, /<li><strong>2<\/strong> предметов<\/li>/);
   assert.match(html, /<li><strong>8\s000<\/strong> первичных баллов<\/li>/);
   assert.match(html, /<li><strong>150<\/strong> заданий с развёрнутым ответом<\/li>/);
-  assert.match(html, /<h2>Так выглядит задание в тренажёре<\/h2>/);
+  assert.match(html, /<h2>Так выглядит задание в тренажёре ЕГЭ<\/h2>/);
   assert.match(html, /№ 99566 в банке ФИПИ\. Тема: Логарифмические уравнения\./);
   assert.match(html, /log₂\(x − 3\) = 4/);
   assert.match(html, /Кинематика, динамика, законы сохранения, электричество<\/li>/, "описание предмета рядом с названием");
@@ -296,7 +296,7 @@ test("renderHomePage: цифры банка, кнопки, пример зада
   assert.match(html, /<strong>Методическая опора:<\/strong> задания и критерии ориентируются/);
   assert.match(html, /Ошибаться нормально/);
   assert.doesNotMatch(html, /Скоро добавим/);
-  assert.match(html, /Начни с любого из 2 предметов — дальше сможешь тренировать все\./);
+  assert.match(html, /Начни с любого из 2 предметов, например с русского языка, профильной математики или обществознания: дальше сможешь тренировать все\./);
 });
 
 test("renderNotFoundPage: noindex, понятный текст и ссылки на разделы; без canonical", () => {
@@ -379,4 +379,27 @@ test("Landing.tsx читает landingMore.json — тот же файл, что
   assert.match(landing, /landingMore\.headings\.faq/);
   for (const k of ["shortAnswer", "ctaMid", "hints", "diff", "essay", "tariffs", "limits", "parents"]) assert.ok(landing.includes("landingMore." + k), k);
   assert.match(landing, /\{tasks\}/);
+});
+
+// ─────────────────────── правки по аудиту главной ───────────────────────
+
+test("шаг «Диагностика»: примерный балл (прогноз) назван в тексте, который отдаётся и людям, и ботам", () => {
+  const land = JSON.parse(fs.readFileSync(new URL("../content/landing.json", import.meta.url), "utf8"));
+  assert.match(land.process[0].d, /примерный балл/);
+  assert.match(land.process[0].d, /прогноз/);
+  assert.match(land.process[0].d, /сильные и слабые темы/);
+});
+
+test("«Начать бесплатно» в трёх местах: первый экран, после «Как это устроено», конец страницы; ссылки ведут на /diagnostic", () => {
+  const html = renderHomePage(homeArgs());
+  assert.equal((html.match(/<a href="\/diagnostic">Начать бесплатно<\/a>/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /href="\/diagnostic">Пройти диагностику</);
+});
+
+test("ключевые фразы на главной: «тренажёр ЕГЭ» не меньше четырёх раз, «профильная математика» в нормальной форме", () => {
+  const land = JSON.parse(fs.readFileSync(new URL("../content/landing.json", import.meta.url), "utf8"));
+  const html = renderHomePage({ ...homeArgs(), landing: land });
+  const text = html.slice(html.indexOf("<main>"), html.indexOf("</main>")).replace(/<[^>]+>/g, " ");
+  assert.ok((text.match(/тренажёр\S* ЕГЭ/gi) ?? []).length >= 4, "«тренажёр ЕГЭ» в любой форме");
+  assert.match(text, /профильной математики/);
 });
