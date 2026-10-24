@@ -180,3 +180,23 @@ test("renderLlmsTxt: суть, механика, цены, условия опл
   assert.doesNotMatch(txt, /возврат/i);
   assert.doesNotMatch(txt, /http:\/\//);
 });
+
+test("toNoindexShell: «index, follow» меняется на «noindex, follow», canonical на главную убирается, остальной документ цел; без метки — добавляется", async () => {
+  const { toNoindexShell } = await import("../spaShell.js");
+  const shell = '<!doctype html><html><head><meta charset="UTF-8" /><meta name="robots" content="index, follow" /><link rel="canonical" href="https://ege-tutor.ru/" /><title>Т</title></head><body><div id="root"></div></body></html>';
+  const out = toNoindexShell(shell);
+  assert.match(out, /<meta name="robots" content="noindex, follow" \/>/);
+  assert.doesNotMatch(out, /content="index, follow"|rel="canonical"/);
+  assert.equal((out.match(/name="robots"/g) ?? []).length, 1);
+  assert.match(out, /<title>Т<\/title>[\s\S]*<div id="root"><\/div>/);
+  const bare = toNoindexShell("<html><head><title>Т</title></head><body></body></html>");
+  assert.match(bare, /<meta name="robots" content="noindex, follow" \/>\n<\/head>/);
+});
+
+test("server.js: маршрут /__private отдаёт оболочку с noindex и тем же заголовком, что ставит Caddy", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(src, /app\.get\("\/__private"/);
+  assert.match(src, /toNoindexShell\(shell\)/);
+  assert.match(src, /X-Robots-Tag", "noindex, follow"/);
+});

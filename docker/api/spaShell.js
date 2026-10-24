@@ -93,6 +93,16 @@ export async function sendPage(res, status, pageHtml) {
   res.status(status).send((shell ? mergeIntoShell(shell, pageHtml) : null) ?? pageHtml);
 }
 
+/** Оболочка для служебных страниц приложения (диагностика, онбординг, оплата…): та же, но с «noindex, follow» вместо «index, follow» и без
+ *  canonical на главную. Заголовок X-Robots-Tag от Caddy и метка в самом документе должны говорить одно и то же, иначе сигналы спорят. */
+export function toNoindexShell(shell) {
+  const robots = /<meta\s+name="robots"[^>]*>/i;
+  const tag = '<meta name="robots" content="noindex, follow" />';
+  let out = shell.replace(/<link\s+rel="canonical"[^>]*>\s*/gi, "");
+  out = robots.test(out) ? out.replace(robots, tag) : out.replace("</head>", () => `${tag}\n</head>`);
+  return out;
+}
+
 const MEMO_MAX = 300;
 const memo = new Map();
 

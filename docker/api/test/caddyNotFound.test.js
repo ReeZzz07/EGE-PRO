@@ -68,6 +68,6 @@ test("служебные страницы приложения закрыты о
     assert.equal(isNotFound(p === "/pay-for/*" ? "/pay-for/token" : p), false, `${p} — страница приложения, а не 404`);
     assert.equal(pubPaths.includes(p), false, `${p} не должен быть и публичным`);
   }
-  assert.match(caddy, /handle @private \{\s*header X-Robots-Tag "noindex, follow"\s*reverse_proxy web:3000/);
+  assert.match(caddy, /handle @private \{\s*header X-Robots-Tag "noindex, follow"\s*rewrite \* \/__private\s*reverse_proxy api:8787 web:3000/);
   assert.ok(caddy.indexOf("handle @public") < caddy.indexOf("handle @private") && caddy.indexOf("handle @private") < caddy.lastIndexOf("\thandle {"));
 });

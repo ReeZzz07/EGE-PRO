@@ -16,7 +16,7 @@ import { escapeHtml, renderBotHtml } from "./botHtml.js";
 import { getBlogIndex, getBlogArticle } from "./blogBot.js";
 import { getBotPage, BOT_PAGE_PATHS, DEFAULT_PAGE_SEO } from "./botPages.js";
 import { renderNotFoundPage, renderLlmsTxt, getSubjectPage, getSubjectPageData, availableSubjectSlugs } from "./botPages.js";
-import { sendPage, getSpaShell, memoize } from "./spaShell.js";
+import { sendPage, getSpaShell, memoize, toNoindexShell, stripSecurityHeaders } from "./spaShell.js";
 import { safeTaskById, TASK_ANSWERS } from "./safeTasks.js";
 import {
   buildChatPrompt,
@@ -840,6 +840,18 @@ app.get("/__not-found", async (_req, res) => {
   } catch (e) {
     res.status(404).type("text/plain").send("Страница не найдена");
   }
+});
+
+// Сюда Caddy переписывает служебные страницы приложения (@private в docker/Caddyfile): та же оболочка сайта, но с noindex в самом документе,
+// чтобы метка не спорила с заголовком X-Robots-Tag. Адрес для браузера не меняется, приложение читает его из location.
+app.get("/__private", async (_req, res) => {
+  const shell = await getSpaShell().catch(() => null);
+  if (!shell) return res.status(503).type("text/plain").send("Сайт обновляется, повторите через минуту");
+  stripSecurityHeaders(res);
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("X-Robots-Tag", "noindex, follow");
+  res.send(toNoindexShell(shell));
 });
 
 // посадочные страницы предметов /ege/<адрес>: тот же документ для всех клиентов (docker/api/botPages.js, getSubjectPage)
