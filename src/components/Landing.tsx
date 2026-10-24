@@ -507,11 +507,15 @@ export default function Landing({
       {/* ─── Для родителей ─── */}
       <section id="for-parents" className="mt-20 scroll-mt-20">
         <Reveal className="pop">
-          <div className="sheet grid grid-cols-1 items-center gap-6 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr_auto] lg:gap-10">
-            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.parents.title}</h2>
-            <p className="text-[14.5px] leading-relaxed text-ink/85">{landingMore.parents.text}</p>
-            <a href={landingMore.parents.href} onClick={(e) => go(e, landingMore.parents.href)} className="btn btn-ghost justify-self-start whitespace-nowrap px-5 py-2.5 text-[13px] lg:justify-self-end">
-              {landingMore.parents.linkText}
+          <div className="relative grid grid-cols-1 items-center gap-6 overflow-hidden border-2 border-ink bg-blue/10 px-6 py-9 shadow-[6px_6px_0_0_#2447e9] sm:px-10 lg:grid-cols-[1fr_1.6fr_auto] lg:gap-10">
+            <span className="absolute inset-y-0 left-0 w-2 bg-hl" aria-hidden />
+            <div>
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">для мам и пап</span>
+              <h2 className="font-display mt-1 text-2xl font-black leading-tight sm:text-3xl">{landingMore.parents.title}</h2>
+            </div>
+            <p className="text-[15px] leading-relaxed text-ink/90">{landingMore.parents.text}</p>
+            <a href={landingMore.parents.href} onClick={(e) => go(e, landingMore.parents.href)} className="btn btn-blue cta-nudge cta-shine justify-self-start whitespace-nowrap px-6 py-3.5 text-sm lg:justify-self-end">
+              {landingMore.parents.linkText} <Icon name="arrowR" size={17} />
             </a>
           </div>
         </Reveal>
