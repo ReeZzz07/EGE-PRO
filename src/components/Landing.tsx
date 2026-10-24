@@ -297,17 +297,24 @@ export default function Landing({
           <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Не решебник, а нормальная подготовка</h2>
         </Reveal>
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {content.capabilities.map((c, i) => (
-            <Reveal key={c.t + i} delay={i * 60}>
-              <div className="sheet h-full p-5">
-                <span className="flex h-10 w-10 items-center justify-center border-2 border-ink bg-hl text-ink">
-                  <Icon name={c.icon} size={18} />
-                </span>
-                <h3 className="font-display mt-3 text-[15px] font-bold leading-snug">{c.t}</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">{c.d}</p>
-              </div>
-            </Reveal>
-          ))}
+          {content.capabilities.map((c, i) => {
+            // последняя карточка одна в ряду из трёх — растягиваем её на всю ширину, чтобы не оставлять дыру
+            const wide = i === content.capabilities.length - 1 && content.capabilities.length % 3 === 1;
+            return (
+              <Reveal key={c.t + i} delay={i * 60} className={`h-full ${wide ? "lg:col-span-3" : ""}`}>
+                <div className={`sheet hover-rise group relative h-full cursor-default overflow-hidden p-5 hover:border-blue/40 ${wide ? "lg:flex lg:items-center lg:gap-5" : ""}`}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-ink bg-hl text-ink transition duration-300 group-hover:-rotate-6 group-hover:scale-110 group-hover:bg-blue group-hover:text-white">
+                    <Icon name={c.icon} size={18} />
+                  </span>
+                  <div>
+                    <h3 className={`font-display text-[15px] font-bold leading-snug transition-colors duration-300 group-hover:text-blue ${wide ? "lg:mt-0" : "mt-3"}`}>{c.t}</h3>
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">{c.d}</p>
+                  </div>
+                  <span className="absolute bottom-0 left-0 h-1 w-full origin-left scale-x-0 bg-blue transition-transform duration-500 ease-out group-hover:scale-x-100" aria-hidden />
+                </div>
+              </Reveal>
+            );
+          })}
         </div>
       </section>
 
