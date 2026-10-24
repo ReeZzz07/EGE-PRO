@@ -117,4 +117,30 @@ describe("Landing", () => {
     fireEvent.click(parents);
     expect(onNav).toHaveBeenLastCalledWith({ name: "parents" });
   });
+  it("чат-демо: кнопки подсказок отвечают, ответ задания не называется; свободный вопрос «скажи ответ» получает отказ; другие вопросы — пояснение про демо", async () => {
+    const onStart = vi.fn();
+    render(<Landing onStart={onStart} onLogin={vi.fn()} onNav={vi.fn()} />);
+    await screen.findByText("АТТЕСТАТ");
+    const log = screen.getByRole("log");
+    expect(within(log).getByText("Просто скажи ответ, мне некогда")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Подсказка 2" }));
+    expect(await within(log).findByText(/log₂\(a\) = 4 означает, что a = 2⁴/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Подсказка 3" }));
+    expect(await within(log).findByText(/Последнее действие за тобой/)).toBeInTheDocument();
+    expect(log.textContent).not.toMatch(/x\s*=\s*19|ответ:\s*19|получа\S+\s+19/i);
+
+    const input = screen.getByLabelText("Напиши вопрос по заданию…");
+    fireEvent.change(input, { target: { value: "скажи ответ пожалуйста" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(await within(log).findByText(/Готовый ответ я не назову/)).toBeInTheDocument();
+    expect(input).toHaveValue("");
+
+    fireEvent.change(input, { target: { value: "привет" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(await within(log).findByText(/В демо я отвечаю только на подсказки/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Попробовать на настоящих заданиях/ }));
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
 });

@@ -7,6 +7,7 @@ import { useDocumentHead } from "../lib/useDocumentHead";
 import { Icon, Reveal, Stamp } from "./ui";
 import BlogSection from "./BlogSection";
 import ReviewsSection from "./ReviewsSection";
+import PrincipleChat from "./PrincipleChat";
 import landingStatic from "../../docker/api/content/landingStatic.json";
 import landingMore from "../../docker/api/content/landingMore.json";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
@@ -34,7 +35,7 @@ function toView(href: string): View | null {
 
 function CtaButton({ onClick, children }: { onClick: () => void; children: string }) {
   return (
-    <button onClick={onClick} className="btn btn-blue shrink-0 whitespace-nowrap px-6 py-3.5 text-sm">
+    <button onClick={onClick} className="btn btn-blue cta-nudge cta-shine shrink-0 whitespace-nowrap px-6 py-3.5 text-sm">
       {children} <Icon name="arrowR" size={17} />
     </button>
   );
@@ -208,7 +209,7 @@ export default function Landing({
 
       {/* ─── Короткий самостоятельный ответ «что это» ─── */}
       <section id="about" className="mt-14 scroll-mt-20">
-        <Reveal>
+        <Reveal className="pop">
           <div className="relative overflow-hidden border-2 border-ink bg-blue px-6 py-9 text-white shadow-[6px_6px_0_0_#15172e] sm:px-10 sm:py-11">
             <div className="gridpaper-dark pointer-events-none absolute inset-0 opacity-30" aria-hidden />
             <div className="relative grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.6fr] lg:gap-14">
@@ -281,10 +282,12 @@ export default function Landing({
           .
         </p>
         {/* вторая кнопка запуска диагностики: сразу после «Как это устроено» */}
-        <div className="mt-10 flex flex-col items-start gap-5 border-2 border-ink bg-hl px-6 py-6 shadow-[5px_5px_0_0_#15172e] sm:flex-row sm:items-center sm:justify-between sm:px-9">
-          <p className="font-display max-w-2xl text-[17px] font-bold leading-snug text-ink sm:text-xl">{landingMore.ctaMid.text}</p>
-          <CtaButton onClick={() => onStart()}>{landingMore.ctaMid.button}</CtaButton>
-        </div>
+        <Reveal className="from-left mt-10">
+          <div className="flex flex-col items-start gap-5 border-2 border-ink bg-hl px-6 py-6 shadow-[5px_5px_0_0_#15172e] sm:flex-row sm:items-center sm:justify-between sm:px-9">
+            <p className="font-display max-w-2xl text-[17px] font-bold leading-snug text-ink sm:text-xl">{landingMore.ctaMid.text}</p>
+            <CtaButton onClick={() => onStart()}>{landingMore.ctaMid.button}</CtaButton>
+          </div>
+        </Reveal>
       </section>
 
       {/* ─── Блок 3: что умеет платформа ─── */}
@@ -319,28 +322,12 @@ export default function Landing({
                 <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-paper/75">{landingStatic.principle.text}</p>
               </div>
 
-              {/* диалог в окне чата: принцип на конкретном примере */}
-              <div className="mx-auto w-full max-w-xl border-2 border-white/15 bg-night2 shadow-[8px_8px_0_0_#2447e9]">
-                <div className="flex items-center gap-2.5 border-b border-white/10 px-4 py-3">
-                  <span className="flex h-8 w-8 items-center justify-center border-2 border-hl bg-hl/15 text-hl">
-                    <Icon name="chat" size={16} />
-                  </span>
-                  <div className="leading-tight">
-                    <p className="font-display text-[13.5px] font-bold">ИИ-репетитор</p>
-                    <p className="text-[11px] text-paper/55">объясняет, но не называет ответ</p>
-                  </div>
+              {/* интерактивное демо: подсказки и свободный ввод; ответы заранее написаны */}
+              <Reveal className="from-right">
+                <div className="float-soft">
+                  <PrincipleChat onStart={() => onStart()} />
                 </div>
-                <div className="space-y-3 px-4 py-5 sm:px-5">
-                  <div className="ml-auto w-fit max-w-[88%] rounded-md rounded-br-none bg-blue px-4 py-2.5 text-[14px] leading-snug text-white">{landingStatic.principle.dialog[0]}</div>
-                  <div className="w-fit max-w-[92%] rounded-md rounded-bl-none border border-white/10 bg-night px-4 py-2.5 text-[14px] leading-relaxed text-paper/90">
-                    {landingStatic.principle.dialog[1]}
-                  </div>
-                </div>
-                <div className="mx-4 mb-4 flex items-center justify-between border border-white/10 bg-night px-3.5 py-2.5 text-[12.5px] text-paper/40" aria-hidden>
-                  <span>Напиши вопрос по заданию…</span>
-                  <Icon name="arrowR" size={15} />
-                </div>
-              </div>
+              </Reveal>
             </div>
 
             {/* три уровня подсказок: от намёка до почти полного разбора */}
@@ -349,8 +336,8 @@ export default function Landing({
               <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-paper/70">{landingMore.hints.intro}</p>
               <ol className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {landingMore.hints.items.map((h, i) => (
-                  <li key={h.t} className="relative border border-white/15 bg-night2 p-5 pt-6">
-                    <span className="absolute -top-px left-0 h-1 bg-hl" style={{ width: `${(i + 1) * 33.3}%` }} aria-hidden />
+                  <li key={h.t} className="hover-rise relative border border-white/15 bg-night2 p-5 pt-6">
+                    <span className="grow-bar absolute -top-px left-0 h-1 bg-hl" style={{ width: `${(i + 1) * 33.3}%`, transitionDelay: `${450 + i * 200}ms` }} aria-hidden />
                     <h4 className="font-display text-[15px] font-bold text-hl">{h.t}</h4>
                     <p className="mt-2 text-[13.5px] leading-relaxed text-paper/80">{h.d}</p>
                   </li>
@@ -385,7 +372,7 @@ export default function Landing({
           {landingMore.diff.items.map((d, i) => (
             <li key={d.t} className={`list-none ${i < 3 ? "md:col-span-2" : "md:col-span-3"}`}>
               <Reveal delay={i * 60} className="h-full">
-                <div className="sheet h-full p-6">
+                <div className="sheet hover-rise h-full p-6">
                   <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-blue">{i + 1} / {landingMore.diff.items.length}</span>
                   <h3 className="font-display mt-2 text-[16px] font-bold leading-snug">{d.t}</h3>
                   <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">{d.d}</p>
@@ -398,7 +385,7 @@ export default function Landing({
 
       {/* ─── Проверка сочинения и развёрнутых ответов ─── */}
       <section id="essay-check" className="mt-20 scroll-mt-20">
-        <Reveal>
+        <Reveal className="from-left">
           <div className="grid grid-cols-1 gap-4 border-l-4 border-blue bg-blue/5 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr] lg:gap-12">
             <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.essay.title}</h2>
             <p className="text-[15px] leading-relaxed text-ink/85">{fillBank(landingMore.essay.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
@@ -413,7 +400,7 @@ export default function Landing({
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">цены</p>
             <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">{landingMore.tariffs.title}</h2>
             <div className="mt-6 overflow-x-auto border-2 border-ink bg-paper shadow-[6px_6px_0_0_#15172e]">
-              <table className="w-full min-w-[36rem] border-collapse text-left text-[14px]">
+              <table className="stagger-rows w-full min-w-[36rem] border-collapse text-left text-[14px]">
                 <thead>
                   <tr className="bg-blue font-mono text-[11.5px] uppercase tracking-[0.14em] text-white">
                     {landingMore.tariffs.head.map((h) => (
@@ -424,20 +411,20 @@ export default function Landing({
                   </tr>
                 </thead>
                 <tbody>
-                  {tariffs.map((t) => {
+                  {tariffs.map((t, ti) => {
                     const price = t.salePriceRub ?? t.priceRub;
                     const onSale = t.salePriceRub != null && t.salePriceRub < t.priceRub;
                     return (
-                      <tr key={t.id} className="border-b-2 border-ink/10 transition-colors last:border-0 hover:bg-blue/5">
+                      <tr key={t.id} style={{ ["--i" as string]: ti }} className="border-b-2 border-ink/10 transition-colors last:border-0 hover:bg-blue/5">
                         <th scope="row" className="px-3 py-5 sm:px-6">
                           <span className="font-display text-[16px] font-black">{t.name}</span>
                         </th>
                         <td className="whitespace-nowrap px-3 py-5 sm:px-6">
                           {price === 0 ? (
-                            <span className="font-display inline-block border-2 border-ink bg-hl px-2.5 py-0.5 text-[15px] font-black">0 ₽</span>
+                            <span className="pop-in font-display inline-block border-2 border-ink bg-hl px-2.5 py-0.5 text-[15px] font-black">0 ₽</span>
                           ) : (
                             <>
-                              <span className="font-display text-[19px] font-black text-blue">{Math.round(price).toLocaleString("ru-RU")} ₽</span>
+                              <span className="pop-in font-display text-[19px] font-black text-blue">{Math.round(price).toLocaleString("ru-RU")} ₽</span>
                               <span className="text-[13px] text-ink2"> за 30 дней</span>
                               {onSale && <span className="ml-2 text-[13px] text-ink2 line-through">{Math.round(t.priceRub).toLocaleString("ru-RU")} ₽</span>}
                             </>
@@ -462,19 +449,19 @@ export default function Landing({
               </table>
             </div>
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="border-l-4 border-blue bg-blue/5 px-5 py-4">
+              <div className="hover-rise border-l-4 border-blue bg-blue/5 px-5 py-4">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-blue">что входит</p>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-ink/85">
                   {landingMore.tariffs.allPlans}
                   {perSubjectNote && tariffs.some((t) => t.priceRub > 0) ? ` ${perSubjectNote.charAt(0).toUpperCase()}${perSubjectNote.slice(1)}.` : ""}
                 </p>
               </div>
-              <div className="border-l-4 border-hl bg-hl/20 px-5 py-4">
+              <div className="hover-rise border-l-4 border-hl bg-hl/20 px-5 py-4">
                 <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink">как оплатить</p>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-ink/85">{landingMore.tariffs.payment}</p>
               </div>
             </div>
-            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-6 py-3 text-sm">
+            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue cta-nudge mt-6 px-6 py-3 text-sm">
               {landingMore.tariffs.link} <Icon name="arrowR" size={17} />
             </button>
           </Reveal>
@@ -499,7 +486,7 @@ export default function Landing({
           {landingMore.limits.items.map((l, i) => (
             <li key={l.t} className="list-none">
               <Reveal delay={i * 60} className="h-full">
-                <div className="sheet h-full p-5">
+                <div className="sheet hover-rise h-full p-5">
                   <span className="font-display flex h-9 w-9 items-center justify-center border-2 border-ink bg-hl text-[15px] font-black" aria-hidden>
                     !
                   </span>
@@ -514,7 +501,7 @@ export default function Landing({
 
       {/* ─── Для родителей ─── */}
       <section id="for-parents" className="mt-20 scroll-mt-20">
-        <Reveal>
+        <Reveal className="pop">
           <div className="sheet grid grid-cols-1 items-center gap-6 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr_auto] lg:gap-10">
             <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.parents.title}</h2>
             <p className="text-[14.5px] leading-relaxed text-ink/85">{landingMore.parents.text}</p>

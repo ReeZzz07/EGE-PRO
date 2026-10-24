@@ -295,3 +295,48 @@ html { scrollbar-width: thin; scrollbar-color: rgba(82, 86, 122, 0.45) transpare
   body { background: #fff; }
   .legal-doc-print { max-width: none; margin: 0; padding: 0; color: #000; }
 }
+
+/* --- анимации блоков главной (Landing.tsx): варианты поверх .reveal --- */
+.reveal.pop { transform: translateY(34px) scale(0.965); }
+.reveal.from-left { transform: translateX(-44px); }
+.reveal.from-right { transform: translateX(44px); }
+.reveal.pop.is-on, .reveal.from-left.is-on, .reveal.from-right.is-on { transform: none; }
+
+/* полоска растёт слева направо, когда блок появился (ширину задаёт сама полоска) */
+.grow-bar { transform-origin: left center; transform: scaleX(0); transition: transform 0.95s cubic-bezier(0.16, 1, 0.3, 1) 0.45s; }
+.is-on .grow-bar, .is-on.grow-bar { transform: scaleX(1); }
+
+/* строки таблицы выезжают по очереди: порядок задаёт --i */
+.stagger-rows tbody tr { opacity: 0; transform: translateX(-22px); transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1); transition-delay: calc(var(--i, 0) * 110ms + 250ms); }
+.is-on .stagger-rows tbody tr { opacity: 1; transform: none; }
+
+/* карточки подсвечиваются при наведении */
+.hover-rise { transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 0.25s ease, border-color 0.25s ease; }
+.hover-rise:hover { transform: translateY(-5px); box-shadow: 0 10px 0 -2px rgba(36, 71, 233, 0.35); }
+
+/* стрелка на главных кнопках мягко «зовёт» нажать, блик пробегает по кнопке */
+@keyframes nudge-x { 0%, 70%, 100% { transform: translateX(0); } 82% { transform: translateX(5px); } 92% { transform: translateX(1px); } }
+.cta-nudge svg { animation: nudge-x 2.6s ease-in-out infinite; }
+@keyframes shine-sweep { 0% { transform: translateX(-130%) skewX(-18deg); } 55%, 100% { transform: translateX(260%) skewX(-18deg); } }
+.cta-shine { position: relative; overflow: hidden; }
+.cta-shine::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 38%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent); animation: shine-sweep 3.6s ease-in-out infinite; pointer-events: none; }
+
+/* окно чата слегка парит; подсказка, которую ещё не нажимали, пульсирует */
+@keyframes float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+.float-soft { animation: float-soft 6.5s ease-in-out infinite; }
+@keyframes chip-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 213, 74, 0.55); } 50% { box-shadow: 0 0 0 7px rgba(255, 213, 74, 0); } }
+.chip-glow { animation: chip-glow 2s ease-out infinite; }
+
+/* бейдж «0 ₽» и цена в таблице тарифов оживают при появлении таблицы */
+@keyframes pop-in { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+.is-on .pop-in { animation: pop-in 0.6s cubic-bezier(0.2, 1.2, 0.35, 1) 0.9s both; }
+.pop-in { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal.pop, .reveal.from-left, .reveal.from-right { opacity: 1; transform: none; transition: none; }
+  .grow-bar { transform: none; transition: none; }
+  .stagger-rows tbody tr { opacity: 1; transform: none; transition: none; }
+  .pop-in, .is-on .pop-in { opacity: 1; animation: none; }
+  .cta-nudge svg, .cta-shine::after, .float-soft, .chip-glow { animation: none; }
+  .hover-rise:hover { transform: none; }
+}
