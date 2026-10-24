@@ -311,34 +311,52 @@ export default function Landing({
       {/* ─── Блок 4: принцип честной помощи ─── */}
       <section id="principle" className="mt-16 scroll-mt-20">
         <Reveal>
-          <div className="gridpaper-dark relative overflow-hidden border-2 border-night bg-night px-6 py-9 text-paper sm:px-10">
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">{landingStatic.principle.eyebrow}</span>
-            <p className="font-display mt-3 max-w-2xl text-xl font-bold leading-snug sm:text-2xl">
-              {landingStatic.principle.title}
-            </p>
-            <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-paper/70">
-              {landingStatic.principle.text}
-            </p>
+          <div className="gridpaper-dark relative overflow-hidden border-2 border-night bg-night px-6 py-10 text-paper sm:px-10 sm:py-12">
+            <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-14">
+              <div>
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">{landingStatic.principle.eyebrow}</span>
+                <p className="font-display mt-3 text-2xl font-bold leading-snug sm:text-[2rem] sm:leading-tight">{landingStatic.principle.title}</p>
+                <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-paper/75">{landingStatic.principle.text}</p>
+              </div>
 
-            {/* мини-пример диалога — принцип на конкретном примере */}
-            <div className="mt-6 max-w-lg space-y-2">
-              <div className="ml-auto w-fit max-w-[85%] rounded-md rounded-br-none bg-blue px-3.5 py-2 text-[13px] text-white">{landingStatic.principle.dialog[0]}</div>
-              <div className="w-fit max-w-[85%] rounded-md rounded-bl-none border border-white/10 bg-night2 px-3.5 py-2 text-[13px] text-paper/85">
-                {landingStatic.principle.dialog[1]}
+              {/* диалог в окне чата: принцип на конкретном примере */}
+              <div className="mx-auto w-full max-w-xl border-2 border-white/15 bg-night2 shadow-[8px_8px_0_0_#2447e9]">
+                <div className="flex items-center gap-2.5 border-b border-white/10 px-4 py-3">
+                  <span className="flex h-8 w-8 items-center justify-center border-2 border-hl bg-hl/15 text-hl">
+                    <Icon name="chat" size={16} />
+                  </span>
+                  <div className="leading-tight">
+                    <p className="font-display text-[13.5px] font-bold">ИИ-репетитор</p>
+                    <p className="text-[11px] text-paper/55">объясняет, но не называет ответ</p>
+                  </div>
+                </div>
+                <div className="space-y-3 px-4 py-5 sm:px-5">
+                  <div className="ml-auto w-fit max-w-[88%] rounded-md rounded-br-none bg-blue px-4 py-2.5 text-[14px] leading-snug text-white">{landingStatic.principle.dialog[0]}</div>
+                  <div className="w-fit max-w-[92%] rounded-md rounded-bl-none border border-white/10 bg-night px-4 py-2.5 text-[14px] leading-relaxed text-paper/90">
+                    {landingStatic.principle.dialog[1]}
+                  </div>
+                </div>
+                <div className="mx-4 mb-4 flex items-center justify-between border border-white/10 bg-night px-3.5 py-2.5 text-[12.5px] text-paper/40" aria-hidden>
+                  <span>Напиши вопрос по заданию…</span>
+                  <Icon name="arrowR" size={15} />
+                </div>
               </div>
             </div>
 
             {/* три уровня подсказок: от намёка до почти полного разбора */}
-            <h3 className="font-display mt-8 text-lg font-bold">{landingMore.hints.title}</h3>
-            <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-paper/70">{landingMore.hints.intro}</p>
-            <ol className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              {landingMore.hints.items.map((h) => (
-                <li key={h.t} className="border border-white/15 bg-night2 p-4">
-                  <h4 className="font-display text-[14px] font-bold text-hl">{h.t}</h4>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-paper/80">{h.d}</p>
-                </li>
-              ))}
-            </ol>
+            <div className="mt-12 border-t border-white/10 pt-9">
+              <h3 className="font-display text-xl font-bold">{landingMore.hints.title}</h3>
+              <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-paper/70">{landingMore.hints.intro}</p>
+              <ol className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {landingMore.hints.items.map((h, i) => (
+                  <li key={h.t} className="relative border border-white/15 bg-night2 p-5 pt-6">
+                    <span className="absolute -top-px left-0 h-1 bg-hl" style={{ width: `${(i + 1) * 33.3}%` }} aria-hidden />
+                    <h4 className="font-display text-[15px] font-bold text-hl">{h.t}</h4>
+                    <p className="mt-2 text-[13.5px] leading-relaxed text-paper/80">{h.d}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
         </Reveal>
       </section>
