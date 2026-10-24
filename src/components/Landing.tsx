@@ -474,19 +474,26 @@ export default function Landing({
       {/* ─── Блок FAQ ─── */}
       <section className="mt-16">
         <Reveal>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{landingMore.headings.faqEyebrow}</p>
-          <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">{landingMore.headings.faq}</h2>
+          <div className="text-center">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{landingMore.headings.faqEyebrow}</p>
+            <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">{landingMore.headings.faq}</h2>
+          </div>
         </Reveal>
         <Reveal>
           <FaqAccordion items={content.faq} className="mt-6 mx-auto max-w-3xl space-y-3" />
         </Reveal>
-      <p className="mt-5 text-[13px] text-ink2">
-          Не нашёл ответ?{" "}
-          <button onClick={() => onNav({ name: "contacts" })} className="link-slide font-bold text-ink hover:text-blue">
-            Напиши нам
-          </button>{" "}
-          — ответим в течение одного дня.
-        </p>
+        {/* «не нашёл ответ» — отдельная заметная плашка по центру, под шириной списка вопросов */}
+        <Reveal>
+          <div className="sheet mx-auto mt-8 flex max-w-3xl flex-col items-center gap-4 px-6 py-7 text-center sm:flex-row sm:justify-between sm:text-left">
+            <div>
+              <p className="font-display text-lg font-black">Не нашёл ответ?</p>
+              <p className="mt-1 text-[13.5px] leading-relaxed text-ink2">Напиши нам — ответим в течение одного дня.</p>
+            </div>
+            <button onClick={() => onNav({ name: "contacts" })} className="btn btn-blue shrink-0 px-6 py-3 text-sm">
+              Напиши нам <Icon name="arrowR" size={17} />
+            </button>
+          </div>
+        </Reveal>
       </section>
 
       <ReviewsSection />
