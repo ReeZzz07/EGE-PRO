@@ -252,7 +252,7 @@ ${dm.items.map((d) => `<li><strong>${esc(d.t)}</strong>: ${esc(d.d)}</li>`).join
   const limitsHtml = `<section>
 <h2>${esc(lm.title)}</h2>
 <ul>
-${lm.items.map((x) => `<li>${esc(x)}</li>`).join("\n")}
+${lm.items.map((x) => `<li><strong>${esc(x.t)}</strong>: ${esc(x.d)}</li>`).join("\n")}
 </ul>
 <p>${esc(lm.article.before)} <a href="${lm.article.href}">${esc(lm.article.linkText)}</a>.</p>
 </section>`;

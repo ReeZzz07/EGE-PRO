@@ -358,7 +358,7 @@ export default function Landing({
         <ul className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-6">
           {landingMore.diff.items.map((d, i) => (
             <li key={d.t} className={`list-none ${i < 3 ? "md:col-span-2" : "md:col-span-3"}`}>
-              <Reveal delay={i * 60}>
+              <Reveal delay={i * 60} className="h-full">
                 <div className="sheet h-full p-6">
                   <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-blue">{i + 1} / {landingMore.diff.items.length}</span>
                   <h3 className="font-display mt-2 text-[16px] font-bold leading-snug">{d.t}</h3>
@@ -435,27 +435,32 @@ export default function Landing({
       {/* ─── Ограничения — честно ─── */}
       <section id="limits" className="mt-20 scroll-mt-20">
         <Reveal>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.6fr] lg:gap-12">
-            <div>
-              <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.limits.title}</h2>
-              <p className="mt-3 text-[13.5px] leading-relaxed text-ink2">
-                {landingMore.limits.article.before}{" "}
-                <a href={landingMore.limits.article.href} onClick={(e) => go(e, landingMore.limits.article.href)} className="link-slide font-bold text-ink hover:text-blue">
-                  {landingMore.limits.article.linkText}
-                </a>
-                .
-              </p>
-            </div>
-            <ul className="divide-y divide-ink/15 border-y border-ink/15">
-              {landingMore.limits.items.map((l) => (
-                <li key={l} className="flex gap-3 py-3.5 text-[14.5px] leading-relaxed text-ink/85">
-                  <span className="mt-[9px] h-1.5 w-1.5 shrink-0 bg-blue" aria-hidden />
-                  <span>{l}</span>
-                </li>
-              ))}
-            </ul>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.limits.title}</h2>
+            <p className="text-[13.5px] leading-relaxed text-ink2">
+              {landingMore.limits.article.before}{" "}
+              <a href={landingMore.limits.article.href} onClick={(e) => go(e, landingMore.limits.article.href)} className="link-slide font-bold text-ink hover:text-blue">
+                {landingMore.limits.article.linkText}
+              </a>
+              .
+            </p>
           </div>
         </Reveal>
+        <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {landingMore.limits.items.map((l, i) => (
+            <li key={l.t} className="list-none">
+              <Reveal delay={i * 60} className="h-full">
+                <div className="sheet h-full p-5">
+                  <span className="font-display flex h-9 w-9 items-center justify-center border-2 border-ink bg-hl text-[15px] font-black" aria-hidden>
+                    !
+                  </span>
+                  <h3 className="font-display mt-3.5 text-[15.5px] font-bold leading-snug">{l.t}</h3>
+                  <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">{l.d}</p>
+                </div>
+              </Reveal>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* ─── Для родителей ─── */}
