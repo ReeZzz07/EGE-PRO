@@ -209,9 +209,9 @@ export default function Landing({
       {/* ─── Короткий самостоятельный ответ «что это» ─── */}
       <section id="about" className="mt-14 scroll-mt-20">
         <Reveal>
-          <div className="sheet mx-auto max-w-3xl p-6 sm:p-8">
-            <h2 className="font-display text-xl font-black sm:text-2xl">{landingMore.shortAnswer.title}</h2>
-            <p className="mt-3 text-[15px] leading-relaxed text-ink/85">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+          <div className="sheet grid grid-cols-1 gap-4 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr] lg:gap-12">
+            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.shortAnswer.title}</h2>
+            <p className="text-[15px] leading-relaxed text-ink/85">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
           </div>
         </Reveal>
       </section>
@@ -344,19 +344,25 @@ export default function Landing({
         </Reveal>
       </section>
 
+      {/* Общий ритм новых блоков: слева заголовок, справа содержание; на телефоне всё в одну колонку. */}
+
       {/* ─── Чем отличается от обычной нейросети ─── */}
-      <section id="difference" className="mt-16 scroll-mt-20">
+      <section id="difference" className="mt-20 scroll-mt-20">
         <Reveal>
-          <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.diff.title}</h2>
-          <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-ink2">{landingMore.diff.intro}</p>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.1fr] lg:items-end lg:gap-12">
+            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.diff.title}</h2>
+            <p className="text-[14.5px] leading-relaxed text-ink2">{landingMore.diff.intro}</p>
+          </div>
         </Reveal>
-        <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* 5 карточек: три в первом ряду и две широких во втором — без «осиротевших» ячеек */}
+        <ul className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-6">
           {landingMore.diff.items.map((d, i) => (
-            <li key={d.t} className="list-none">
+            <li key={d.t} className={`list-none ${i < 3 ? "md:col-span-2" : "md:col-span-3"}`}>
               <Reveal delay={i * 60}>
-                <div className="sheet h-full p-5">
-                  <h3 className="font-display text-[15px] font-bold leading-snug">{d.t}</h3>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">{d.d}</p>
+                <div className="sheet h-full p-6">
+                  <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-blue">{i + 1} / {landingMore.diff.items.length}</span>
+                  <h3 className="font-display mt-2 text-[16px] font-bold leading-snug">{d.t}</h3>
+                  <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">{d.d}</p>
                 </div>
               </Reveal>
             </li>
@@ -365,26 +371,26 @@ export default function Landing({
       </section>
 
       {/* ─── Проверка сочинения и развёрнутых ответов ─── */}
-      <section id="essay-check" className="mt-16 scroll-mt-20">
+      <section id="essay-check" className="mt-20 scroll-mt-20">
         <Reveal>
-          <div className="border-l-4 border-blue bg-blue/5 px-5 py-5 sm:px-7">
-            <h2 className="font-display text-xl font-black sm:text-2xl">{landingMore.essay.title}</h2>
-            <p className="mt-2.5 max-w-3xl text-[14.5px] leading-relaxed text-ink/85">{fillBank(landingMore.essay.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+          <div className="grid grid-cols-1 gap-4 border-l-4 border-blue bg-blue/5 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr] lg:gap-12">
+            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.essay.title}</h2>
+            <p className="text-[15px] leading-relaxed text-ink/85">{fillBank(landingMore.essay.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
           </div>
         </Reveal>
       </section>
 
       {/* ─── Тарифы и оплата: HTML-таблица, те же цены, что на /tariffs; роботам блок отдаёт docker/api/botPages.js ─── */}
       {tariffs.length > 0 && (
-        <section id="tariffs-home" className="mt-16 scroll-mt-20">
+        <section id="tariffs-home" className="mt-20 scroll-mt-20">
           <Reveal>
             <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.tariffs.title}</h2>
             <div className="sheet mt-6 overflow-x-auto">
-              <table className="w-full min-w-[34rem] border-collapse text-left text-[13.5px]">
+              <table className="w-full min-w-[34rem] border-collapse text-left text-[14px]">
                 <thead>
                   <tr className="border-b-2 border-ink/20 font-mono text-[11.5px] uppercase tracking-wide text-ink2">
                     {landingMore.tariffs.head.map((h) => (
-                      <th key={h} scope="col" className="px-4 py-3 font-bold">
+                      <th key={h} scope="col" className="px-3 py-3.5 font-bold sm:px-5">
                         {h}
                       </th>
                     ))}
@@ -395,29 +401,31 @@ export default function Landing({
                     const price = t.salePriceRub ?? t.priceRub;
                     return (
                       <tr key={t.id} className="border-b border-ink/10 last:border-0">
-                        <th scope="row" className="font-display px-4 py-3 text-[15px] font-black">
+                        <th scope="row" className="font-display px-3 py-4 text-[15px] font-black sm:px-5">
                           {t.name}
                         </th>
-                        <td className="px-4 py-3 font-bold">
+                        <td className="whitespace-nowrap px-5 py-4 font-bold">
                           {price === 0 ? "0 ₽" : `${Math.round(price).toLocaleString("ru-RU")} ₽ за 30 дней`}
                           {t.salePriceRub != null && t.salePriceRub < t.priceRub && (
                             <span className="ml-2 font-normal text-ink2 line-through">{Math.round(t.priceRub).toLocaleString("ru-RU")} ₽</span>
                           )}
                         </td>
-                        <td className="px-4 py-3">{t.subjectsCount} на выбор</td>
-                        <td className="px-4 py-3">{t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений в день` : "без лимита"}</td>
+                        <td className="px-3 py-4 sm:px-5">{t.subjectsCount} на выбор</td>
+                        <td className="px-3 py-4 sm:px-5">{t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений в день` : "без лимита"}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <p className="mt-4 max-w-3xl text-[13px] leading-relaxed text-ink2">
-              {landingMore.tariffs.allPlans}
-              {perSubjectNote && tariffs.some((t) => t.priceRub > 0) ? ` ${perSubjectNote.charAt(0).toUpperCase()}${perSubjectNote.slice(1)}.` : ""}
-            </p>
-            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-ink2">{landingMore.tariffs.payment}</p>
-            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-ghost mt-4 px-5 py-2.5 text-[13px]">
+            <div className="mt-5 grid grid-cols-1 gap-3 text-[13.5px] leading-relaxed text-ink2 md:grid-cols-2 md:gap-10">
+              <p>
+                {landingMore.tariffs.allPlans}
+                {perSubjectNote && tariffs.some((t) => t.priceRub > 0) ? ` ${perSubjectNote.charAt(0).toUpperCase()}${perSubjectNote.slice(1)}.` : ""}
+              </p>
+              <p>{landingMore.tariffs.payment}</p>
+            </div>
+            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-ghost mt-5 px-5 py-2.5 text-[13px]">
               {landingMore.tariffs.link}
             </button>
           </Reveal>
@@ -425,32 +433,41 @@ export default function Landing({
       )}
 
       {/* ─── Ограничения — честно ─── */}
-      <section id="limits" className="mt-16 scroll-mt-20">
+      <section id="limits" className="mt-20 scroll-mt-20">
         <Reveal>
-          <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.limits.title}</h2>
-          <ul className="mt-5 max-w-3xl list-disc space-y-2 pl-5 text-[14px] leading-relaxed text-ink/85">
-            {landingMore.limits.items.map((l) => (
-              <li key={l}>{l}</li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[13px] text-ink2">
-            {landingMore.limits.article.before}{" "}
-            <a href={landingMore.limits.article.href} onClick={(e) => go(e, landingMore.limits.article.href)} className="link-slide font-bold text-ink hover:text-blue">
-              {landingMore.limits.article.linkText}
-            </a>
-            .
-          </p>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.6fr] lg:gap-12">
+            <div>
+              <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.limits.title}</h2>
+              <p className="mt-3 text-[13.5px] leading-relaxed text-ink2">
+                {landingMore.limits.article.before}{" "}
+                <a href={landingMore.limits.article.href} onClick={(e) => go(e, landingMore.limits.article.href)} className="link-slide font-bold text-ink hover:text-blue">
+                  {landingMore.limits.article.linkText}
+                </a>
+                .
+              </p>
+            </div>
+            <ul className="divide-y divide-ink/15 border-y border-ink/15">
+              {landingMore.limits.items.map((l) => (
+                <li key={l} className="flex gap-3 py-3.5 text-[14.5px] leading-relaxed text-ink/85">
+                  <span className="mt-[9px] h-1.5 w-1.5 shrink-0 bg-blue" aria-hidden />
+                  <span>{l}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </Reveal>
       </section>
 
       {/* ─── Для родителей ─── */}
-      <section id="for-parents" className="mt-16 scroll-mt-20">
+      <section id="for-parents" className="mt-20 scroll-mt-20">
         <Reveal>
-          <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.parents.title}</h2>
-          <p className="mt-2.5 max-w-3xl text-[14.5px] leading-relaxed text-ink/85">{landingMore.parents.text}</p>
-          <a href={landingMore.parents.href} onClick={(e) => go(e, landingMore.parents.href)} className="btn btn-ghost mt-4 inline-flex px-5 py-2.5 text-[13px]">
-            {landingMore.parents.linkText}
-          </a>
+          <div className="sheet grid grid-cols-1 items-center gap-6 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr_auto] lg:gap-10">
+            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.parents.title}</h2>
+            <p className="text-[14.5px] leading-relaxed text-ink/85">{landingMore.parents.text}</p>
+            <a href={landingMore.parents.href} onClick={(e) => go(e, landingMore.parents.href)} className="btn btn-ghost justify-self-start whitespace-nowrap px-5 py-2.5 text-[13px] lg:justify-self-end">
+              {landingMore.parents.linkText}
+            </a>
+          </div>
         </Reveal>
       </section>
 
