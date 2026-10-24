@@ -34,7 +34,7 @@ function toView(href: string): View | null {
 
 function CtaButton({ onClick, children }: { onClick: () => void; children: string }) {
   return (
-    <button onClick={onClick} className="btn btn-blue px-6 py-3.5 text-sm">
+    <button onClick={onClick} className="btn btn-blue shrink-0 whitespace-nowrap px-6 py-3.5 text-sm">
       {children} <Icon name="arrowR" size={17} />
     </button>
   );
@@ -209,9 +209,17 @@ export default function Landing({
       {/* ─── Короткий самостоятельный ответ «что это» ─── */}
       <section id="about" className="mt-14 scroll-mt-20">
         <Reveal>
-          <div className="sheet grid grid-cols-1 gap-4 px-6 py-8 sm:px-10 lg:grid-cols-[1fr_1.6fr] lg:gap-12">
-            <h2 className="font-display text-2xl font-black leading-tight sm:text-3xl">{landingMore.shortAnswer.title}</h2>
-            <p className="text-[15px] leading-relaxed text-ink/85">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+          <div className="relative overflow-hidden border-2 border-ink bg-blue px-6 py-9 text-white shadow-[6px_6px_0_0_#15172e] sm:px-10 sm:py-11">
+            <div className="gridpaper-dark pointer-events-none absolute inset-0 opacity-30" aria-hidden />
+            <div className="relative grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.6fr] lg:gap-14">
+              <div>
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">коротко</span>
+                <h2 className="font-display mt-2 text-3xl font-black leading-tight sm:text-4xl">
+                  Что такое <span className="text-hl">ЕГЭ·ПРО</span>
+                </h2>
+              </div>
+              <p className="text-[16px] leading-[1.75] text-white/95">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+            </div>
           </div>
         </Reveal>
       </section>
@@ -273,8 +281,8 @@ export default function Landing({
           .
         </p>
         {/* вторая кнопка запуска диагностики: сразу после «Как это устроено» */}
-        <div className="sheet mt-8 flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-xl text-[14px] leading-relaxed text-ink/85">{landingMore.ctaMid.text}</p>
+        <div className="mt-10 flex flex-col items-start gap-5 border-2 border-ink bg-hl px-6 py-6 shadow-[5px_5px_0_0_#15172e] sm:flex-row sm:items-center sm:justify-between sm:px-9">
+          <p className="font-display max-w-2xl text-[17px] font-bold leading-snug text-ink sm:text-xl">{landingMore.ctaMid.text}</p>
           <CtaButton onClick={() => onStart()}>{landingMore.ctaMid.button}</CtaButton>
         </div>
       </section>
@@ -384,13 +392,14 @@ export default function Landing({
       {tariffs.length > 0 && (
         <section id="tariffs-home" className="mt-20 scroll-mt-20">
           <Reveal>
-            <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.tariffs.title}</h2>
-            <div className="sheet mt-6 overflow-x-auto">
-              <table className="w-full min-w-[34rem] border-collapse text-left text-[14px]">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">цены</p>
+            <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">{landingMore.tariffs.title}</h2>
+            <div className="mt-6 overflow-x-auto border-2 border-ink bg-paper shadow-[6px_6px_0_0_#15172e]">
+              <table className="w-full min-w-[36rem] border-collapse text-left text-[14px]">
                 <thead>
-                  <tr className="border-b-2 border-ink/20 font-mono text-[11.5px] uppercase tracking-wide text-ink2">
+                  <tr className="bg-blue font-mono text-[11.5px] uppercase tracking-[0.14em] text-white">
                     {landingMore.tariffs.head.map((h) => (
-                      <th key={h} scope="col" className="px-3 py-3.5 font-bold sm:px-5">
+                      <th key={h} scope="col" className="px-3 py-4 font-bold sm:px-6">
                         {h}
                       </th>
                     ))}
@@ -399,34 +408,56 @@ export default function Landing({
                 <tbody>
                   {tariffs.map((t) => {
                     const price = t.salePriceRub ?? t.priceRub;
+                    const onSale = t.salePriceRub != null && t.salePriceRub < t.priceRub;
                     return (
-                      <tr key={t.id} className="border-b border-ink/10 last:border-0">
-                        <th scope="row" className="font-display px-3 py-4 text-[15px] font-black sm:px-5">
-                          {t.name}
+                      <tr key={t.id} className="border-b-2 border-ink/10 transition-colors last:border-0 hover:bg-blue/5">
+                        <th scope="row" className="px-3 py-5 sm:px-6">
+                          <span className="font-display text-[16px] font-black">{t.name}</span>
                         </th>
-                        <td className="whitespace-nowrap px-5 py-4 font-bold">
-                          {price === 0 ? "0 ₽" : `${Math.round(price).toLocaleString("ru-RU")} ₽ за 30 дней`}
-                          {t.salePriceRub != null && t.salePriceRub < t.priceRub && (
-                            <span className="ml-2 font-normal text-ink2 line-through">{Math.round(t.priceRub).toLocaleString("ru-RU")} ₽</span>
+                        <td className="whitespace-nowrap px-3 py-5 sm:px-6">
+                          {price === 0 ? (
+                            <span className="font-display inline-block border-2 border-ink bg-hl px-2.5 py-0.5 text-[15px] font-black">0 ₽</span>
+                          ) : (
+                            <>
+                              <span className="font-display text-[19px] font-black text-blue">{Math.round(price).toLocaleString("ru-RU")} ₽</span>
+                              <span className="text-[13px] text-ink2"> за 30 дней</span>
+                              {onSale && <span className="ml-2 text-[13px] text-ink2 line-through">{Math.round(t.priceRub).toLocaleString("ru-RU")} ₽</span>}
+                            </>
                           )}
                         </td>
-                        <td className="px-3 py-4 sm:px-5">{t.subjectsCount} на выбор</td>
-                        <td className="px-3 py-4 sm:px-5">{t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений в день` : "без лимита"}</td>
+                        <td className="px-3 py-5 sm:px-6">
+                          <span className="inline-block rounded-sm bg-blue/10 px-2.5 py-1 text-[13px] font-bold text-blue">{t.subjectsCount} на выбор</span>
+                        </td>
+                        <td className="px-3 py-5 sm:px-6">
+                          {t.dailyAiLimit != null ? (
+                            <span className="text-ink2">до {t.dailyAiLimit} обращений в день</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 font-bold text-ink">
+                              <Icon name="check" size={16} className="text-blue" />без лимита
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <div className="mt-5 grid grid-cols-1 gap-3 text-[13.5px] leading-relaxed text-ink2 md:grid-cols-2 md:gap-10">
-              <p>
-                {landingMore.tariffs.allPlans}
-                {perSubjectNote && tariffs.some((t) => t.priceRub > 0) ? ` ${perSubjectNote.charAt(0).toUpperCase()}${perSubjectNote.slice(1)}.` : ""}
-              </p>
-              <p>{landingMore.tariffs.payment}</p>
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="border-l-4 border-blue bg-blue/5 px-5 py-4">
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-blue">что входит</p>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-ink/85">
+                  {landingMore.tariffs.allPlans}
+                  {perSubjectNote && tariffs.some((t) => t.priceRub > 0) ? ` ${perSubjectNote.charAt(0).toUpperCase()}${perSubjectNote.slice(1)}.` : ""}
+                </p>
+              </div>
+              <div className="border-l-4 border-hl bg-hl/20 px-5 py-4">
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink">как оплатить</p>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-ink/85">{landingMore.tariffs.payment}</p>
+              </div>
             </div>
-            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-ghost mt-5 px-5 py-2.5 text-[13px]">
-              {landingMore.tariffs.link}
+            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-6 py-3 text-sm">
+              {landingMore.tariffs.link} <Icon name="arrowR" size={17} />
             </button>
           </Reveal>
         </section>
