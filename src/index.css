@@ -328,7 +328,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(82, 86, 122, 0.45) transpare
 .chip-glow { animation: chip-glow 2s ease-out infinite; }
 
 /* бейдж «0 ₽» и цена в таблице тарифов оживают при появлении таблицы */
-@keyframes pop-in { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes pop-in { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 .is-on .pop-in { animation: pop-in 0.6s cubic-bezier(0.2, 1.2, 0.35, 1) 0.9s both; }
 .pop-in { opacity: 0; }
 

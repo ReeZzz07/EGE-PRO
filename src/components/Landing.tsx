@@ -320,6 +320,19 @@ export default function Landing({
                 <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">{landingStatic.principle.eyebrow}</span>
                 <p className="font-display mt-3 text-2xl font-bold leading-snug sm:text-[2rem] sm:leading-tight">{landingStatic.principle.title}</p>
                 <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-paper/75">{landingStatic.principle.text}</p>
+
+                {/* три уровня подсказок: от намёка до почти полного разбора */}
+                <h3 className="font-display mt-8 text-xl font-bold">{landingMore.hints.title}</h3>
+                <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-paper/70">{landingMore.hints.intro}</p>
+                <ol className="mt-5 max-w-xl space-y-3">
+                  {landingMore.hints.items.map((h, i) => (
+                    <li key={h.t} className="hover-rise relative border border-white/15 bg-night2 p-4 pt-5">
+                      <span className="grow-bar absolute -top-px left-0 h-1 bg-hl" style={{ width: `${(i + 1) * 33.3}%`, transitionDelay: `${450 + i * 200}ms` }} aria-hidden />
+                      <h4 className="font-display text-[15px] font-bold text-hl">{h.t}</h4>
+                      <p className="mt-1.5 text-[13.5px] leading-relaxed text-paper/80">{h.d}</p>
+                    </li>
+                  ))}
+                </ol>
               </div>
 
               {/* интерактивное демо: подсказки и свободный ввод; ответы заранее написаны */}
@@ -328,21 +341,6 @@ export default function Landing({
                   <PrincipleChat onStart={() => onStart()} />
                 </div>
               </Reveal>
-            </div>
-
-            {/* три уровня подсказок: от намёка до почти полного разбора */}
-            <div className="mt-12 border-t border-white/10 pt-9">
-              <h3 className="font-display text-xl font-bold">{landingMore.hints.title}</h3>
-              <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-paper/70">{landingMore.hints.intro}</p>
-              <ol className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-                {landingMore.hints.items.map((h, i) => (
-                  <li key={h.t} className="hover-rise relative border border-white/15 bg-night2 p-5 pt-6">
-                    <span className="grow-bar absolute -top-px left-0 h-1 bg-hl" style={{ width: `${(i + 1) * 33.3}%`, transitionDelay: `${450 + i * 200}ms` }} aria-hidden />
-                    <h4 className="font-display text-[15px] font-bold text-hl">{h.t}</h4>
-                    <p className="mt-2 text-[13.5px] leading-relaxed text-paper/80">{h.d}</p>
-                  </li>
-                ))}
-              </ol>
             </div>
           </div>
         </Reveal>
