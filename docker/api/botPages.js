@@ -20,13 +20,14 @@ const PARENTS = readJson("parents.json");
 const CONTACTS = readJson("contacts.json");
 const SUBJECT_PAGES = readJson("subjects.json");
 const LANDING_STATIC = readJson("landingStatic.json");
+const LANDING_MORE = readJson("landingMore.json");
 
 /** Заголовки и описания по умолчанию — те же, что в админке «SEO» (src/lib/seo.ts), если там ничего не сохранено. */
 export const DEFAULT_PAGE_SEO = {
   home: {
-    title: "ЕГЭ·ПРО — тренажёр с ИИ-репетитором",
+    title: "Тренажёр ЕГЭ с ИИ-репетитором — ЕГЭ·ПРО: задания ФИПИ бесплатно",
     description:
-      "ЕГЭ·ПРО — тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания из Открытого банка ФИПИ: математика, русский язык, физика, обществознание, биология, химия и другие предметы.",
+      "ЕГЭ·ПРО — онлайн-тренажёр ЕГЭ с ИИ-репетитором: 51 391 задание из банка ФИПИ по 11 предметам, диагностика, план и проверка сочинений. Начни бесплатно.",
   },
   tariffs: {
     title: "Тарифы — ЕГЭ·ПРО",
@@ -39,7 +40,7 @@ export const LANDING_HEADINGS = {
   subjects: "С какого предмета начнём?",
   process: "Четыре шага от диагностики до пробника",
   capabilities: "Не решебник, а нормальная подготовка",
-  faq: "Коротко о главном",
+  faq: LANDING_MORE.headings.faq,
   cta: LANDING_STATIC.ctaFinal.title,
 };
 
@@ -52,6 +53,15 @@ const plural = (n, one, few, many) => {
   return many;
 };
 const esc = escapeHtml;
+
+/** «{tasks}» → «51 391 задание», «{subjects}» → «11 предметам», «{essay}» → «7 232 задания» — как fillBank в Landing.tsx. */
+export function fillBankText(text, tasks, subjects, essay) {
+  const n = (v) => v.toLocaleString("ru-RU");
+  return text
+    .replace("{tasks}", `${n(tasks)} ${plural(tasks, "задание", "задания", "заданий")}`)
+    .replace("{subjects}", `${subjects} ${plural(subjects, "предмету", "предметам", "предметам")}`)
+    .replace("{essay}", `${n(essay)} ${plural(essay, "задание", "задания", "заданий")}`);
+}
 
 /** «Платёж»: токен {price} в строке таблицы родителей → «От X за 30 дней, » (есть платные тарифы) или «Фиксированная цена за 30 дней, ». */
 export function parentsUsText(us, minPrice) {
@@ -83,6 +93,14 @@ async function loadLanding() {
     out[key] = saved ?? LANDING[key];
   }
   return out;
+}
+
+async function loadHomeArticles(limit = 4) {
+  const { rows } = await pool.query(
+    `select slug, title, excerpt from public.blog_articles where is_published = true and visible_to_guests = true order by is_pinned desc, published_at desc nulls last limit $1`,
+    [limit]
+  );
+  return rows;
 }
 
 async function loadTariffs() {
@@ -141,7 +159,7 @@ const page = (meta, bodyHtml) => head(meta) + `${NAV}\n<main>\n${bodyHtml}\n</ma
 
 // ─────────────────────── главная ───────────────────────
 
-export function renderHomePage({ seo, landing, subjects, tariffs, reviews, contactEmail, paymentNote = "", siteUrl = "", verificationMetaTags = "" }) {
+export function renderHomePage({ seo, landing, subjects, tariffs, reviews, articles = [], contactEmail, perSubjectNote = "", siteUrl = "", verificationMetaTags = "" }) {
   const canonicalUrl = siteUrl ? `${siteUrl}/` : "";
   const total = subjects.reduce((n, s) => n + s.total, 0);
   const subjectsHtml = subjects.length
@@ -150,24 +168,42 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
         .join("\n")}\n</ul>\n</section>`
     : "";
   const processHtml = landing.process.length
-    ? `<section>\n<h2>${esc(LANDING_HEADINGS.process)}</h2>\n<ol>\n${landing.process.map((s) => `<li><h3>${esc(s.t)}</h3><p>${esc(s.d)}</p></li>`).join("\n")}\n</ol>\n</section>`
+    ? `<section>\n<h2>${esc(LANDING_HEADINGS.process)}</h2>\n<ol>\n${landing.process.map((s) => `<li><h3>${esc(s.t)}</h3><p>${esc(s.d)}</p></li>`).join("\n")}\n</ol>\n<p>${esc(LANDING_MORE.processNote.before)} <a href="${LANDING_MORE.processNote.href}">${esc(LANDING_MORE.processNote.linkText)}</a>.</p>\n<p>${esc(LANDING_MORE.ctaMid.text)} <a href="/diagnostic">${esc(LANDING_MORE.ctaMid.button)}</a></p>\n</section>`
     : "";
   const capsHtml = landing.capabilities.length
     ? `<section>\n<h2>${esc(LANDING_HEADINGS.capabilities)}</h2>\n<ul>\n${landing.capabilities.map((c) => `<li><h3>${esc(c.t)}</h3><p>${esc(c.d)}</p></li>`).join("\n")}\n</ul>\n</section>`
     : "";
+  const tm = LANDING_MORE.tariffs;
+  const anyPaidHome = tariffs.some((t) => t.price > 0);
   const tariffsHtml = tariffs.length
-    ? `<section>\n<h2>Тарифы</h2>\n<ul>\n${tariffs
+    ? `<section>
+<h2>${esc(tm.title)}</h2>
+<table>
+<thead><tr>${tm.head.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead>
+<tbody>
+${tariffs
         .map((t) => {
           const l = tariffLine(t);
-          return `<li><strong>${esc(t.name)}</strong>: ${esc(l.price)}${t.price > 0 ? " за 30 дней" : ""}, ${esc(l.subjects)}, ${esc(l.ai)}</li>`;
+          const old = t.basePrice > t.price ? ` (вместо ${rubles(t.basePrice)})` : "";
+          const ai = t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений в день` : "без лимита";
+          return `<tr><th scope="row">${esc(t.name)}</th><td>${t.price === 0 ? "0 ₽" : `${esc(rubles(t.price))} за 30 дней${esc(old)}`}</td><td>${t.subjectsCount} на выбор</td><td>${esc(ai)}</td></tr>`;
         })
-        .join("\n")}\n</ul>\n${paymentNote ? `<p>${esc(paymentNote)}</p>\n` : ""}<p><a href="/tariffs">Все тарифы и условия оплаты</a></p>\n</section>`
+        .join("\n")}
+</tbody>
+</table>
+<p>${esc(tm.allPlans)}${perSubjectNote && anyPaidHome ? ` ${esc(perSubjectNote.charAt(0).toUpperCase() + perSubjectNote.slice(1))}.` : ""}</p>
+<p>${esc(tm.payment)}</p>
+<p><a href="/tariffs">${esc(tm.link)}</a></p>
+</section>`
     : "";
   const reviewsHtml = reviews.length
     ? `<section>\n<h2>Отзывы учеников</h2>\n${reviews.map((r) => `<blockquote><p>${esc(r.body)}</p><footer>${esc(r.displayName || "Ученик")}${r.subject && SUBJECT_NAMES[r.subject] ? `, ${esc(SUBJECT_NAMES[r.subject])}` : ""}, оценка ${esc(r.rating)} из 5</footer></blockquote>`).join("\n")}\n</section>`
     : "";
   const faqHtml = landing.faq.length
     ? `<section>\n<h2>${esc(LANDING_HEADINGS.faq)}</h2>\n${landing.faq.map((f) => `<h3>${esc(f.q)}</h3>\n<p>${esc(f.a)}</p>`).join("\n")}\n</section>`
+    : "";
+  const blogHtml = articles.length
+    ? `<section>\n<h2>Последние статьи</h2>\n<ul>\n${articles.map((x) => `<li><a href="/blog/${esc(x.slug)}">${esc(x.title)}</a>${x.excerpt ? `: ${esc(x.excerpt)}` : ""}</li>`).join("\n")}\n</ul>\n<p><a href="/blog">Вся база знаний</a></p>\n</section>`
     : "";
   const points = subjects.reduce((n, x) => n + (x.points ?? 0), 0);
   const essay = subjects.reduce((n, x) => n + (x.essay ?? 0), 0);
@@ -191,13 +227,52 @@ export function renderHomePage({ seo, landing, subjects, tariffs, reviews, conta
 </blockquote>
 </section>
 <p><strong>${esc(LANDING_STATIC.method.label)}</strong> ${esc(LANDING_STATIC.method.text)}</p>`;
+  const bank = (text) => fillBankText(text, total, subjects.length, essay);
+  const hm = LANDING_MORE.hints;
+  const hintsHtml = `<section>
+<h3>${esc(hm.title)}</h3>
+<p>${esc(hm.intro)}</p>
+<ol>
+${hm.items.map((h) => `<li><strong>${esc(h.t)}</strong>: ${esc(h.d)}</li>`).join("\n")}
+</ol>
+</section>`;
+  const dm = LANDING_MORE.diff;
+  const diffHtml = `<section>
+<h2>${esc(dm.title)}</h2>
+<p>${esc(dm.intro)}</p>
+<ul>
+${dm.items.map((d) => `<li><strong>${esc(d.t)}</strong>: ${esc(d.d)}</li>`).join("\n")}
+</ul>
+</section>`;
+  const essayHtml = `<section>
+<h2>${esc(LANDING_MORE.essay.title)}</h2>
+<p>${esc(bank(LANDING_MORE.essay.text))}</p>
+</section>`;
+  const lm = LANDING_MORE.limits;
+  const limitsHtml = `<section>
+<h2>${esc(lm.title)}</h2>
+<ul>
+${lm.items.map((x) => `<li>${esc(x)}</li>`).join("\n")}
+</ul>
+<p>${esc(lm.article.before)} <a href="${lm.article.href}">${esc(lm.article.linkText)}</a>.</p>
+</section>`;
+  const pm = LANDING_MORE.parents;
+  const parentsHtml = `<section>
+<h2>${esc(pm.title)}</h2>
+<p>${esc(pm.text)}</p>
+<p><a href="${pm.href}">${esc(pm.linkText)}</a></p>
+</section>`;
+  const shortHtml = `<section>
+<h2>${esc(LANDING_MORE.shortAnswer.title)}</h2>
+<p>${esc(bank(LANDING_MORE.shortAnswer.text))}</p>
+</section>`;
   const body = `<h1>${esc(landing.hero.title)}</h1>
 <p>${esc(landing.hero.subtitle)}</p>
 <p><a href="/diagnostic">${esc(LANDING_STATIC.heroCtas[0])}</a> · <a href="/diagnostic">${esc(LANDING_STATIC.heroCtas[1])}</a></p>
 ${statsHtml}
 <p><a href="/parents">Для родителей: чем это отличается от репетитора</a> · <a href="/blog">База знаний: статьи и разборы</a></p>
 ${previewHtml}
-${[subjectsHtml, processHtml, capsHtml, tariffsHtml, principleHtml, reviewsHtml, faqHtml].filter(Boolean).join("\n")}
+${[shortHtml, subjectsHtml, processHtml, capsHtml, principleHtml, hintsHtml, diffHtml, essayHtml, tariffsHtml, limitsHtml, parentsHtml, reviewsHtml, faqHtml, blogHtml].filter(Boolean).join("\n")}
 <section>
 <h2>${esc(LANDING_HEADINGS.cta)}</h2>
 <p>${esc(LANDING_STATIC.ctaFinal.text)}</p>
@@ -205,7 +280,20 @@ ${[subjectsHtml, processHtml, capsHtml, tariffsHtml, principleHtml, reviewsHtml,
 </section>`;
   const orgLd = { "@context": "https://schema.org", ...org(siteUrl, ""), description: seo.pages.home.description, ...(contactEmail ? { contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: contactEmail, availableLanguage: "ru" } } : {}) };
   const siteLd = siteUrl ? { "@context": "https://schema.org", "@type": "WebSite", name: siteName, url: siteUrl, inLanguage: "ru" } : null;
-  return page({ title: seo.pages.home.title, description: seo.pages.home.description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(orgLd, siteLd, faqLd(landing.faq)) }, body);
+  const appLd = tariffs.length
+    ? {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: siteName,
+        applicationCategory: "EducationalApplication",
+        operatingSystem: "Web",
+        inLanguage: "ru",
+        description: seo.pages.home.description,
+        ...(siteUrl ? { url: siteUrl } : {}),
+        offers: tariffs.map((t) => ({ "@type": "Offer", name: t.name, price: t.price.toFixed(2), priceCurrency: "RUB", availability: "https://schema.org/InStock" })),
+      }
+    : null;
+  return page({ title: seo.pages.home.title, description: seo.pages.home.description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(orgLd, siteLd, appLd, faqLd(landing.faq)) }, body);
 }
 
 // ─────────────────────── тарифы ───────────────────────
@@ -378,16 +466,17 @@ export async function getBotPage(pathname, { siteUrl = "", verificationMetaTags 
   if (!BOT_PAGE_PATHS.includes(pathname)) return null;
   const seo = await loadSeo();
   if (pathname === "/") {
-    const [landing, subjects, tariffs, reviews, info] = await Promise.all([
+    const [landing, subjects, tariffs, reviews, articles, info] = await Promise.all([
       loadLanding(),
       loadSubjects().catch(() => []),
       loadTariffs().catch(() => []),
       listPublicReviews(6).then((r) => r.reviews).catch(() => []),
+      loadHomeArticles(4).catch(() => []),
       getPublicContactInfo().catch(() => null),
     ]);
     const tariffsSaved = await contentBlock("tariffsPage").catch(() => null);
-    const paymentNote = { ...TARIFFS_PAGE, ...(tariffsSaved ?? {}) }.paymentNote;
-    return { status: 200, html: renderHomePage({ seo, landing, subjects, tariffs, reviews, contactEmail: info?.supportEmail ?? "", paymentNote, ...opts }) };
+    const perSubjectNote = { ...TARIFFS_PAGE, ...(tariffsSaved ?? {}) }.perSubjectNote;
+    return { status: 200, html: renderHomePage({ seo, landing, subjects, tariffs, reviews, articles, contactEmail: info?.supportEmail ?? "", perSubjectNote, ...opts }) };
   }
   if (pathname === "/tariffs") {
     const saved = await contentBlock("tariffsPage").catch(() => null);

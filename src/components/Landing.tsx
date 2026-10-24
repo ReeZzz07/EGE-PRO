@@ -8,11 +8,37 @@ import { Icon, Reveal, Stamp } from "./ui";
 import BlogSection from "./BlogSection";
 import ReviewsSection from "./ReviewsSection";
 import landingStatic from "../../docker/api/content/landingStatic.json";
+import landingMore from "../../docker/api/content/landingMore.json";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { loadTariffsContent } from "../lib/tariffsContent";
 import { plural } from "../lib/utils";
 import FaqAccordion from "./FaqAccordion";
 import type { View } from "./Header";
+
+/** Подставляет в текст из landingMore.json живые цифры банка: «{tasks}» → «51 391 задание», «{subjects}» → «11 предметам», «{essay}» → «7 232 задания».
+ *  Та же подстановка на сервере — fillBankText в docker/api/botPages.js. */
+function fillBank(text: string, tasks: number, subjects: number, essay: number): string {
+  const n = (v: number) => v.toLocaleString("ru-RU");
+  return text
+    .replace("{tasks}", `${n(tasks)} ${plural(tasks, "задание", "задания", "заданий")}`)
+    .replace("{subjects}", `${subjects} ${plural(subjects, "предмету", "предметам", "предметам")}`)
+    .replace("{essay}", `${n(essay)} ${plural(essay, "задание", "задания", "заданий")}`);
+}
+
+/** Внутренняя ссылка из landingMore.json: настоящий href, но обычный клик не перезагружает страницу. */
+function toView(href: string): View | null {
+  if (href === "/parents") return { name: "parents" } as View;
+  const m = href.match(/^\/blog\/([a-z0-9-]+)$/);
+  return m ? { name: "blog-article", slug: m[1] } : null;
+}
+
+function CtaButton({ onClick, children }: { onClick: () => void; children: string }) {
+  return (
+    <button onClick={onClick} className="btn btn-blue px-6 py-3.5 text-sm">
+      {children} <Icon name="arrowR" size={17} />
+    </button>
+  );
+}
 
 /** Разбивает заголовок на части вокруг выделяемой подстроки и оборачивает её в hl-подсветку. */
 function HeroTitle({ title, highlight }: { title: string; highlight: string }) {
@@ -68,11 +94,18 @@ export default function Landing({
   const availableSubjects = getAvailableSubjects();
   // тарифы и условия оплаты на главной: те же цены, что на /tariffs; роботам эти же данные отдаёт docker/api/botPages.js
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
-  const [paymentNote, setPaymentNote] = useState("");
+  const [perSubjectNote, setPerSubjectNote] = useState("");
   useEffect(() => {
     loadActiveTariffs().then(setTariffs).catch(() => {});
-    loadTariffsContent().then((c) => setPaymentNote(c.paymentNote)).catch(() => {});
+    loadTariffsContent().then((c) => setPerSubjectNote(c.perSubjectNote ?? "")).catch(() => {});
   }, []);
+
+  const go = (e: React.MouseEvent, href: string) => {
+    const v = toView(href);
+    if (!v || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    onNav(v);
+  };
 
   // Иллюстративный образец для лендинга — не тянем из банка (гость видит эту страницу до того,
   // как банк вообще подгрузился), поэтому просто фиксированный пример «как выглядит задание».
@@ -173,6 +206,16 @@ export default function Landing({
         </div>
       )}
 
+      {/* ─── Короткий самостоятельный ответ «что это» ─── */}
+      <section id="about" className="mt-14 scroll-mt-20">
+        <Reveal>
+          <div className="sheet mx-auto max-w-3xl p-6 sm:p-8">
+            <h2 className="font-display text-xl font-black sm:text-2xl">{landingMore.shortAnswer.title}</h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink/85">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+          </div>
+        </Reveal>
+      </section>
+
       {/* ─── Блок 2: быстрый выбор предмета ─── */}
       <section id="subjects" className="mt-14 scroll-mt-20">
         <Reveal>
@@ -222,6 +265,18 @@ export default function Landing({
             </Reveal>
           ))}
         </div>
+        <p className="mt-6 text-[13px] text-ink2">
+          {landingMore.processNote.before}{" "}
+          <a href={landingMore.processNote.href} onClick={(e) => go(e, landingMore.processNote.href)} className="link-slide font-bold text-ink hover:text-blue">
+            {landingMore.processNote.linkText}
+          </a>
+          .
+        </p>
+        {/* вторая кнопка запуска диагностики: сразу после «Как это устроено» */}
+        <div className="sheet mt-8 flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-[14px] leading-relaxed text-ink/85">{landingMore.ctaMid.text}</p>
+          <CtaButton onClick={() => onStart()}>{landingMore.ctaMid.button}</CtaButton>
+        </div>
       </section>
 
       {/* ─── Блок 3: что умеет платформа ─── */}
@@ -245,35 +300,6 @@ export default function Landing({
         </div>
       </section>
 
-      {/* ─── Тарифы: те же цены, что на /tariffs; роботам этот блок отдаёт docker/api/botPages.js ─── */}
-      {tariffs.length > 0 && (
-        <section id="tariffs-home" className="mt-16 scroll-mt-20">
-          <Reveal>
-            <h2 className="font-display text-2xl font-black sm:text-3xl">{landingStatic.tariffsTitle}</h2>
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {tariffs.map((t) => {
-                const price = t.salePriceRub ?? t.priceRub;
-                return (
-                  <div key={t.id} className="sheet p-5">
-                    <h3 className="font-display text-[16px] font-black">{t.name}</h3>
-                    <p className="font-display mt-1 text-2xl font-black">{price === 0 ? "бесплатно" : `${Math.round(price).toLocaleString("ru-RU")} ₽`}</p>
-                    <p className="font-mono text-[11.5px] text-ink2">
-                      {price > 0 ? "на 30 дней · " : ""}
-                      {t.subjectsCount} {plural(t.subjectsCount, "предмет", "предмета", "предметов")}
-                    </p>
-                    <p className="mt-2 text-[12.5px] leading-relaxed text-ink2">{t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений к ИИ-репетитору в день` : "безлимитный ИИ-репетитор"}</p>
-                  </div>
-                );
-              })}
-            </div>
-            {paymentNote && <p className="mt-4 max-w-3xl text-[12.5px] leading-relaxed text-ink2">{paymentNote}</p>}
-            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-ghost mt-4 px-5 py-2.5 text-[13px]">
-              Все тарифы и условия оплаты
-            </button>
-          </Reveal>
-        </section>
-      )}
-
       {/* ─── Блок 4: принцип честной помощи ─── */}
       <section id="principle" className="mt-16 scroll-mt-20">
         <Reveal>
@@ -293,6 +319,18 @@ export default function Landing({
                 {landingStatic.principle.dialog[1]}
               </div>
             </div>
+
+            {/* три уровня подсказок: от намёка до почти полного разбора */}
+            <h3 className="font-display mt-8 text-lg font-bold">{landingMore.hints.title}</h3>
+            <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-paper/70">{landingMore.hints.intro}</p>
+            <ol className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              {landingMore.hints.items.map((h) => (
+                <li key={h.t} className="border border-white/15 bg-night2 p-4">
+                  <h4 className="font-display text-[14px] font-bold text-hl">{h.t}</h4>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-paper/80">{h.d}</p>
+                </li>
+              ))}
+            </ol>
           </div>
         </Reveal>
       </section>
@@ -306,11 +344,121 @@ export default function Landing({
         </Reveal>
       </section>
 
+      {/* ─── Чем отличается от обычной нейросети ─── */}
+      <section id="difference" className="mt-16 scroll-mt-20">
+        <Reveal>
+          <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.diff.title}</h2>
+          <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-ink2">{landingMore.diff.intro}</p>
+        </Reveal>
+        <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {landingMore.diff.items.map((d, i) => (
+            <li key={d.t} className="list-none">
+              <Reveal delay={i * 60}>
+                <div className="sheet h-full p-5">
+                  <h3 className="font-display text-[15px] font-bold leading-snug">{d.t}</h3>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">{d.d}</p>
+                </div>
+              </Reveal>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* ─── Проверка сочинения и развёрнутых ответов ─── */}
+      <section id="essay-check" className="mt-16 scroll-mt-20">
+        <Reveal>
+          <div className="border-l-4 border-blue bg-blue/5 px-5 py-5 sm:px-7">
+            <h2 className="font-display text-xl font-black sm:text-2xl">{landingMore.essay.title}</h2>
+            <p className="mt-2.5 max-w-3xl text-[14.5px] leading-relaxed text-ink/85">{fillBank(landingMore.essay.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* ─── Тарифы и оплата: HTML-таблица, те же цены, что на /tariffs; роботам блок отдаёт docker/api/botPages.js ─── */}
+      {tariffs.length > 0 && (
+        <section id="tariffs-home" className="mt-16 scroll-mt-20">
+          <Reveal>
+            <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.tariffs.title}</h2>
+            <div className="sheet mt-6 overflow-x-auto">
+              <table className="w-full min-w-[34rem] border-collapse text-left text-[13.5px]">
+                <thead>
+                  <tr className="border-b-2 border-ink/20 font-mono text-[11.5px] uppercase tracking-wide text-ink2">
+                    {landingMore.tariffs.head.map((h) => (
+                      <th key={h} scope="col" className="px-4 py-3 font-bold">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tariffs.map((t) => {
+                    const price = t.salePriceRub ?? t.priceRub;
+                    return (
+                      <tr key={t.id} className="border-b border-ink/10 last:border-0">
+                        <th scope="row" className="font-display px-4 py-3 text-[15px] font-black">
+                          {t.name}
+                        </th>
+                        <td className="px-4 py-3 font-bold">
+                          {price === 0 ? "0 ₽" : `${Math.round(price).toLocaleString("ru-RU")} ₽ за 30 дней`}
+                          {t.salePriceRub != null && t.salePriceRub < t.priceRub && (
+                            <span className="ml-2 font-normal text-ink2 line-through">{Math.round(t.priceRub).toLocaleString("ru-RU")} ₽</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">{t.subjectsCount} на выбор</td>
+                        <td className="px-4 py-3">{t.dailyAiLimit != null ? `до ${t.dailyAiLimit} обращений в день` : "без лимита"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-4 max-w-3xl text-[13px] leading-relaxed text-ink2">
+              {landingMore.tariffs.allPlans}
+              {perSubjectNote && tariffs.some((t) => t.priceRub > 0) ? ` ${perSubjectNote.charAt(0).toUpperCase()}${perSubjectNote.slice(1)}.` : ""}
+            </p>
+            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-ink2">{landingMore.tariffs.payment}</p>
+            <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-ghost mt-4 px-5 py-2.5 text-[13px]">
+              {landingMore.tariffs.link}
+            </button>
+          </Reveal>
+        </section>
+      )}
+
+      {/* ─── Ограничения — честно ─── */}
+      <section id="limits" className="mt-16 scroll-mt-20">
+        <Reveal>
+          <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.limits.title}</h2>
+          <ul className="mt-5 max-w-3xl list-disc space-y-2 pl-5 text-[14px] leading-relaxed text-ink/85">
+            {landingMore.limits.items.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[13px] text-ink2">
+            {landingMore.limits.article.before}{" "}
+            <a href={landingMore.limits.article.href} onClick={(e) => go(e, landingMore.limits.article.href)} className="link-slide font-bold text-ink hover:text-blue">
+              {landingMore.limits.article.linkText}
+            </a>
+            .
+          </p>
+        </Reveal>
+      </section>
+
+      {/* ─── Для родителей ─── */}
+      <section id="for-parents" className="mt-16 scroll-mt-20">
+        <Reveal>
+          <h2 className="font-display text-2xl font-black sm:text-3xl">{landingMore.parents.title}</h2>
+          <p className="mt-2.5 max-w-3xl text-[14.5px] leading-relaxed text-ink/85">{landingMore.parents.text}</p>
+          <a href={landingMore.parents.href} onClick={(e) => go(e, landingMore.parents.href)} className="btn btn-ghost mt-4 inline-flex px-5 py-2.5 text-[13px]">
+            {landingMore.parents.linkText}
+          </a>
+        </Reveal>
+      </section>
+
       {/* ─── Блок FAQ ─── */}
       <section className="mt-16">
         <Reveal>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">частые вопросы</p>
-          <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">Коротко о главном</h2>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{landingMore.headings.faqEyebrow}</p>
+          <h2 className="font-display mt-1 text-2xl font-black sm:text-3xl">{landingMore.headings.faq}</h2>
         </Reveal>
         <Reveal>
           <FaqAccordion items={content.faq} className="mt-6 mx-auto max-w-3xl space-y-3" />

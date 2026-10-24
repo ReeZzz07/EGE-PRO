@@ -5,6 +5,7 @@ import fs from "node:fs";
 import {
   BOT_PAGE_PATHS,
   LANDING_HEADINGS,
+  DEFAULT_PAGE_SEO,
   getBotPage,
   renderNotFoundPage,
   getSubjectPage,
@@ -57,13 +58,17 @@ test("renderHomePage: заголовок и подзаголовок героя,
   assert.match(html, new RegExp(LANDING_HEADINGS.subjects));
   assert.match(html, /<h3>Диагностика<\/h3><p>7–10 минут\.<\/p>/);
   assert.match(html, /<h3>Диагностика уровня<\/h3>/);
-  assert.match(html, /<strong>АТТЕСТАТ<\/strong>: 1\s990 ₽ за 30 дней, 2 предмета, безлимитный ИИ-репетитор/);
-  assert.match(html, /<strong>Попробовать<\/strong>: бесплатно, 2 предмета, до 3 обращений к ИИ-репетитору в день/);
+  assert.match(html, /<tr><th scope="row">АТТЕСТАТ<\/th><td>1\s990 ₽ за 30 дней<\/td><td>2 на выбор<\/td><td>без лимита<\/td><\/tr>/);
+  assert.match(html, /<tr><th scope="row">Попробовать<\/th><td>0 ₽<\/td><td>2 на выбор<\/td><td>до 3 обращений в день<\/td><\/tr>/);
+  assert.match(html, /<th scope="col">Тариф<\/th><th scope="col">Цена<\/th><th scope="col">Предметы<\/th><th scope="col">ИИ-репетитор<\/th>/);
   assert.match(html, /<blockquote><p>Помогло разобраться<\/p><footer>Аня, Математика \(профиль\), оценка 5 из 5<\/footer><\/blockquote>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/ege-tutor\.ru\/">/);
   assert.match(html, /<meta property="og:image" content="https:\/\/ege-tutor\.ru\/storage\/seo\/og\.jpg">/);
   const types = ldBlocks(html).map((b) => b["@type"]);
-  assert.deepEqual(types, ["Organization", "WebSite", "FAQPage"]);
+  assert.deepEqual(types, ["Organization", "WebSite", "SoftwareApplication", "FAQPage"]);
+  const app = ldBlocks(html).find((b) => b["@type"] === "SoftwareApplication");
+  assert.deepEqual(app.offers.map((o) => [o.name, o.price]), tariffs.map((t) => [t.name, t.price.toFixed(2)]));
+  assert.equal(app.aggregateRating, undefined, "рейтингов нет");
   const faq = ldBlocks(html).find((b) => b["@type"] === "FAQPage");
   assert.equal(faq.mainEntity[0].name, "Это официальный ресурс ФИПИ?");
   assert.equal(ldBlocks(html)[0].contactPoint.email, "support@ege-tutor.ru");
@@ -183,7 +188,7 @@ test("страница родителей и контактов в React чит�
   assert.match(src("src/lib/content.ts"), /docker\/api\/content\/landing\.json/);
   assert.match(src("src/lib/tariffsContent.ts"), /docker\/api\/content\/tariffsPage\.json/);
   const landing = src("src/components/Landing.tsx");
-  for (const [key, text] of Object.entries(LANDING_HEADINGS).filter(([k]) => k !== "cta")) assert.ok(landing.includes(text), `Landing.tsx: нет заголовка «${text}» (${key}) — обновите LANDING_HEADINGS в botPages.js`);
+  for (const [key, text] of Object.entries(LANDING_HEADINGS).filter(([k]) => k !== "cta" && k !== "faq")) assert.ok(landing.includes(text), `Landing.tsx: нет заголовка «${text}» (${key}) — обновите LANDING_HEADINGS в botPages.js`);
   assert.match(landing, /docker\/api\/content\/landingStatic\.json/);
   assert.match(landing, /landingStatic\.ctaFinal\.title/);
 });
@@ -306,4 +311,72 @@ test("на главной (приложение) нет противоречия
   const landing = fs.readFileSync(new URL("../../../src/components/Landing.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(landing, /Скоро добавим/);
   assert.match(landing, /landingStatic\.subjectsIntro/);
+});
+
+// ─────────────────────── главная по ТЗ: новые блоки ───────────────────────
+
+const homeArgs = () => ({
+  seo,
+  landing: { hero: { title: "Заголовок", subtitle: "Подзаголовок" }, capabilities: [], process: [{ n: "01", icon: "target", t: "Диагностика", d: "7–10 минут." }], faq: [{ q: "Вопрос?", a: "Ответ." }] },
+  subjects: [{ id: "math", name: "Математика (профиль)", total: 4774, points: 5000, essay: 100 }, { id: "fiz", name: "Физика", total: 2683, points: 3000, essay: 50 }],
+  tariffs,
+  reviews: [],
+  articles: [{ slug: "znakomstvo-s-ege-pro", title: "Знакомство с ЕГЭ·ПРО", excerpt: "Как устроена платформа" }],
+  perSubjectNote: "при поштучной покупке — от 1290 ₽/мес за предмет",
+  siteUrl: SITE,
+});
+
+test("renderHomePage: порядок блоков по ТЗ и все новые блоки на месте", () => {
+  const html = renderHomePage(homeArgs());
+  const order = ["<h1>", "<h2>Что такое ЕГЭ·ПРО</h2>", "<h2>С какого предмета", "<h2>Четыре шага", "<h2>Принцип платформы", "<h3>Три уровня подсказок</h3>", "<h2>Чем ИИ-репетитор ЕГЭ·ПРО отличается от обычной нейросети</h2>", "<h2>Проверка сочинения и развёрнутых ответов</h2>", "<h2>Тарифы и оплата</h2>", "<h2>Ограничения — честно</h2>", "<h2>Для родителей</h2>", "<h2>Частые вопросы</h2>", "<h2>Последние статьи</h2>", "<h2>Пройди диагностику"];
+  let at = -1;
+  for (const h of order) {
+    const i = html.indexOf(h, at + 1);
+    assert.ok(i > at, "блок «" + h + "» на месте и после предыдущего");
+    at = i;
+  }
+});
+
+test("renderHomePage: короткий ответ с живыми цифрами, три уровня подсказок, пять отличий, проверка сочинений с числом заданий", () => {
+  const html = renderHomePage(homeArgs());
+  assert.match(html, /В банке 7\s457 заданий в формате Открытого банка заданий ФИПИ по 2 предметам\./);
+  assert.match(html, /<li><strong>Уровень 1: намёк на тему<\/strong>/);
+  assert.match(html, /<li><strong>Уровень 3: почти полный разбор<\/strong>/);
+  assert.equal((html.match(/<h2>Чем ИИ-репетитор[\s\S]*?<\/ul>/)[0].match(/<li>/g) ?? []).length, 5);
+  assert.match(html, /В банке 150 заданий с развёрнутым ответом\./);
+  assert.doesNotMatch(html, /\{(tasks|subjects|essay)\}/, "подстановки раскрыты");
+});
+
+test("renderHomePage: тарифы — HTML-таблица, условия оплаты, поштучная цена из настроек, три кнопки диагностики, внутренние ссылки из ТЗ", () => {
+  const html = renderHomePage(homeArgs());
+  assert.match(html, /<table>[\s\S]*<\/table>/);
+  assert.match(html, /На всех тарифах есть диагностика, персональный план и пробные варианты\. При поштучной покупке — от 1290 ₽\/мес за предмет\./);
+  assert.match(html, /картой или через СБП, через ЮKassa, без сохранения карты и без автопродления\. Тариф включается сразу после оплаты, чек приходит на почту\. Оплатить может родитель/);
+  assert.ok((html.match(/<a href="\/diagnostic">/g) ?? []).length >= 3, "кнопок диагностики не меньше трёх");
+  for (const href of ["/tariffs", "/parents", "/blog/ii-repetitor-protiv-zhivogo-repetitora", "/blog/kak-rabotaet-diagnostika-i-plan", "/blog/znakomstvo-s-ege-pro"]) assert.ok(html.includes('href="' + href + '"'), href);
+});
+
+test("renderHomePage: нет запрещённого ТЗ — возврата денег, отзывов без данных, рейтингов, «лучший», гарантий балла", () => {
+  const html = renderHomePage(homeArgs());
+  assert.doesNotMatch(html, /возврат/i);
+  assert.doesNotMatch(html, /Отзывы учеников/);
+  assert.doesNotMatch(html, /лучш(ий|ая|ее) (сервис|тренажёр|платформа)/i);
+  assert.doesNotMatch(html, /гарантир(уем|ует) (балл|результат)/i);
+  assert.doesNotMatch(html, /фото|PDF|рукописн|живые преподаватели|хранятся в России/i);
+});
+
+test("renderHomePage: заголовок и описание по умолчанию соответствуют ТЗ и совпадают с настройками приложения", () => {
+  assert.equal(DEFAULT_PAGE_SEO.home.title, "Тренажёр ЕГЭ с ИИ-репетитором — ЕГЭ·ПРО: задания ФИПИ бесплатно");
+  assert.ok(DEFAULT_PAGE_SEO.home.title.length <= 70);
+  assert.ok(DEFAULT_PAGE_SEO.home.description.length <= 165);
+  const seoTs = fs.readFileSync(new URL("../../../src/lib/seo.ts", import.meta.url), "utf8");
+  assert.ok(seoTs.includes(DEFAULT_PAGE_SEO.home.title) && seoTs.includes(DEFAULT_PAGE_SEO.home.description), "src/lib/seo.ts совпадает с DEFAULT_PAGE_SEO");
+});
+
+test("Landing.tsx читает landingMore.json — тот же файл, что сервер; заголовок FAQ и подстановки не разошлись", () => {
+  const landing = fs.readFileSync(new URL("../../../src/components/Landing.tsx", import.meta.url), "utf8");
+  assert.match(landing, /docker\/api\/content\/landingMore\.json/);
+  assert.match(landing, /landingMore\.headings\.faq/);
+  for (const k of ["shortAnswer", "ctaMid", "hints", "diff", "essay", "tariffs", "limits", "parents"]) assert.ok(landing.includes("landingMore." + k), k);
+  assert.match(landing, /\{tasks\}/);
 });
