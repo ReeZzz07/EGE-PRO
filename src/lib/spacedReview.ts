@@ -2,10 +2,8 @@
 // платформа должна возвращать похожие задания через 1 день, 3 дня, неделю и т.д." — растущий
 // интервал закрепляет знание в долгосрочной памяти, а не только в моменте решения.
 //
-// Источник истины — localStorage (тот же принцип, что у диагностики/плана, см. planStorage.ts:
-// "DB — только зеркало, никогда не читается обратно"), ключ — по пользователю, как и там, чтобы на
-// одном браузере расписание одного аккаунта не подмешивалось другому. public.topic_reviews
-// (0021_topic_reviews.sql) — write-only зеркало для устойчивости данных, не читается обратно.
+// Источник истины для залогиненного — public.topic_reviews; localStorage — кэш/офлайн.
+// На логине hydrateTopicReviewsFromServer() подтягивает строки в кэш.
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type { Subject } from "../data/tasks";
 
@@ -39,7 +37,7 @@ function saveAll(userId: string, reviews: TopicReview[]) {
   }
 }
 
-function mirrorToSupabase(userId: string, review: TopicReview) {
+function upsertRemote(userId: string, review: TopicReview) {
   if (!isSupabaseConfigured || !supabase) return;
   supabase
     .from("topic_reviews")
@@ -48,8 +46,40 @@ function mirrorToSupabase(userId: string, review: TopicReview) {
       { onConflict: "user_id,subject,topic" }
     )
     .then(({ error }) => {
-      if (error) console.warn("Не удалось сохранить расписание повторения в Supabase:", error.message);
+      if (error) console.warn("Не удалось сохранить расписание повторения в БД:", error.message);
     });
+}
+
+/** Подтягивает расписание с сервера в кэш. Сервер выигрывает, если у строки новее updated_at /
+ *  due_at, чем у локальной пары subject+topic; локальные-only темы (ещё не ушедшие в insert)
+ *  сохраняются и дописываются на сервер. */
+export async function hydrateTopicReviewsFromServer(userId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { data, error } = await supabase.from("topic_reviews").select("subject, topic, stage, due_at, updated_at").eq("user_id", userId);
+  if (error || !data) {
+    if (error) console.warn("Не удалось загрузить расписание повторения:", error.message);
+    return;
+  }
+  const local = loadAll(userId);
+  const byKey = new Map(local.map((r) => [`${r.subject}|${r.topic}`, r]));
+  for (const row of data) {
+    const key = `${row.subject}|${row.topic}`;
+    const remote: TopicReview = {
+      subject: row.subject as Subject,
+      topic: row.topic as string,
+      stage: row.stage as number,
+      dueAt: new Date(row.due_at as string).getTime(),
+    };
+    const cur = byKey.get(key);
+    if (!cur || cur.dueAt <= remote.dueAt) byKey.set(key, remote);
+  }
+  const merged = [...byKey.values()];
+  saveAll(userId, merged);
+  // локальные-only → дописать на сервер
+  for (const r of merged) {
+    const onServer = data.some((row) => row.subject === r.subject && row.topic === r.topic);
+    if (!onServer) upsertRemote(userId, r);
+  }
 }
 
 /** Вызывается на КАЖДУЮ попытку решения задания (см. lib/store.tsx addAttempt) — обновляет
@@ -73,7 +103,7 @@ export function recordTopicOutcome(userId: string, subject: Subject, topic: stri
     if (idx >= 0) all[idx] = next;
     else all.push(next);
     saveAll(userId, all);
-    mirrorToSupabase(userId, next);
+    upsertRemote(userId, next);
     return;
   }
 
@@ -92,7 +122,7 @@ export function recordTopicOutcome(userId: string, subject: Subject, topic: stri
         .eq("subject", subject)
         .eq("topic", topic)
         .then(({ error }) => {
-          if (error) console.warn("Не удалось убрать закреплённую тему из расписания в Supabase:", error.message);
+          if (error) console.warn("Не удалось убрать закреплённую тему из расписания в БД:", error.message);
         });
     }
     return;
@@ -102,7 +132,7 @@ export function recordTopicOutcome(userId: string, subject: Subject, topic: stri
   const next: TopicReview = { subject, topic, stage: nextStage, dueAt: Date.now() + REVIEW_INTERVALS_DAYS[nextStage] * 86_400_000 };
   all[idx] = next;
   saveAll(userId, all);
-  mirrorToSupabase(userId, next);
+  upsertRemote(userId, next);
 }
 
 /** Темы предмета, чей срок повторения уже наступил — то, что реально нужно показать ученику
@@ -119,10 +149,7 @@ export function countScheduledTopics(userId: string): number {
   return loadAll(userId).length;
 }
 
-/** Снимает с повторения одну тему — зовётся из clearTask (см. lib/store.tsx): "Убрать задание и
- *  его историю" в тетради ошибок обещает забыть про эту ошибку целиком, а расписание повторения
- *  раньше этим не затрагивалось — тема продолжала маячить "на повторении" даже после того, как
- *  ученик явно попросил её убрать. */
+/** Снимает с повторения одну тему — зовётся из clearTask (см. lib/store.tsx). */
 export function clearTopicReview(userId: string, subject: Subject, topic: string): void {
   const all = loadAll(userId).filter((r) => !(r.subject === subject && r.topic === topic));
   saveAll(userId, all);
@@ -134,14 +161,11 @@ export function clearTopicReview(userId: string, subject: Subject, topic: string
     .eq("subject", subject)
     .eq("topic", topic)
     .then(({ error }) => {
-      if (error) console.warn("Не удалось убрать тему из расписания повторения в Supabase:", error.message);
+      if (error) console.warn("Не удалось убрать тему из расписания повторения в БД:", error.message);
     });
 }
 
-/** Полностью очищает расписание повторения — зовётся из resetAll (см. lib/store.tsx): "Сбросить
- *  прогресс" обещает стереть всё, а расписание повторения раньше переживало сброс нетронутым —
- *  бейдж "на повторении" мог всплыть по темам, о которых свежая (нулевая) история попыток ничего
- *  не знает. */
+/** Полностью очищает расписание повторения — зовётся из resetAll (см. lib/store.tsx). */
 export function clearAllTopicReviews(userId: string): void {
   saveAll(userId, []);
   if (!isSupabaseConfigured || !supabase) return;
@@ -150,6 +174,6 @@ export function clearAllTopicReviews(userId: string): void {
     .delete()
     .eq("user_id", userId)
     .then(({ error }) => {
-      if (error) console.warn("Не удалось стереть расписание повторения в Supabase:", error.message);
+      if (error) console.warn("Не удалось стереть расписание повторения в БД:", error.message);
     });
 }

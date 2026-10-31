@@ -71,6 +71,20 @@ import { initiatePayment, initiateRenewal, initiateAddon, handleYookassaWebhook,
 import { getOrCreateLink, getLinkStatus, recordShare, sendParentEmail, getPublicView, startParentPayment, getParentPaymentStatus, getParentPayStats, linkUrl, isValidToken } from "./parentPay.js";
 import { createActionToken, consumeActionToken, inspectActionToken } from "./authTokens.js";
 import { sendVerifyEmail, sendPasswordResetEmail, sendWelcomeEmail, sendMail, resolveWelcomeEmailSettings } from "./mailer.js";
+import { normalizeErrorBody, recordClientError, listClientErrors, clearClientErrors } from "./clientErrors.js";
+import {
+  TeacherError,
+  listClasses as teacherListClasses,
+  createClass as teacherCreateClass,
+  renameClass as teacherRenameClass,
+  deleteClass as teacherDeleteClass,
+  listMembers as teacherListMembers,
+  removeMember as teacherRemoveMember,
+  joinByCode as teacherJoinByCode,
+  myMemberships as teacherMyMemberships,
+  leaveClass as teacherLeaveClass,
+} from "./teacher.js";
+import { getLaunchReadiness } from "./launchReadiness.js";
 
 const PORT = process.env.PORT || 8787;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -1032,6 +1046,132 @@ app.get("/admin/badges", authMiddleware, requireAdmin, async (_req, res) => {
     res.json(await getAdminBadges());
   } catch (e) {
     res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/admin/launch-readiness", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json(await getLaunchReadiness());
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/admin/errors", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    res.json(await listClientErrors({ limit: req.query.limit, offset: req.query.offset }));
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.delete("/admin/errors", authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    await clearClientErrors();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+const errorsLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+app.post("/errors", errorsLimiter, optionalAuth, async (req, res) => {
+  try {
+    const parsed = normalizeErrorBody(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    await recordClientError({
+      userId: req.user?.sub ?? null,
+      source: parsed.source,
+      message: parsed.message,
+      stack: parsed.stack,
+      url: parsed.url,
+      userAgent: req.get("user-agent"),
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+function teacherFail(res, e) {
+  if (e instanceof TeacherError) return res.status(e.status).json({ error: e.message });
+  console.error(e);
+  return res.status(500).json({ error: String(e?.message ?? e) });
+}
+
+app.get("/teacher/classes", authMiddleware, async (req, res) => {
+  try {
+    res.json({ classes: await teacherListClasses(req.user.sub) });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.post("/teacher/classes", authMiddleware, async (req, res) => {
+  try {
+    res.json({ class: await teacherCreateClass(req.user.sub, req.body?.name) });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.patch("/teacher/classes/:id", authMiddleware, async (req, res) => {
+  try {
+    await teacherRenameClass(req.user.sub, req.params.id, req.body?.name);
+    res.json({ ok: true });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.delete("/teacher/classes/:id", authMiddleware, async (req, res) => {
+  try {
+    await teacherDeleteClass(req.user.sub, req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.get("/teacher/classes/:id/members", authMiddleware, async (req, res) => {
+  try {
+    res.json({ members: await teacherListMembers(req.user.sub, req.params.id) });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.delete("/teacher/classes/:id/members/:studentId", authMiddleware, async (req, res) => {
+  try {
+    await teacherRemoveMember(req.user.sub, req.params.id, req.params.studentId);
+    res.json({ ok: true });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.post("/teacher/join", authMiddleware, async (req, res) => {
+  try {
+    res.json(await teacherJoinByCode(req.user.sub, req.body?.code));
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.get("/teacher/memberships", authMiddleware, async (req, res) => {
+  try {
+    res.json({ memberships: await teacherMyMemberships(req.user.sub) });
+  } catch (e) {
+    teacherFail(res, e);
+  }
+});
+
+app.delete("/teacher/memberships/:classId", authMiddleware, async (req, res) => {
+  try {
+    await teacherLeaveClass(req.user.sub, req.params.classId);
+    res.json({ ok: true });
+  } catch (e) {
+    teacherFail(res, e);
   }
 });
 

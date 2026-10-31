@@ -113,7 +113,7 @@ export async function searchUsers({ q, filters = {}, sort = "registered", dir = 
   const orderDir = dir === "asc" ? "asc" : "desc";
   const { rows } = await pool.query(
     `select u.id, u.email, u.created_at as registered_at, p.full_name, p.tariff_id, p.tariff_expires_at,
-            p.is_admin, p.discount_percent, p.anonymized_at, p.region, p.city,
+            p.is_admin, p.is_teacher, p.discount_percent, p.anonymized_at, p.region, p.city,
             (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active,
             ${USER_BOOL_FILTERS.map((k) => `(${BOOL_EXPR[k]}) as ${k}`).join(", ")}
      from auth.users u
@@ -148,7 +148,7 @@ export async function getUserDetail(id) {
     `select u.id, u.email, u.created_at as registered_at, u.email_confirmed_at,
             p.full_name, p.grade, p.exam_year, p.goal, p.daily_minutes, p.primary_subject, p.onboarded_at, p.avatar_url,
             p.region, p.city, p.school, p.age, p.gender,
-            p.is_admin, p.tariff_id, p.tariff_activated_at, p.tariff_expires_at, p.extra_subjects, p.discount_percent,
+            p.is_admin, p.is_teacher, p.tariff_id, p.tariff_activated_at, p.tariff_expires_at, p.extra_subjects, p.discount_percent,
             p.anonymized_at, t.name as tariff_name, t.price_rub as tariff_price_rub,
             (p.tariff_id <> 'free' and (p.tariff_expires_at is null or p.tariff_expires_at > now())) as tariff_active
      from auth.users u
@@ -206,6 +206,7 @@ export async function updateUser(id, patch) {
     };
     if (patch.fullName !== undefined) set("full_name", patch.fullName);
     if (patch.isAdmin !== undefined) set("is_admin", patch.isAdmin);
+    if (patch.isTeacher !== undefined) set("is_teacher", patch.isTeacher);
     if (patch.discountPercent !== undefined) set("discount_percent", patch.discountPercent);
     if (patch.tariffExpiresAt !== undefined) set("tariff_expires_at", patch.tariffExpiresAt);
     if (patch.tariffId !== undefined) {

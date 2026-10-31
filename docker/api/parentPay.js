@@ -127,11 +127,54 @@ export function diagnosticSummary(row) {
 }
 
 async function studentStats(userId) {
-  const [counts, diag] = await Promise.all([
-    pool.query("select count(*)::int as tasks from public.attempts where user_id = $1", [userId]),
+  const [counts, diag, week, bySubject, reviews] = await Promise.all([
+    pool.query(
+      `select count(*)::int as tasks,
+              count(*) filter (where correct)::int as correct,
+              coalesce(sum(seconds), 0)::int as seconds
+         from public.attempts where user_id = $1`,
+      [userId]
+    ),
     pool.query("select subject, result from public.diagnostics where user_id = $1 order by finished_at desc limit 1", [userId]),
+    pool.query(
+      `select count(*)::int as tasks,
+              count(*) filter (where correct)::int as correct
+         from public.attempts
+        where user_id = $1 and created_at > now() - interval '7 days'`,
+      [userId]
+    ),
+    pool.query(
+      `select t.subject,
+              count(*)::int as attempts,
+              count(*) filter (where a.correct)::int as correct
+         from public.attempts a
+         join public.tasks t on t.id = a.task_id
+        where a.user_id = $1
+        group by t.subject
+        order by attempts desc
+        limit 8`,
+      [userId]
+    ),
+    pool.query("select count(*)::int as n from public.topic_reviews where user_id = $1", [userId]),
   ]);
-  return { tasksSolved: counts.rows[0]?.tasks ?? 0, diagnosticDone: !!diag.rows[0], diagnostic: diagnosticSummary(diag.rows[0]) };
+  const c = counts.rows[0] ?? {};
+  const w = week.rows[0] ?? {};
+  return {
+    tasksSolved: c.tasks ?? 0,
+    tasksCorrect: c.correct ?? 0,
+    totalSeconds: c.seconds ?? 0,
+    weekAttempts: w.tasks ?? 0,
+    weekCorrect: w.correct ?? 0,
+    reviewTopics: reviews.rows[0]?.n ?? 0,
+    bySubject: (bySubject.rows ?? []).map((r) => ({
+      subject: r.subject,
+      subjectName: SUBJECT_NAMES[r.subject] ?? r.subject,
+      attempts: r.attempts,
+      correct: r.correct,
+    })),
+    diagnosticDone: !!diag.rows[0],
+    diagnostic: diagnosticSummary(diag.rows[0]),
+  };
 }
 
 /** Платные тарифы с итоговыми ценами для этого ученика (персональная скидка и приветственный оффер

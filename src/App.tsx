@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import Header, { ADMIN_ONLY_VIEWS, PROTECTED_VIEWS, landingSection, type View } from "./components/Header";
+import Header, { ADMIN_ONLY_VIEWS, PROTECTED_VIEWS, TEACHER_VIEWS, landingSection, type View } from "./components/Header";
 // Ленивая загрузка — админка тянет за собой RichTextEditor.tsx (TipTap/ProseMirror, ~430 КБ), а её
 // видят только админы; без lazy() этот вес получал бы каждый гость на лендинге/статьях блога.
 const AdminContent = lazy(() => import("./components/AdminContent"));
+const TeacherView = lazy(() => import("./components/TeacherView"));
 import Dashboard from "./components/Dashboard";
 import TaskBank from "./components/TaskBank";
 import SolveView from "./components/SolveView";
@@ -216,7 +217,10 @@ function AppShell() {
     persistView(v);
     setViewRaw(v);
     const path = viewToPath(v);
-    if (path !== window.location.pathname) window.history.pushState(null, "", path);
+    // сравниваем только pathname: у части роутов search значим только при входе снаружи (payment/return)
+    if (path.split("?")[0] !== window.location.pathname || (path.includes("?") && path !== `${window.location.pathname}${window.location.search}`)) {
+      window.history.pushState(null, "", path);
+    }
   };
 
   // неизвестный путь при первой загрузке (не один из наших роутов) — контент уже landing
@@ -258,10 +262,13 @@ function AppShell() {
       const persisted = loadPersistedView();
       if (persisted) {
         setViewRaw(persisted);
+        const path = viewToPath(persisted);
+        if (path !== window.location.pathname) window.history.replaceState(null, "", path);
         return;
       }
     }
     setViewRaw({ name: "home" });
+    if (window.location.pathname !== "/app") window.history.replaceState(null, "", "/app");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile]);
 
@@ -345,9 +352,10 @@ function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile, view.name]);
 
-  // разделы админки — только для администраторов
+  // разделы админки — только для администраторов; классы — учитель или админ
   useEffect(() => {
     if (!loading && profile && !profile.isAdmin && ADMIN_ONLY_VIEWS.includes(view.name)) setView({ name: "home" });
+    if (!loading && profile && !profile.isAdmin && !profile.isTeacher && TEACHER_VIEWS.includes(view.name)) setView({ name: "home" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile, view.name]);
 
@@ -483,6 +491,11 @@ function AppShell() {
         {view.name === "parents" && <ParentsView onNav={setView} />}
         {view.name === "subject-page" && <SubjectPage subject={view.subject} onStart={(s) => setView({ name: "onboarding", subject: s })} onNav={setView} />}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
+        {view.name === "teacher" && (profile?.isTeacher || profile?.isAdmin) && (
+          <Suspense fallback={<p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>}>
+            <TeacherView onNav={setView} />
+          </Suspense>
+        )}
         {view.name === "admin" && profile?.isAdmin && (
           <Suspense fallback={<p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>}>
             <AdminContent onNav={setView} />

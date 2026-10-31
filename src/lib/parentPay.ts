@@ -88,12 +88,25 @@ export interface ParentDiagnostic {
   weakTopics: string[];
 }
 
+export interface ParentSubjectStat {
+  subject: string;
+  subjectName: string;
+  attempts: number;
+  correct: number;
+}
+
 export interface ParentPublicView {
   expired: boolean;
   studentName?: string | null;
   expiresAt?: string;
   currentTariffId?: string;
   tasksSolved?: number;
+  tasksCorrect?: number;
+  totalSeconds?: number;
+  weekAttempts?: number;
+  weekCorrect?: number;
+  reviewTopics?: number;
+  bySubject?: ParentSubjectStat[];
   diagnosticDone?: boolean;
   diagnostic?: ParentDiagnostic | null;
   discountPercent?: number | null;

@@ -104,11 +104,12 @@ node scripts/import/publish-to-supabase.mjs --subject=biologiya --db-subject=bio
 ```bash
 scripts/backup.sh                 # пишет в ./backups/pg_<дата>.dump и storage_<дата>.tar.gz
 scripts/backup.sh /куда-угодно    # или в указанный каталог
+BACKUP_REMOTE_DIR=/mnt/offsite ./scripts/backup.sh   # + копия в другой каталог/том
 ```
 
-Скрипт только СОЗДАЁТ локальные файлы бэкапа — сам он никуда их не копирует. Для реальной защиты
-от потери диска забирай `backups/` куда-то ещё (внешний диск, облачное хранилище) вручную или по
-расписанию (cron/Task Scheduler).
+Скрипт создаёт локальные файлы бэкапа. Если задана переменная `BACKUP_REMOTE_DIR`, после дампа
+копирует свежие `pg_*.dump` и `storage_*.tar.gz` туда (второй диск, смонтированный S3-fuse и т.п.).
+Без неё забирай `backups/` куда-то ещё вручную или по cron/Task Scheduler.
 
 Восстановление — `scripts/restore.sh <pg_dump файл> <storage tar.gz файл>` (останавливает
 api/web, перезаписывает текущие данные, поднимает всё обратно). Необратимо — сначала убедись, что

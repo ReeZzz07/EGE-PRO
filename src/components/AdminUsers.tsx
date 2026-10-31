@@ -73,6 +73,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
   const [expiresAt, setExpiresAt] = useState("");
   const [discountPercent, setDiscountPercent] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isTeacher, setIsTeacher] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -86,6 +87,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
         setExpiresAt(expiresAtToDateInput(d.tariff_expires_at));
         setDiscountPercent(d.discount_percent != null ? String(d.discount_percent) : "");
         setIsAdmin(d.is_admin);
+        setIsTeacher(!!d.is_teacher);
       }
       setLoading(false);
     });
@@ -109,7 +111,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
       tariffId,
       tariffExpiresAt: dateInputToExpiresAt(expiresAt),
       discountPercent: discountPercent === "" ? null : Math.max(0, Math.min(100, Number(discountPercent) || 0)),
-      ...(isSelf ? {} : { isAdmin }),
+      ...(isSelf ? {} : { isAdmin, isTeacher }),
     });
     setSaving(false);
     if (res.error) return push(res.error, "err");
@@ -281,10 +283,16 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
           </label>
 
           {!isSelf && (
-            <label className="flex items-center gap-2 pt-1">
-              <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} className="h-4 w-4" />
-              <span className="text-[13px] font-bold">Права администратора</span>
-            </label>
+            <>
+              <label className="flex items-center gap-2 pt-1">
+                <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} className="h-4 w-4" />
+                <span className="text-[13px] font-bold">Права администратора</span>
+              </label>
+              <label className="flex items-center gap-2 pt-1">
+                <input type="checkbox" checked={isTeacher} onChange={(e) => setIsTeacher(e.target.checked)} className="h-4 w-4" />
+                <span className="text-[13px] font-bold">Права учителя (классы)</span>
+              </label>
+            </>
           )}
         </div>
       </div>

@@ -39,16 +39,20 @@ export type View =
   | { name: "reset-password"; token: string }
   | { name: "check-email"; email: string }
   | { name: "verify-email"; token: string }
-  | { name: "admin" };
+  | { name: "admin" }
+  | { name: "teacher" };
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
 export const PROTECTED_VIEWS: View["name"][] = [
   "bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary",
-  "profile", "review", "settings", "subjects", "kim2027", "payment-return", "renew", "admin",
+  "profile", "review", "settings", "subjects", "kim2027", "payment-return", "renew", "admin", "teacher", "home",
 ];
 
 /** Виды, доступные только администраторам (см. AppShell). */
 export const ADMIN_ONLY_VIEWS: View["name"][] = ["admin"];
+
+/** Виды, доступные учителю или админу (см. AppShell). */
+export const TEACHER_VIEWS: View["name"][] = ["teacher"];
 
 /** Переход к разделу лендинга (для гостевой навигации в шапке/подвале). */
 export function landingSection(section?: string): View {
@@ -120,7 +124,11 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
 
   // Те же пункты, что и в верхнем меню авторизованного пользователя — переиспользуются и в нижней
   // мобильной навигации (см. ниже), чтобы оба списка не могли разъехаться.
-  const authNav = profile?.isAdmin ? [...NAV, { id: "admin", label: "Админка", icon: "sigma" }] : NAV;
+  const authNav = [
+    ...NAV,
+    ...((profile?.isTeacher || profile?.isAdmin) ? [{ id: "teacher", label: "Классы", icon: "book" }] : []),
+    ...(profile?.isAdmin ? [{ id: "admin", label: "Админка", icon: "sigma" }] : []),
+  ];
 
   // Нижняя мобильная панель (см. под </header>) — общая для авторизованных и гостей, только источник
   // пунктов и обработчик клика разные; сама разметка и активное состояние ниже не знают о профиле.

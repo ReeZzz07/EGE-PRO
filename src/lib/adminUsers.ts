@@ -13,6 +13,7 @@ export interface AdminUserListItem {
   tariff_id: string;
   tariff_expires_at: string | null;
   is_admin: boolean;
+  is_teacher: boolean;
   discount_percent: number | null;
   anonymized_at: string | null;
   tariff_active: boolean;
@@ -101,6 +102,7 @@ export interface AdminUserDetail {
   gender: string | null;
   avatar_url: string | null;
   is_admin: boolean;
+  is_teacher: boolean;
   tariff_id: string;
   tariff_activated_at: string | null;
   tariff_expires_at: string | null;
@@ -136,6 +138,7 @@ export interface AdminUserPatch {
   tariffExpiresAt?: string | null;
   discountPercent?: number | null;
   isAdmin?: boolean;
+  isTeacher?: boolean;
 }
 
 export interface AdminUserSearchResult {
