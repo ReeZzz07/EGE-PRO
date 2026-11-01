@@ -38,7 +38,9 @@ describe("ParentPayView", () => {
   it("имя ребёнка, прогресс, скидка, тарифы с зачёркнутой ценой; популярный выбран по умолчанию", async () => {
     render(<ParentPayView token={TOKEN} onNav={vi.fn()} />);
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Мария просит помочь");
-    expect(screen.getByText(/решено 5 заданий, пройдена диагностика/)).toBeInTheDocument();
+    const report = screen.getByTestId("parent-progress-report");
+    expect(report).toHaveTextContent("5");
+    expect(report).toHaveTextContent(/Как занимается Мария/);
     expect(screen.getByText(/скидка −30%/)).toBeInTheDocument();
     expect(screen.getByText(/2\s793\s₽/)).toBeInTheDocument();
     expect(screen.getByText(/3\s990\s₽/).className).toContain("line-through");

@@ -4,7 +4,7 @@ import { SUBJECTS, type Subject } from "../data/tasks";
 import { checkAnswer } from "../lib/utils";
 import { pickDiagnosticTasks, scoreDiagnostic, LEVEL_LABEL, type DiagnosticAnswer, type DiagnosticResult } from "../lib/diagnostic";
 import { reachGoalOnce } from "../lib/metrika";
-import { saveDiagnosticResult, mirrorDiagnosticToSupabase } from "../lib/planStorage";
+import { persistDiagnostic } from "../lib/planStorage";
 import { useAuth } from "../lib/auth";
 import { getDiagnosticPick, hydrateDiagnosticTasks, isDiagnosticLoading, useTasksVersion } from "../lib/dbTasks";
 import { Icon, Reveal, TaskStatement } from "./ui";
@@ -15,7 +15,7 @@ type Phase = "setup" | "running" | "result";
 
 export default function DiagnosticView({ subject, onFinish, onSkip }: { subject: Subject; onFinish: (result: DiagnosticResult) => void; onSkip: () => void }) {
   const meta = SUBJECTS[subject];
-  const { profile, isGuestMode } = useAuth();
+  const { profile } = useAuth();
   useTasksVersion(); // перерисовка, когда набор заданий загрузился
   const [phase, setPhase] = useState<Phase>("setup");
   // набор фиксируем в момент старта — фоновая подгрузка банка не должна менять задания посреди диагностики
@@ -45,9 +45,8 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
     setValue("");
     if (idx + 1 >= tasks.length) {
       const scored = scoreDiagnostic(subject, next);
-      if (profile) saveDiagnosticResult(scored, profile.id);
+      if (profile) persistDiagnostic(profile.id, scored);
       reachGoalOnce("diagnostic_done", "diagnostic_done");
-      if (!isGuestMode && profile) mirrorDiagnosticToSupabase(profile.id, scored);
       setPhase("result");
     } else {
       setIdx((i) => i + 1);

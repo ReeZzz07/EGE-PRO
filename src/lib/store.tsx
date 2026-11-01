@@ -5,7 +5,8 @@ import { reachGoalOnce } from "./metrika";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
 import { ALL_SUBJECTS, getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
-import { clearAllTopicReviews, clearTopicReview, recordTopicOutcome } from "./spacedReview";
+import { clearAllTopicReviews, clearTopicReview, hydrateTopicReviewsFromServer, recordTopicOutcome } from "./spacedReview";
+import { hydratePlansFromServer } from "./planStorage";
 
 export interface Attempt {
   taskId: string;
@@ -56,18 +57,23 @@ function reducer(state: ProgressState, action: Action): ProgressState {
   }
 }
 
-/** Загружает попытки пользователя из Supabase, переносит туда локальные (гостевые) при первом
- *  входе — и на каждый вызов МЁРДЖИТ локальные и удалённые попытки объединением, а не заменой.
- *  Раньше эта функция вызывалась на КАЖДОЙ перезагрузке страницы (не только при первом входе — ref
- *  syncedUserId сбрасывается на каждый маунт) и подменяла state.attempts удалённой копией целиком.
- *  Запись попытки в Supabase (см. addAttempt ниже) асинхронная и не блокирует UI — если сразу после
- *  решения задания перезагрузить страницу, запрос insert мог не успеть завершиться, и такая замена
- *  теряла самую свежую попытку целиком (а вместе с ней и стрик, который считается по датам попыток). */
+/** Загружает попытки из БД (source of truth), дописывает туда локальные, которых ещё нет на
+ *  сервере (офлайн / insert не успел), и возвращает объединённый список. Кэш в localStorage —
+ *  только ускорение первого кадра и страховка на сетевой сбой, не авторитет. */
 async function syncOnLogin(userId: string, local: Attempt[]): Promise<Attempt[]> {
   if (!supabase) return local;
   const migratedFlag = `ege-pro.migrated.${userId}`;
   const { data: remoteRows } = await supabase.from("attempts").select("task_id, given, correct, seconds, created_at").eq("user_id", userId);
-  const remote: Attempt[] = (remoteRows ?? []).map((r) => ({ taskId: r.task_id, given: r.given, correct: r.correct, seconds: r.seconds, ts: new Date(r.created_at).getTime() }));
+  const remote: Attempt[] = (remoteRows ?? []).map((r) => ({
+    taskId: r.task_id as string,
+    given: r.given as string,
+    correct: r.correct as boolean,
+    seconds: r.seconds as number,
+    ts: new Date(r.created_at as string).getTime(),
+  }));
+
+  const seen = new Set(remote.map((a) => `${a.taskId}|${a.ts}`));
+  const pendingLocal = local.filter((a) => !seen.has(`${a.taskId}|${a.ts}`));
 
   let alreadyMigrated = false;
   try {
@@ -76,28 +82,26 @@ async function syncOnLogin(userId: string, local: Attempt[]): Promise<Attempt[]>
     /* ignore */
   }
 
-  if (!alreadyMigrated && local.length > 0) {
-    const rows = local.map((a) => ({ user_id: userId, task_id: a.taskId, given: a.given, correct: a.correct, seconds: a.seconds, created_at: new Date(a.ts).toISOString() }));
+  // Первый вход с гостевого кэша / догон неуспевших insert — заливаем только то, чего нет в БД.
+  if (pendingLocal.length > 0 && (!alreadyMigrated || pendingLocal.length <= 50)) {
+    const rows = pendingLocal.map((a) => ({
+      user_id: userId,
+      task_id: a.taskId,
+      given: a.given,
+      correct: a.correct,
+      seconds: a.seconds,
+      created_at: new Date(a.ts).toISOString(),
+    }));
     await supabase.from("attempts").insert(rows);
   }
-  if (!alreadyMigrated) {
-    try {
-      localStorage.setItem(migratedFlag, "1");
-    } catch {
-      /* ignore */
-    }
+  try {
+    localStorage.setItem(migratedFlag, "1");
+  } catch {
+    /* ignore */
   }
 
-  const seen = new Set(local.map((a) => `${a.taskId}|${a.ts}`));
-  const merged = [...local];
-  for (const r of remote) {
-    const key = `${r.taskId}|${r.ts}`;
-    if (!seen.has(key)) {
-      merged.push(r);
-      seen.add(key);
-    }
-  }
-  return merged.sort((a, b) => a.ts - b.ts);
+  const merged = [...remote, ...pendingLocal].sort((a, b) => a.ts - b.ts);
+  return merged;
 }
 
 export interface Derived {
@@ -164,7 +168,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       return;
     }
     const local = load(userAttemptsKey(nextId)).attempts;
-    syncOnLogin(nextId, local).then((merged) => dispatch({ type: "LOAD", attempts: merged }));
+    Promise.all([syncOnLogin(nextId, local), hydratePlansFromServer(nextId), hydrateTopicReviewsFromServer(nextId)]).then(([merged]) => {
+      dispatch({ type: "LOAD", attempts: merged });
+    });
   }, [profile?.id, isGuestMode]);
 
   const tasksVersion = useTasksVersion();

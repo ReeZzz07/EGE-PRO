@@ -1,60 +1,56 @@
-// Мост между состоянием View (см. App.tsx/Header.tsx) и адресной строкой браузера — только для
-// горстки публичных/маркетинговых страниц, ради которых это вообще делается (SEO: до этого у всего
-// сайта был единственный URL "/", поисковик физически не видел ничего дальше первого экрана).
-// Внутренность приложения (банк, задание, админка и т.д.) осталась на чистой state-навигации, как
-// и была, — при переходе на такие экраны адресная строка просто сворачивается обратно на "/".
-//
-// Сознательно без react-router: здесь нет ни одного place, где нужен настоящий роутинг/матчинг —
-// весь рендер по-прежнему один большой switch по view.name в App.tsx. History API (pushState +
-// popstate) для двух десятков строк логичнее, чем тащить <BrowserRouter>/<Routes> ради
-// несуществующего в проекте паттерна (react-router-dom когда-то был в зависимостях неиспользуемым — убран).
+// Мост между состоянием View (см. App.tsx/Header.tsx) и адресной строкой браузера.
+// Публичные/маркетинговые страницы — для SEO. Кабинет — под /app/* (deep link, F5, шаринг
+// задания), без react-router: History API + switch по view.name в App.tsx.
 import type { View } from "../components/Header";
 import { subjectBySlug, subjectPagePath } from "./subjectPage";
+import type { Subject } from "../data/tasks";
+
+const SUBJECTS_RE = /^(math|rus|inf|fiz|soc|bio|eng|geo|chem|hist|lit|math_base)$/;
+
+function asSubject(raw: string): Subject | null {
+  return SUBJECTS_RE.test(raw) ? (raw as Subject) : null;
+}
 
 export function viewToPath(view: View): string {
   if (view.name === "tariffs") return "/tariffs";
-  // /renew — продление тарифа «как было»: сюда ведут письма о сроке тарифа (docker/api/mailer.js)
   if (view.name === "renew") return "/renew";
-  // /subjects, /plan — см. pathToView ниже
   if (view.name === "subjects") return "/subjects";
   if (view.name === "plan") return "/plan";
   if (view.name === "diagnostic") return "/diagnostic";
-  // /review — «Мой отзыв»: сюда ведёт письмо с просьбой об отзыве (docker/api/lifecycleEmails.js)
   if (view.name === "review") return "/review";
-  // /contacts — контакты и форма обратной связи (публичная страница, есть в sitemap.xml)
   if (view.name === "contacts") return "/contacts";
   if (view.name === "legal") return view.doc === "offer" ? "/oferta" : "/privacy";
-  // /parents — страница для родителей (публичная, есть в sitemap.xml)
   if (view.name === "parents") return "/parents";
-  // /pay-for/<токен> — страница родителя, куда ведёт ссылка от ученика («попросить родителя оплатить»);
-  // ?paymentId= — возврат после оплаты. Токен — длинная случайная строка, поэтому без encodeURIComponent
-  // его не ломаем: base64url безопасен для пути.
   if (view.name === "parent-pay") return `/pay-for/${encodeURIComponent(view.token)}${view.paymentId ? `?paymentId=${encodeURIComponent(view.paymentId)}` : ""}`;
-  // /ege/<адрес> — посадочная страница предмета (публичная, есть в sitemap.xml), адреса — docker/api/content/subjects.json
   if (view.name === "subject-page") return subjectPagePath(view.subject);
   if (view.name === "blog") return "/blog";
   if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
-  // /payment/return не строится через setView() изнутри приложения — на него попадают только
-  // редиректом от ЮKassa (см. PaymentReturnView.tsx) — но path нужен и для симметрии с
-  // pathToView ниже, и на случай, если пользователь обновит эту страницу в браузере.
   if (view.name === "payment-return") return `/payment/return?paymentId=${encodeURIComponent(view.paymentId)}`;
-  // /reset-password — из письма (см. docker/api/mailer.js sendPasswordResetEmail), как и
-  // payment-return, изнутри приложения на этот экран не переходят через setView().
   if (view.name === "reset-password") return `/reset-password?token=${encodeURIComponent(view.token)}`;
-  // /verify-email — из письма подтверждения (см. docker/api/server.js POST /auth/signup), та же
-  // логика, что и у reset-password выше.
   if (view.name === "verify-email") return `/verify-email?token=${encodeURIComponent(view.token)}`;
+
+  // ─── кабинет (/app/*) ───
+  if (view.name === "home") return "/app";
+  if (view.name === "bank") return view.subject ? `/app/bank/${view.subject}` : "/app/bank";
+  if (view.name === "task") return `/app/task/${encodeURIComponent(view.id)}`;
+  if (view.name === "tutor") return "/app/tutor";
+  if (view.name === "mistakes") return "/app/mistakes";
+  if (view.name === "stats") return "/app/stats";
+  if (view.name === "mock-exam") return view.subject ? `/app/mock-exam/${view.subject}` : "/app/mock-exam";
+  if (view.name === "profile") return "/app/profile";
+  if (view.name === "settings") return "/app/settings";
+  if (view.name === "admin") return "/app/admin";
+  if (view.name === "teacher") return "/app/teacher";
+  if (view.name === "kim2027") return "/app/kim2027";
+  if (view.name === "session-summary") return "/app/session-summary";
+
+  // онбординг/auth/landing/check-email — без отдельного «красивого» URL (кроме /onboarding из писем)
   return "/";
 }
 
-/** null — путь не из наших публичных роутов (см. AppShell: тогда адресная строка мягко
- *  выправляется на "/", а не остаётся показывать несуществующую страницу). search — сырой
- *  window.location.search (с "?" или без), нужен только для /payment/return: единственный
- *  роут здесь, у которого есть значимый параметр запроса, остальные — чистые пути. */
+/** null — путь не из наших роутов (см. AppShell: тогда адресная строка мягко
+ *  выправляется на "/", а не остаётся показывать несуществующую страницу). */
 export function pathToView(pathname: string, search = ""): View | null {
-  // /blog/:slug — единственный путь здесь с переменным сегментом, обрабатываем до switch ниже, не
-  // трогая его: точный "/blog" — список, "/blog/<slug>" — статья (ровно один плоский сегмент, без
-  // вложенных "/" — вложенный путь или пустой хвост не наш формат).
   if (pathname.startsWith("/pay-for/")) {
     const token = pathname.slice("/pay-for/".length);
     if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
@@ -71,30 +67,54 @@ export function pathToView(pathname: string, search = ""): View | null {
     try {
       return { name: "blog-article", slug: decodeURIComponent(rest) };
     } catch {
-      return null; // битый %-escape
+      return null;
     }
   }
+
+  // /app и /app/...
+  if (pathname === "/app" || pathname === "/app/") return { name: "home" };
+  if (pathname === "/app/bank") return { name: "bank" };
+  if (pathname.startsWith("/app/bank/")) {
+    const subject = asSubject(pathname.slice("/app/bank/".length));
+    return subject ? { name: "bank", subject } : null;
+  }
+  if (pathname.startsWith("/app/task/")) {
+    const rest = pathname.slice("/app/task/".length);
+    if (!rest || rest.includes("/")) return null;
+    try {
+      return { name: "task", id: decodeURIComponent(rest) };
+    } catch {
+      return null;
+    }
+  }
+  if (pathname === "/app/tutor") return { name: "tutor" };
+  if (pathname === "/app/mistakes") return { name: "mistakes" };
+  if (pathname === "/app/stats") return { name: "stats" };
+  if (pathname === "/app/mock-exam") return { name: "mock-exam" };
+  if (pathname.startsWith("/app/mock-exam/")) {
+    const subject = asSubject(pathname.slice("/app/mock-exam/".length));
+    return subject ? { name: "mock-exam", subject } : null;
+  }
+  if (pathname === "/app/profile") return { name: "profile" };
+  if (pathname === "/app/settings") return { name: "settings" };
+  if (pathname === "/app/admin") return { name: "admin" };
+  if (pathname === "/app/teacher") return { name: "teacher" };
+  if (pathname === "/app/kim2027") return { name: "kim2027" };
+  if (pathname === "/app/session-summary") return { name: "session-summary" };
+
   switch (pathname) {
     case "/tariffs":
       return { name: "tariffs" };
     case "/renew":
       return { name: "renew" };
-    // /onboarding — ссылка из письма-напоминания «заполни анкету» (см. AppShell: без входа сначала вход)
     case "/onboarding":
       return { name: "onboarding" };
-    // /subjects — ссылка из письма «оплата докупки предметов не завершена» (см. lifecycle.js)
     case "/subjects":
       return { name: "subjects" };
-    // /plan — ссылка из письма-напоминания «твой план ждёт» (см. lifecycle.js); subject не в пути —
-    // PlanView сама берёт effectivePrimarySubject(profile), как и обычная внутренняя навигация на план
     case "/plan":
       return { name: "plan" };
-    // /diagnostic — ссылка из письма-напоминания «пройди диагностику» (рассылка по фильтру, см.
-    // AdminCampaignComposer.tsx); subject не в пути — App.tsx сам берёт effectivePrimarySubject(profile),
-    // как и /plan выше
     case "/diagnostic":
       return { name: "diagnostic" };
-    // /review — ссылка из письма-просьбы об отзыве (см. lifecycle.js); без входа — сначала вход (см. AppShell)
     case "/review":
       return { name: "review" };
     case "/contacts":

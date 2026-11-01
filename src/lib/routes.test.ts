@@ -59,6 +59,23 @@ describe("pathToView", () => {
     expect(pathToView("/random-garbage")).toBeNull();
   });
 
+  it("/app/* — deep links кабинета", () => {
+    expect(pathToView("/app")).toEqual({ name: "home" });
+    expect(pathToView("/app/bank")).toEqual({ name: "bank" });
+    expect(pathToView("/app/bank/rus")).toEqual({ name: "bank", subject: "rus" });
+    expect(pathToView("/app/task/math-1")).toEqual({ name: "task", id: "math-1" });
+    expect(pathToView("/app/tutor")).toEqual({ name: "tutor" });
+    expect(pathToView("/app/mistakes")).toEqual({ name: "mistakes" });
+    expect(pathToView("/app/stats")).toEqual({ name: "stats" });
+    expect(pathToView("/app/admin")).toEqual({ name: "admin" });
+    expect(pathToView("/app/teacher")).toEqual({ name: "teacher" });
+    expect(pathToView("/app/bank/nope")).toBeNull();
+    expect(viewToPath({ name: "home" })).toBe("/app");
+    expect(viewToPath({ name: "bank", subject: "bio" })).toBe("/app/bank/bio");
+    expect(viewToPath({ name: "task", id: "x/y" })).toBe("/app/task/x%2Fy");
+    expect(viewToPath({ name: "teacher" })).toBe("/app/teacher");
+  });
+
   it("/blog и /blog/:slug — база знаний, единственный роут здесь с переменным сегментом пути", () => {
     expect(pathToView("/blog")).toEqual({ name: "blog" });
     expect(pathToView("/blog/ii-repetitor-vs-zhivoi")).toEqual({ name: "blog-article", slug: "ii-repetitor-vs-zhivoi" });
@@ -80,15 +97,12 @@ describe("viewToPath", () => {
     expect(viewToPath({ name: "legal", doc: "privacy" })).toBe("/privacy");
   });
 
-  it("всё остальное (внутренние экраны приложения) — адресная строка сворачивается на /", () => {
-    const internalViews: View[] = [
-      { name: "home" },
-      { name: "bank", subject: "math" },
-      { name: "task", id: "t1" },
-      { name: "admin" },
-      { name: "mock-exam" },
-    ];
-    for (const v of internalViews) expect(viewToPath(v)).toBe("/");
+  it("кабинет — deep URLs под /app", () => {
+    expect(viewToPath({ name: "home" })).toBe("/app");
+    expect(viewToPath({ name: "bank", subject: "math" })).toBe("/app/bank/math");
+    expect(viewToPath({ name: "task", id: "t1" })).toBe("/app/task/t1");
+    expect(viewToPath({ name: "admin" })).toBe("/app/admin");
+    expect(viewToPath({ name: "mock-exam" })).toBe("/app/mock-exam");
   });
 
   it("blog и blog-article — реальные URL, slug кодируется", () => {

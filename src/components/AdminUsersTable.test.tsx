@@ -23,6 +23,7 @@ const row = (over: Partial<AdminUserListItem>): AdminUserListItem => ({
   tariff_id: "free",
   tariff_expires_at: null,
   is_admin: false,
+  is_teacher: false,
   discount_percent: null,
   anonymized_at: null,
   tariff_active: false,

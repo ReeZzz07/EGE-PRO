@@ -55,6 +55,9 @@ const apiProxy = backendHost
       "/blog-engagement": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/parent-link": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       "/public/parent-link": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      // журнал клиентских ошибок (POST /errors) и учительский кабинет (GET/POST /teacher/…)
+      "/errors": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
+      "/teacher": { target: `http://api:8787`, changeOrigin: true, ...XFWD },
       // Раньше — статические файлы в public/ (см. src/lib/seo.ts, docker/api/server.js) — теперь
       // генерируются api из public.app_settings, редактируются в /admin → SEO. Проксируем их сюда
       // же, а не отдаём статикой, иначе этот путь конфликтовал бы с уже собранным файлом.

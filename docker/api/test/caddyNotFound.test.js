@@ -24,7 +24,7 @@ test("неизвестные адреса — 404: случайный путь, 
 });
 
 test("страницы сайта не получают 404: главная, тарифы, родителям, контакты, оферта, блог, предметы, ссылки из писем и оплаты", () => {
-  for (const p of ["/", "/tariffs", "/parents", "/contacts", "/oferta", "/privacy", "/blog", "/blog/stat", "/ege/biologiya", "/llms.txt", "/renew", "/onboarding", "/subjects", "/plan", "/diagnostic", "/review", "/payment/return", "/reset-password", "/verify-email", "/pay-for/abcdefghijklmnopqrstuvwx"]) {
+  for (const p of ["/", "/tariffs", "/parents", "/contacts", "/oferta", "/privacy", "/blog", "/blog/stat", "/ege/biologiya", "/llms.txt", "/renew", "/onboarding", "/subjects", "/plan", "/diagnostic", "/review", "/payment/return", "/reset-password", "/verify-email", "/pay-for/abcdefghijklmnopqrstuvwx", "/app", "/app/bank", "/app/task/math-1", "/app/teacher"]) {
     assert.equal(isNotFound(p), false, p);
   }
 });
@@ -64,8 +64,10 @@ test("служебные страницы приложения закрыты о
   const pub = caddy.slice(caddy.indexOf("@public {"), caddy.indexOf("}", caddy.indexOf("@public {")));
   const pubPaths = pub.match(/^\s*path (.+)$/m)[1].trim().split(/\s+/);
   assert.ok(privPaths.includes("/diagnostic"));
+  assert.ok(privPaths.includes("/app") || privPaths.includes("/app/*"));
   for (const p of privPaths) {
-    assert.equal(isNotFound(p === "/pay-for/*" ? "/pay-for/token" : p), false, `${p} — страница приложения, а не 404`);
+    const sample = p === "/pay-for/*" ? "/pay-for/token" : p === "/app/*" ? "/app/bank" : p;
+    assert.equal(isNotFound(sample), false, `${p} — страница приложения, а не 404`);
     assert.equal(pubPaths.includes(p), false, `${p} не должен быть и публичным`);
   }
   assert.match(caddy, /handle @private \{\s*header X-Robots-Tag "noindex, follow"\s*rewrite \* \/__private\s*reverse_proxy api:8787 web:3000/);

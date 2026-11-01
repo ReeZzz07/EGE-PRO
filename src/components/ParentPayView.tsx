@@ -155,10 +155,9 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
       window.location.href = url;
     });
   };
-  const progress = [
-    view.tasksSolved ? `решено ${view.tasksSolved} ${plural(view.tasksSolved, "задание", "задания", "заданий")}` : null,
-    view.diagnosticDone ? "пройдена диагностика уровня" : null,
-  ].filter(Boolean);
+  const accuracy = view.tasksSolved ? Math.round(((view.tasksCorrect ?? 0) / view.tasksSolved) * 100) : null;
+  const weekAccuracy = view.weekAttempts ? Math.round(((view.weekCorrect ?? 0) / view.weekAttempts) * 100) : null;
+  const hours = view.totalSeconds ? Math.round((view.totalSeconds / 3600) * 10) / 10 : 0;
 
   return (
     <Shell>
@@ -167,32 +166,65 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
       <p className="mt-3 text-[14px] leading-relaxed text-ink2">
         ЕГЭ·ПРО — тренажёр для подготовки к ЕГЭ с ИИ-репетитором: он объясняет задачи по шагам, а не решает за ученика. Задания взяты из открытого банка ФИПИ. Это учебный проект, он не связан с ФИПИ и Рособрнадзором.
       </p>
-      {progress.length > 0 && (
-        <p className="mt-3 border-l-4 border-blue bg-blue/8 px-4 py-3 text-[13.5px] text-ink">
-          <strong>Уже сделано:</strong> {progress.join(", ")}.
-        </p>
-      )}
 
-      {view.diagnostic && (view.diagnostic.level || view.diagnostic.weakTopics.length > 0) && (
-        <div data-testid="parent-diagnostic" className="mt-4 border-2 border-ink/15 p-4">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ink2">
-            Результат диагностики{view.diagnostic.subjectName ? ` · ${view.diagnostic.subjectName}` : ""}
-          </p>
-          {view.diagnostic.level && (
-            <p className="mt-2 text-[14px]">
-              Уровень: <strong>{LEVEL_LABEL[view.diagnostic.level]}</strong>
-              {view.diagnostic.scoreMin != null && view.diagnostic.scoreMax != null ? ` · ориентировочно ${view.diagnostic.scoreMin}–${view.diagnostic.scoreMax} баллов` : ""}
-            </p>
-          )}
-          {view.diagnostic.weakTopics.length > 0 && (
-            <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">
-              Над чем стоит поработать: <strong className="text-ink">{view.diagnostic.weakTopics.join(", ")}</strong>. На бесплатном тарифе ИИ-репетитор отвечает три раза в день, на платном лимита нет:
-              эти темы можно разбирать по шагам каждый день.
-            </p>
-          )}
-          <p className="mt-2 text-[11.5px] text-ink2">Это грубая оценка по короткой диагностике, не гарантия результата.</p>
+      <div data-testid="parent-progress-report" className="mt-5 border-2 border-ink bg-white p-4 sm:p-5">
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-blue">прогресс за всё время</p>
+        <h2 className="font-display mt-1 text-lg font-black">Как занимается {who}</h2>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="border-2 border-ink/10 bg-paper/60 px-3 py-2.5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink2">решено</p>
+            <p className="font-display mt-0.5 text-xl font-black">{view.tasksSolved ?? 0}</p>
+          </div>
+          <div className="border-2 border-ink/10 bg-paper/60 px-3 py-2.5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink2">точность</p>
+            <p className="font-display mt-0.5 text-xl font-black">{accuracy != null ? `${accuracy}%` : "—"}</p>
+          </div>
+          <div className="border-2 border-ink/10 bg-paper/60 px-3 py-2.5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink2">за 7 дней</p>
+            <p className="font-display mt-0.5 text-xl font-black">{view.weekAttempts ?? 0}</p>
+            {weekAccuracy != null && <p className="text-[11px] text-ink2">{weekAccuracy}% верно</p>}
+          </div>
+          <div className="border-2 border-ink/10 bg-paper/60 px-3 py-2.5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-ink2">на повторении</p>
+            <p className="font-display mt-0.5 text-xl font-black">{view.reviewTopics ?? 0}</p>
+            {hours > 0 && <p className="text-[11px] text-ink2">~{hours} ч практики</p>}
+          </div>
         </div>
-      )}
+        {(view.bySubject?.length ?? 0) > 0 && (
+          <ul className="mt-4 space-y-1.5 text-[13px]">
+            {view.bySubject!.map((s) => (
+              <li key={s.subject} className="flex flex-wrap items-baseline justify-between gap-x-3 border-b border-ink/10 pb-1.5">
+                <span className="font-semibold">{s.subjectName}</span>
+                <span className="font-mono text-[12px] text-ink2">
+                  {s.attempts} {plural(s.attempts, "попытка", "попытки", "попыток")} · {s.attempts ? Math.round((s.correct / s.attempts) * 100) : 0}% верно
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {view.diagnostic && (view.diagnostic.level || view.diagnostic.weakTopics.length > 0) && (
+          <div data-testid="parent-diagnostic" className="mt-4 border-l-4 border-blue bg-blue/8 px-3 py-3">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ink2">
+              Диагностика{view.diagnostic.subjectName ? ` · ${view.diagnostic.subjectName}` : ""}
+            </p>
+            {view.diagnostic.level && (
+              <p className="mt-1.5 text-[14px]">
+                Уровень: <strong>{LEVEL_LABEL[view.diagnostic.level]}</strong>
+                {view.diagnostic.scoreMin != null && view.diagnostic.scoreMax != null ? ` · ориентировочно ${view.diagnostic.scoreMin}–${view.diagnostic.scoreMax} баллов` : ""}
+              </p>
+            )}
+            {view.diagnostic.weakTopics.length > 0 && (
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink2">
+                Слабые темы: <strong className="text-ink">{view.diagnostic.weakTopics.join(", ")}</strong>. На платном тарифе ИИ-репетитор без дневного лимита помогает разбирать их по шагам.
+              </p>
+            )}
+            <p className="mt-1.5 text-[11.5px] text-ink2">Грубая оценка по короткой диагностике, не гарантия результата.</p>
+          </div>
+        )}
+        {!view.tasksSolved && !view.diagnosticDone && (
+          <p className="mt-3 text-[13px] text-ink2">Пока мало данных — ребёнок только начинает. Тариф даст безлимитного ИИ-репетитора и полный план подготовки.</p>
+        )}
+      </div>
 
       <h2 className="font-display mt-8 text-lg font-black">Выберите тариф</h2>
       {view.discountPercent ? (
@@ -253,7 +285,7 @@ export default function ParentPayView({ token, paymentId, onNav }: { token: stri
         <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Платёж разовый, на 30 дней. Автопродления нет, карту мы не сохраняем.</li>
         <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Оплата проходит на стороне ЮKassa, данные карты мы не видим.</li>
         <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Тариф включается ребёнку сразу после оплаты.</li>
-        <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Родитель видит только имя ребёнка, счётчики занятий и итог диагностики, в аккаунт зайти нельзя.</li>
+        <li className="flex items-start gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-blue" />Родитель видит имя, сводку прогресса и итог диагностики — без входа в аккаунт ребёнка.</li>
       </ul>
 
       <p className="mt-6 text-[12px] leading-relaxed text-ink2">

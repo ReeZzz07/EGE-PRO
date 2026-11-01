@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { generatePlan } from "../lib/plan";
 import { plural } from "../lib/utils";
-import { loadDiagnosticResult, loadStudyPlan, saveStudyPlan, mirrorPlanToSupabase } from "../lib/planStorage";
+import { loadDiagnosticResult, loadStudyPlan, persistPlan } from "../lib/planStorage";
 import { useAuth } from "../lib/auth";
 import { Icon, Reveal } from "./ui";
 import PaywallCard from "./PaywallCard";
@@ -34,8 +34,7 @@ export default function PlanView({ subject, onStartTraining, onSkipToBank, onNav
     let p = loadStudyPlan(subject, profile.id);
     if (!p || p.generatedAt < diag.finishedAt) {
       p = generatePlan(diag, profile.dailyMinutes);
-      saveStudyPlan(p, profile.id);
-      if (!isGuestMode) mirrorPlanToSupabase(profile.id, p);
+      persistPlan(profile.id, p);
     }
     return { plan: p, result: diag };
     // eslint-disable-next-line react-hooks/exhaustive-deps

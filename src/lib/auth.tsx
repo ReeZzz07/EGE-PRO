@@ -45,6 +45,8 @@ export interface Profile {
   onboardedAt?: number;
   /** доступ к админке управления контентом лендинга (раздел 2.4 ТЗ, узкий срез) */
   isAdmin?: boolean;
+  /** учительский кабинет: классы и прогресс учеников (см. TeacherView, profiles.is_teacher) */
+  isTeacher?: boolean;
   /** id тарифа из public.tariffs; по умолчанию "free". Администраторы тариф игнорируют — им
    *  всегда доступно всё, независимо от того, что здесь записано (см. isAdmin). */
   tariffId?: string;
@@ -185,6 +187,7 @@ function profileFromRow(data: Record<string, unknown>, fallbackEmail: string, fa
     ...withSubscription(subjects, subscription),
     onboardedAt: data.onboarded_at ? new Date(data.onboarded_at as string).getTime() : undefined,
     isAdmin: (data.is_admin as boolean) ?? false,
+    isTeacher: (data.is_teacher as boolean) ?? false,
     tariffId: (data.tariff_id as string) ?? "free",
     tariffExpiresAt: data.tariff_expires_at ? new Date(data.tariff_expires_at as string).getTime() : undefined,
     discountPercent: (data.discount_percent as number) ?? undefined,

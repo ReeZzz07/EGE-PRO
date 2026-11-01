@@ -22,6 +22,8 @@ import AdminBlog from "./AdminBlog";
 import AdminReviews from "./AdminReviews";
 import AdminFeedback from "./AdminFeedback";
 import AdminAttribution from "./AdminAttribution";
+import AdminClientErrors from "./AdminClientErrors";
+import AdminLaunchReadiness from "./AdminLaunchReadiness";
 import { useAdminBadges } from "../lib/adminBadges";
 
 function Field({ label, value, onChange, area }: { label: string; value: string; onChange: (v: string) => void; area?: boolean }) {
@@ -82,7 +84,7 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
   const { push } = useToast();
   const badges = useAdminBadges();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail" | "campaigns" | "blog" | "reviews" | "feedback" | "attribution">("content");
+  const [tab, setTab] = useState<"content" | "tasks" | "import" | "ai" | "users" | "tariffs" | "scales" | "legal" | "seo" | "mail" | "campaigns" | "blog" | "reviews" | "feedback" | "attribution" | "errors" | "launch">("launch");
 
   const [hero, setHero] = useState<HeroContent>(DEFAULT_CONTENT.hero);
   const [legalEntity, setLegalEntity] = useState<LegalEntityInfo>(DEFAULT_LEGAL_ENTITY);
@@ -144,6 +146,18 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
       )}
 
       <div className="scrollbar-thin mt-6 flex gap-2 overflow-x-auto whitespace-nowrap border-b-2 border-ink/15 pb-px">
+        <button
+          onClick={() => setTab("launch")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "launch" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Запуск
+        </button>
+        <button
+          onClick={() => setTab("errors")}
+          className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "errors" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
+        >
+          Ошибки
+        </button>
         <button
           onClick={() => setTab("content")}
           className={`px-4 py-2.5 text-[13px] font-bold transition ${tab === "content" ? "border-b-2 border-blue text-blue" : "text-ink2 hover:text-ink"}`}
@@ -242,6 +256,16 @@ export default function AdminContent({ onNav }: { onNav: (v: View) => void }) {
         </button>
       </div>
 
+      {tab === "launch" && (
+        <div className="mt-6">
+          <AdminLaunchReadiness />
+        </div>
+      )}
+      {tab === "errors" && (
+        <div className="mt-6">
+          <AdminClientErrors />
+        </div>
+      )}
       {tab === "campaigns" && (
         <div className="mt-6">
           <AdminCampaigns />

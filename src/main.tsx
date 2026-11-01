@@ -7,9 +7,11 @@ import { loadSubjectAggregates } from "./lib/dbTasks";
 import { initMetrika, injectCustomCode } from "./lib/metrika";
 import { loadSeoSettings } from "./lib/seo";
 import { captureAttribution } from "./lib/attribution";
+import { installClientErrorReporting } from "./lib/clientErrors";
 
 // Метки рекламы и реферер — сразу, до рендера: роутер в App.tsx может заменить адрес и стереть ?utm_…
 captureAttribution();
+installClientErrorReporting();
 
 // Задания подгружаются лениво по предмету (см. lib/dbTasks.ts) — рендерим сразу, не дожидаясь сети.
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -29,3 +31,10 @@ loadSeoSettings().then((s) => {
   // после счётчика: своему коду из админки уже доступен ym() и window.dataLayer
   injectCustomCode(s.customCode);
 });
+
+// PWA: только кэш /assets/* (см. public/sw.js) — без offline HTML и без перехвата API.
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

@@ -6,6 +6,7 @@ import { useAuth, type Gender, type Goal, type Grade } from "../lib/auth";
 import { ChoiceRow, GOAL_OPTS, GRADE_OPTS, TIME_OPTS } from "./OnboardingFlow";
 import { RUSSIAN_REGIONS, CITIES_BY_REGION } from "../data/geo";
 import { isValidAge, MIN_PASSWORD_LENGTH } from "../lib/validation";
+import { joinClassByCode, leaveClass, loadMyMemberships, type StudentMembership } from "../lib/teacher";
 import { Icon, useToast } from "./ui";
 import type { View } from "./Header";
 
@@ -272,6 +273,10 @@ export default function SettingsView({
       </section>
 
       {!isGuestMode && (
+        <ClassJoinSection />
+      )}
+
+      {!isGuestMode && (
         <section className="sheet mt-4 space-y-3 p-5 sm:p-6">
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">сменить пароль</p>
           <div className="relative">
@@ -393,5 +398,81 @@ export default function SettingsView({
         )}
       </section>
     </div>
+  );
+}
+
+function ClassJoinSection() {
+  const { push } = useToast();
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [list, setList] = useState<StudentMembership[]>([]);
+
+  const reload = () => {
+    loadMyMemberships()
+      .then(setList)
+      .catch(() => setList([]));
+  };
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  const join = async () => {
+    if (!code.trim()) return;
+    setBusy(true);
+    try {
+      const r = await joinClassByCode(code.trim());
+      push(`Ты в классе «${r.className}»`, "ok");
+      setCode("");
+      reload();
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Не удалось вступить", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const leave = async (id: string) => {
+    try {
+      await leaveClass(id);
+      setList((prev) => prev.filter((m) => m.id !== id));
+      push("Ты вышел из класса", "ok");
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Не удалось выйти", "err");
+    }
+  };
+
+  return (
+    <section className="sheet mt-4 space-y-3 p-5 sm:p-6">
+      <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">класс учителя</p>
+      <p className="text-[13px] text-ink2">Если учитель дал код приглашения — введи его здесь. Учитель увидит твой прогресс по заданиям.</p>
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="Код, например AB12CD"
+          className="input-blank min-w-[160px] flex-1 rounded-sm px-3.5 py-2.5 font-mono text-sm uppercase tracking-wider"
+          maxLength={8}
+        />
+        <button onClick={join} disabled={busy || code.trim().length < 6} className="btn btn-ink px-4 py-2.5 text-[13px] disabled:opacity-50">
+          Вступить
+        </button>
+      </div>
+      {list.length > 0 && (
+        <ul className="mt-2 space-y-2">
+          {list.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 border-2 border-ink/10 px-3 py-2">
+              <span className="text-[13.5px]">
+                <strong>{m.name}</strong>
+                {m.teacherName ? <span className="text-ink2"> · {m.teacherName}</span> : null}
+              </span>
+              <button onClick={() => leave(m.id)} className="btn btn-ghost px-2.5 py-1.5 text-[12px]">
+                Выйти
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
