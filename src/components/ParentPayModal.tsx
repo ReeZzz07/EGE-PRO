@@ -37,6 +37,7 @@ export default function ParentPayModal({ onClose, place }: { onClose: () => void
   const shared = (channel: ShareChannel) => {
     markParentLinkShared(channel);
     reachGoal("parent_link_shared", { channel, place });
+    reachGoal("pay_parent_link_share", { channel, place });
   };
 
   const copy = async () => {

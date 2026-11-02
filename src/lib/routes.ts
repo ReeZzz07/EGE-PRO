@@ -28,6 +28,7 @@ export function viewToPath(view: View): string {
   if (view.name === "payment-return") return `/payment/return?paymentId=${encodeURIComponent(view.paymentId)}`;
   if (view.name === "reset-password") return `/reset-password?token=${encodeURIComponent(view.token)}`;
   if (view.name === "verify-email") return `/verify-email?token=${encodeURIComponent(view.token)}`;
+  if (view.name === "try") return view.subject ? `/try/${view.subject}` : "/try";
 
   // ─── кабинет (/app/*) ───
   if (view.name === "home") return "/app";
@@ -137,9 +138,16 @@ export function pathToView(pathname: string, search = ""): View | null {
       const token = new URLSearchParams(search).get("token");
       return token ? { name: "verify-email", token } : null;
     }
+    case "/try":
+      return { name: "try" };
     case "/":
       return { name: "landing" };
-    default:
+    default: {
+      if (pathname.startsWith("/try/")) {
+        const subject = asSubject(pathname.slice("/try/".length));
+        return subject ? { name: "try", subject } : null;
+      }
       return null;
+    }
   }
 }

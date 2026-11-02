@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useAuth, type Gender } from "../lib/auth";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { emailProblem, isValidAge, MIN_PASSWORD_LENGTH } from "../lib/validation";
+import { reachGoalOnce } from "../lib/metrika";
 import { Icon } from "./ui";
 import MailNotice from "./MailNotice";
 import type { View } from "./Header";
+import { consumeEarlyValueIntent } from "./EarlyValueView";
 
 const GENDER_OPTS: { v: Gender; l: string }[] = [
   { v: "m", l: "Мужской" },
@@ -48,7 +50,10 @@ export default function AuthScreen({
     const res = await resendVerification(email.trim());
     setResendBusy(false);
     if (res.error) setError(res.error);
-    else setResendSent(true);
+    else {
+      setResendSent(true);
+      reachGoalOnce(`email_confirm_sent_resend:${email.trim().toLowerCase()}`, "email_confirm_sent");
+    }
   };
 
   const submit = async () => {
@@ -81,7 +86,10 @@ export default function AuthScreen({
       if (result.code === "EMAIL_NOT_CONFIRMED") setUnconfirmedEmail(true);
       return;
     }
-    if (mode === "signup" && result.needsVerification) return onNav({ name: "check-email", email: email.trim() });
+    if (mode === "signup") {
+      if (consumeEarlyValueIntent()) reachGoalOnce("reg_from_early_value", "reg_from_early_value");
+      if (result.needsVerification) return onNav({ name: "check-email", email: email.trim() });
+    }
     onSuccess(mode);
   };
 

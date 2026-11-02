@@ -14,6 +14,14 @@ describe("pathToView", () => {
     expect(pathToView("/")).toEqual({ name: "landing" });
   });
 
+  it("/try и /try/:subject — ранняя польза без регистрации", () => {
+    expect(pathToView("/try")).toEqual({ name: "try" });
+    expect(viewToPath({ name: "try" })).toBe("/try");
+    expect(pathToView("/try/rus")).toEqual({ name: "try", subject: "rus" });
+    expect(viewToPath({ name: "try", subject: "rus" })).toBe("/try/rus");
+    expect(pathToView("/try/nope")).toBeNull();
+  });
+
   it("/renew и /onboarding — адреса из писем (продление тарифа и анкета подготовки)", () => {
     expect(pathToView("/renew")).toEqual({ name: "renew" });
     expect(viewToPath({ name: "renew" })).toBe("/renew");

@@ -56,17 +56,21 @@ function HeroTitle({ title, highlight }: { title: string; highlight: string }) {
 
 export default function Landing({
   onStart,
+  onTry,
   onLogin,
   scrollTo,
   scrollNonce,
   onNav,
 }: {
   onStart: (subject?: Subject) => void;
+  /** Ранняя польза: одно задание без регистрации (DEV brief). Если нет — fallback на onStart. */
+  onTry?: (subject?: Subject) => void;
   onLogin: () => void;
   scrollTo?: string;
   scrollNonce?: number;
   onNav: (v: View) => void;
 }) {
+  const tryOrStart = onTry ?? onStart;
   const [content, setContent] = useState<LandingContent>(DEFAULT_CONTENT);
   const [seo, setSeo] = useState(DEFAULT_SEO);
 
@@ -144,8 +148,8 @@ export default function Landing({
               <button onClick={() => onStart()} className="btn btn-blue px-6 py-3.5 text-sm">
                 {landingStatic.heroCtas[0]} <Icon name="arrowR" size={17} />
               </button>
-              <button onClick={() => onStart()} className="btn btn-ghost px-6 py-3.5 text-sm">
-                {landingStatic.heroCtas[1]}
+              <button onClick={() => tryOrStart()} className="btn btn-ghost px-6 py-3.5 text-sm">
+                Попробовать задание без регистрации
               </button>
             </div>
 
@@ -237,7 +241,7 @@ export default function Landing({
             const s = SUBJECTS[id];
             return (
             <Reveal key={s.id} delay={i * 60}>
-              <button onClick={() => onStart(s.id)} className="sheet card-lift group flex w-full items-center gap-3 p-4 text-left">
+              <button onClick={() => tryOrStart(s.id)} className="sheet card-lift group flex w-full items-center gap-3 p-4 text-left">
                 <span className={`font-display flex h-11 w-11 shrink-0 items-center justify-center border-2 border-ink text-[12px] font-black ${s.color}`}>{s.short}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-bold">{s.name}</span>

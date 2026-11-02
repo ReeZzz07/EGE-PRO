@@ -72,12 +72,14 @@ describe("Landing", () => {
     expect(screen.getByRole("heading", { level: 2, name: /принцип платформы\s*ИИ не решает за тебя/i })).toBeInTheDocument();
   });
 
-  it("герой: обе кнопки запускают диагностику, текст берётся из общего файла", async () => {
+  it("герой: основная кнопка — диагностика; вторая — try без регистрации", async () => {
     const onStart = vi.fn();
-    render(<Landing onStart={onStart} onLogin={vi.fn()} onNav={vi.fn()} />);
+    const onTry = vi.fn();
+    render(<Landing onStart={onStart} onTry={onTry} onLogin={vi.fn()} onNav={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Определить свой уровень/ }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Начать бесплатно" })[0]);
-    expect(onStart).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: /Попробовать задание без регистрации/ }));
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onTry).toHaveBeenCalledTimes(1);
     expect(DEFAULT_CONTENT.hero.title.length).toBeGreaterThan(0);
   });
 
@@ -97,16 +99,18 @@ describe("Landing", () => {
     expect(document.body.textContent).not.toMatch(/возврат/i);
   });
 
-  it("кнопки запуска диагностики: первый экран, после «Как это устроено» и в конце страницы", async () => {
+  it("кнопки запуска: герой (диагностика + try), mid/end «Начать бесплатно»", async () => {
     const onStart = vi.fn();
-    render(<Landing onStart={onStart} onLogin={vi.fn()} onNav={vi.fn()} />);
+    const onTry = vi.fn();
+    render(<Landing onStart={onStart} onTry={onTry} onLogin={vi.fn()} onNav={vi.fn()} />);
     await screen.findByText("АТТЕСТАТ");
-    // «Начать бесплатно» ровно в трёх местах: первый экран, после «Как это устроено», конец страницы (плюс «Определить свой уровень» в герое)
-    const free = screen.getAllByRole("button", { name: "Начать бесплатно" });
-    expect(free).toHaveLength(3);
     expect(screen.getAllByRole("button", { name: /Определить свой уровень/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Попробовать задание без регистрации/ })).toBeInTheDocument();
+    // mid + footer (герой больше не дублирует «Начать бесплатно»)
+    const free = screen.getAllByRole("button", { name: "Начать бесплатно" });
+    expect(free).toHaveLength(2);
     for (const b of free) fireEvent.click(b);
-    expect(onStart).toHaveBeenCalledTimes(3);
+    expect(onStart).toHaveBeenCalledTimes(2);
   });
 
   it("ссылки из ТЗ: статья о диагностике, сравнение с живым репетитором — переходы без перезагрузки; /parents — страница для родителей", async () => {

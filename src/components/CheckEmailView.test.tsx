@@ -5,7 +5,7 @@ import { mailboxLink } from "../lib/mailboxLink";
 
 const resendVerification = vi.fn();
 vi.mock("../lib/auth", () => ({ useAuth: () => ({ resendVerification }) }));
-vi.mock("../lib/metrika", () => ({ reachGoalOnce: vi.fn() }));
+vi.mock("../lib/metrika", () => ({ reachGoalOnce: vi.fn(), reachGoal: vi.fn() }));
 
 beforeEach(() => {
   vi.useFakeTimers();

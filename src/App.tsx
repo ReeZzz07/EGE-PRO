@@ -35,6 +35,7 @@ import RenewView from "./components/RenewView";
 import ResetPasswordView from "./components/ResetPasswordView";
 import CheckEmailView from "./components/CheckEmailView";
 import VerifyEmailView from "./components/VerifyEmailView";
+import EarlyValueView from "./components/EarlyValueView";
 import CookieBanner from "./components/CookieBanner";
 import { pathToView, viewToPath } from "./lib/routes";
 import SubjectPage from "./components/SubjectPage";
@@ -378,6 +379,7 @@ function AppShell() {
         {view.name === "landing" && (
           <Landing
             onStart={(subject) => setView({ name: "onboarding", subject })}
+            onTry={(subject) => setView({ name: "try", subject })}
             onLogin={() => setView({ name: "auth", mode: "login" })}
             scrollTo={view.section}
             scrollNonce={view.nonce}
@@ -416,8 +418,19 @@ function AppShell() {
           />
         )}
 
+        {view.name === "try" && <EarlyValueView subject={view.subject} onNav={setView} />}
+
         {view.name === "home" && (
-          profile ? <Dashboard onNav={setView} /> : <Landing onStart={(subject) => setView({ name: "onboarding", subject })} onLogin={() => setView({ name: "auth" })} onNav={setView} />
+          profile ? (
+            <Dashboard onNav={setView} />
+          ) : (
+            <Landing
+              onStart={(subject) => setView({ name: "onboarding", subject })}
+              onTry={(subject) => setView({ name: "try", subject })}
+              onLogin={() => setView({ name: "auth" })}
+              onNav={setView}
+            />
+          )
         )}
 
         {view.name === "bank" && <TaskBank onNav={setView} initialSubject={view.subject} />}

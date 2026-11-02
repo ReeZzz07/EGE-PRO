@@ -19,6 +19,7 @@ import { Icon, useToast } from "./ui";
 import ReviewsSection from "./ReviewsSection";
 import WelcomeOfferBanner, { pendingStepsText } from "./WelcomeOfferBanner";
 import ParentPayModal from "./ParentPayModal";
+import PaymentTrustBlock from "./PaymentTrustBlock";
 import SubscriptionBanner from "./SubscriptionBanner";
 import type { View } from "./Header";
 
@@ -69,7 +70,10 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       // редирект — только после того, как Метрика приняла событие (или через 1 с): иначе уход со
       // страницы обрывал бы отправку цели
       const url = res.confirmationUrl;
-      reachGoal("checkout_start", { tariff: t.id, price: t.priceRub, ...(method ? { method } : {}) }, () => {
+      const params = { tariff: t.id, price: t.priceRub, ...(method ? { method } : {}) };
+      if (method) reachGoal("pay_method_selected", params);
+      reachGoal("pay_start", params);
+      reachGoal("checkout_start", params, () => {
         window.location.href = url;
       });
     }
@@ -104,13 +108,16 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       )}
 
       {profile && !profile.isAdmin && tariffs.some((t) => t.priceRub > 0) && (
-        <div className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-between gap-3 border-2 border-ink bg-hl/40 px-4 py-3">
-          <p className="text-[13px] leading-relaxed text-ink">
-            <strong>Платит родитель?</strong> Отправь ему ссылку: он оплатит картой или через СБП, а тариф включится тебе.
-          </p>
-          <button onClick={() => setParentModal(true)} className="btn btn-ink shrink-0 px-4 py-2 text-[12.5px]">
-            Попросить родителя оплатить
-          </button>
+        <div className="mx-auto mt-6 max-w-3xl space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-2 border-ink bg-hl/40 px-4 py-3">
+            <p className="text-[13px] leading-relaxed text-ink">
+              <strong>Платит родитель?</strong> Отправь ему ссылку: он оплатит картой или через СБП, а тариф включится тебе.
+            </p>
+            <button onClick={() => setParentModal(true)} className="btn btn-ink shrink-0 px-4 py-2 text-[12.5px]">
+              Попросить родителя оплатить
+            </button>
+          </div>
+          <PaymentTrustBlock />
         </div>
       )}
       {parentModal && <ParentPayModal place="tariffs" onClose={() => setParentModal(false)} />}

@@ -93,8 +93,12 @@ export type GoalName =
   | "signup"
   | "check_email_seen"
   | "email_confirmed"
+  | "email_confirm_sent"
+  | "email_confirm_ok"
   | "first_ai_use"
   | "checkout_start"
+  | "pay_start"
+  | "pay_method_selected"
   | "purchase"
   | "task_opened"
   | "ai_limit_reached"
@@ -106,10 +110,15 @@ export type GoalName =
   | "paywall_seen"
   | "offer_seen"
   | "parent_link_shared"
+  | "pay_parent_link_share"
   | "parent_email_sent"
   | "parent_reminder_seen"
   | "parent_page_opened"
-  | "parent_pay_start";
+  | "parent_pay_start"
+  | "anon_task_start"
+  | "anon_hint_used"
+  | "anon_similar_done"
+  | "reg_from_early_value";
 
 /** Достигнута цель. Если счётчик не подключён (не настроен в админке / ещё грузится) — цель ждёт в
  *  очереди и уходит после init; ничего не отправляется, пока счётчика нет вовсе.

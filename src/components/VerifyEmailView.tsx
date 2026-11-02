@@ -26,6 +26,7 @@ export default function VerifyEmailView({ token, onNav }: { token: string; onNav
       return setError(res.error);
     }
     reachGoalOnce("email_confirmed", "email_confirmed");
+    reachGoalOnce("email_confirm_ok", "email_confirm_ok");
     onNav({ name: "onboarding" });
   };
 

@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { mailboxLink } from "../lib/mailboxLink";
-import { reachGoalOnce } from "../lib/metrika";
+import { reachGoal, reachGoalOnce } from "../lib/metrika";
 import { Icon } from "./ui";
 import MailNotice from "./MailNotice";
 import type { View } from "./Header";
@@ -28,7 +28,9 @@ export default function CheckEmailView({ email, onNav }: { email: string; onNav:
 
   useEffect(() => {
     reachGoalOnce("check_email_seen", "check_email_seen");
-  }, []);
+    // письмо уже ушло при signup — фиксируем для воронки маркетологов
+    reachGoalOnce(`email_confirm_sent:${email.toLowerCase()}`, "email_confirm_sent");
+  }, [email]);
 
   useEffect(() => {
     if (wait <= 0) return;
@@ -46,6 +48,7 @@ export default function CheckEmailView({ email, onNav }: { email: string; onNav:
     else {
       setSent(true);
       setWait(RESEND_COOLDOWN_S);
+      reachGoal("email_confirm_sent", { resend: true, provider: email.split("@")[1]?.toLowerCase() });
     }
   };
 
