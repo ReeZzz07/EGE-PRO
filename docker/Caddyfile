@@ -54,7 +54,7 @@ www.{$SITE_HOST} {
 	# (скрипты, картинки, robots.txt, sitemap.xml) сюда не попадают. Человек получает то же приложение: оно само вернёт его на главную.
 	@notfound {
 		method GET HEAD
-		not path / /tariffs /renew /onboarding /subjects /plan /diagnostic /review /contacts /parents /oferta /privacy /payment/return /reset-password /verify-email /pay-for/* /blog /blog/* /ege/* /llms.txt /app /app/*
+		not path / /tariffs /renew /onboarding /subjects /plan /diagnostic /review /try /try/* /contacts /parents /oferta /privacy /payment/return /reset-password /verify-email /pay-for/* /blog /blog/* /ege/* /llms.txt /app /app/*
 		not path /admin /admin/* /ai-tutor /ai-tutor/* /auth /auth/* /blog-engagement /blog-engagement/* /errors /errors/* /feedback /feedback/* /health /health/* /offers /offers/* /parent-link /parent-link/* /payments /payments/* /profile/avatar /profile/avatar/* /public/parent-link /public/parent-link/* /public/subject /public/subject/* /rest/v1 /rest/v1/* /reviews /reviews/* /robots.txt /robots.txt/* /site-notice /site-notice/* /sitemap.xml /sitemap.xml/* /storage /storage/* /subscription /subscription/* /teacher /teacher/*
 		not path /assets/* /robots.txt /sitemap.xml
 		not path_regexp ext \.[A-Za-z0-9]+$
@@ -74,7 +74,7 @@ www.{$SITE_HOST} {
 	# Человеку ничего не меняется: приложение то же самое. Список должен входить в страницы приложения из @notfound (держит caddyNotFound.test.js).
 	@private {
 		method GET HEAD
-		path /diagnostic /renew /onboarding /subjects /plan /review /payment/return /reset-password /verify-email /pay-for/* /app /app/*
+		path /diagnostic /renew /onboarding /subjects /plan /review /try /try/* /payment/return /reset-password /verify-email /pay-for/* /app /app/*
 	}
 	handle @private {
 		header X-Robots-Tag "noindex, follow"

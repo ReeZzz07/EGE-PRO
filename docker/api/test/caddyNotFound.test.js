@@ -24,7 +24,7 @@ test("неизвестные адреса — 404: случайный путь, 
 });
 
 test("страницы сайта не получают 404: главная, тарифы, родителям, контакты, оферта, блог, предметы, ссылки из писем и оплаты", () => {
-  for (const p of ["/", "/tariffs", "/parents", "/contacts", "/oferta", "/privacy", "/blog", "/blog/stat", "/ege/biologiya", "/llms.txt", "/renew", "/onboarding", "/subjects", "/plan", "/diagnostic", "/review", "/payment/return", "/reset-password", "/verify-email", "/pay-for/abcdefghijklmnopqrstuvwx", "/app", "/app/bank", "/app/task/math-1", "/app/teacher"]) {
+  for (const p of ["/", "/tariffs", "/parents", "/contacts", "/oferta", "/privacy", "/blog", "/blog/stat", "/ege/biologiya", "/llms.txt", "/renew", "/onboarding", "/subjects", "/plan", "/diagnostic", "/review", "/try", "/try/rus", "/payment/return", "/reset-password", "/verify-email", "/pay-for/abcdefghijklmnopqrstuvwx", "/app", "/app/bank", "/app/task/math-1", "/app/teacher"]) {
     assert.equal(isNotFound(p), false, p);
   }
 });
