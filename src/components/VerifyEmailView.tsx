@@ -5,6 +5,7 @@
 // сама слала запрос при загрузке, одноразовый токен сгорал бы от сканера раньше настоящего клика.
 import { useState } from "react";
 import { useAuth } from "../lib/auth";
+import { takeGuestDiagSignupIntent } from "../lib/guestDiagnostic";
 import { reachGoalOnce } from "../lib/metrika";
 import { Icon } from "./ui";
 import type { View } from "./Header";
@@ -27,7 +28,8 @@ export default function VerifyEmailView({ token, onNav }: { token: string; onNav
     }
     reachGoalOnce("email_confirmed", "email_confirmed");
     reachGoalOnce("email_confirm_ok", "email_confirm_ok");
-    onNav({ name: "onboarding" });
+    const intent = takeGuestDiagSignupIntent();
+    onNav(intent ? { name: "onboarding", subject: intent.subject } : { name: "onboarding" });
   };
 
   return (

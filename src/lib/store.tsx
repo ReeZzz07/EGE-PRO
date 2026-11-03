@@ -6,6 +6,7 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 import { useAuth } from "./auth";
 import { ALL_SUBJECTS, getSubjectTotal, hydrateTasksByIds, useTasksVersion } from "./dbTasks";
 import { clearAllTopicReviews, clearTopicReview, hydrateTopicReviewsFromServer, recordTopicOutcome } from "./spacedReview";
+import { flushGuestDiagnosticToAccount } from "./guestDiagnostic";
 import { hydratePlansFromServer } from "./planStorage";
 
 export interface Attempt {
@@ -154,6 +155,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     const ids = [...new Set(state.attempts.map((a) => a.taskId))];
     if (ids.length) hydrateTasksByIds(ids);
   }, [state.attempts]);
+
+  // гостевая диагностика (до signup) → в аккаунт при появлении профиля; и в demo guest mode тоже
+  useEffect(() => {
+    if (profile?.id) flushGuestDiagnosticToAccount(profile.id);
+  }, [profile?.id]);
 
   // при входе в настоящий (не гостевой) аккаунт — подгружаем и мигрируем попытки в Supabase.
   // Локальный кэш читаем строго из ключа ЭТОГО userId (не из текущего state — тот в момент

@@ -45,7 +45,8 @@ export type View =
 
 /** Виды, доступные только авторизованным — неавторизованных на них не пускаем (см. AppShell). */
 export const PROTECTED_VIEWS: View["name"][] = [
-  "bank", "tutor", "mistakes", "stats", "task", "diagnostic", "plan", "mock-exam", "session-summary",
+  // diagnostic намеренно НЕ здесь — гости проходят диагностику до регистрации (см. guestDiagnostic.ts)
+  "bank", "tutor", "mistakes", "stats", "task", "plan", "mock-exam", "session-summary",
   "profile", "review", "settings", "subjects", "kim2027", "payment-return", "renew", "admin", "teacher", "home",
 ];
 

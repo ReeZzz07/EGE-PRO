@@ -43,6 +43,8 @@ import { hasSubjectPage } from "./lib/subjectPage";
 import ParentPayView from "./components/ParentPayView";
 import ParentsView from "./components/ParentsView";
 import { loadLegalEntityInfo, DEFAULT_LEGAL_ENTITY, type LegalEntityInfo } from "./lib/legalEntity";
+import { markGuestDiagSignupIntent, peekGuestDiagSignupIntent, takeGuestDiagSignupIntent } from "./lib/guestDiagnostic";
+import { loadDiagnosticResult } from "./lib/planStorage";
 
 function Footer({ onNav }: { onNav: (v: View) => void }) {
   const { profile } = useAuth();
@@ -274,9 +276,18 @@ function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile]);
 
-  // вошли, пока на экране была форма входа, и нас сюда привела ссылка на продление — возвращаем на неё
+  // вошли, пока на экране была форма входа: guest-diag → онбординг/план; иначе after-login из письма
   useEffect(() => {
     if (profile && view.name === "auth") {
+      const guestIntent = takeGuestDiagSignupIntent();
+      if (guestIntent) {
+        setView(
+          profile.onboardedAt
+            ? { name: "plan", subject: guestIntent.subject }
+            : { name: "onboarding", subject: guestIntent.subject },
+        );
+        return;
+      }
       const next = takeAfterLoginView();
       if (next) setView(next);
     }
@@ -329,17 +340,8 @@ function AppShell() {
       setView({ name: "auth", mode: "login" });
       return;
     }
-    // ссылка на диагностику из письма-напоминания («Напоминание про диагностику», рассылка по
-    // фильтру, см. AdminCampaignComposer.tsx) — та же схема
-    if (!loading && !profile && view.name === "diagnostic") {
-      try {
-        sessionStorage.setItem(AFTER_LOGIN_KEY, "diagnostic");
-      } catch {
-        /* ignore */
-      }
-      setView({ name: "auth", mode: "login" });
-      return;
-    }
+    // /diagnostic доступен гостям (guest diagnostic → signup); письмо-напоминание тоже открывает
+    // диагностику без принудительного логина — сохранить результат можно с экрана результата.
     // ссылка на отзыв из письма-просьбы (review_request, см. lifecycle.js) — та же схема
     if (!loading && !profile && view.name === "review") {
       try {
@@ -379,7 +381,15 @@ function AppShell() {
       <main className="flex-1">
         {view.name === "landing" && (
           <Landing
-            onStart={(subject) => setView({ name: "onboarding", subject })}
+            onStart={(subject) =>
+              setView(
+                profile
+                  ? profile.onboardedAt
+                    ? { name: "diagnostic", subject }
+                    : { name: "onboarding", subject }
+                  : { name: "diagnostic", subject },
+              )
+            }
             onTry={(subject) => setView({ name: "try", subject })}
             onLogin={() => setView({ name: "auth", mode: "login" })}
             scrollTo={view.section}
@@ -392,9 +402,9 @@ function AppShell() {
           // onSuccess срабатывает только для входа — успешная регистрация сама уводит на
           // check-email (аккаунт нерабочий до подтверждения, см. AuthScreen.tsx), а не сюда.
           <AuthScreen
-            // профиль после входа подгружается асинхронно — на /renew возвращает эффект выше, когда он появился
+            // профиль после входа подгружается асинхронно — guest-diag / /renew ловит эффект выше
             onSuccess={() => {
-              if (!hasAfterLoginView()) setView({ name: "home" });
+              if (!hasAfterLoginView() && !peekGuestDiagSignupIntent()) setView({ name: "home" });
             }}
             initialMode={view.mode}
             onNav={setView}
@@ -412,8 +422,12 @@ function AppShell() {
 
         {view.name === "onboarding" && (
           <OnboardingFlow
-            initialSubject={view.subject}
-            onFinishToDiagnostic={(subject) => setView({ name: "diagnostic", subject })}
+            initialSubject={view.subject ?? undefined}
+            onFinishToDiagnostic={(subject) => {
+              // гостевая диагностика уже в аккаунте после flush — сразу в план
+              if (profile && loadDiagnosticResult(subject, profile.id)) setView({ name: "plan", subject });
+              else setView({ name: "diagnostic", subject });
+            }}
             onFinishToBank={() => setView({ name: "bank" })}
             onNav={setView}
           />
@@ -426,7 +440,7 @@ function AppShell() {
             <Dashboard onNav={setView} />
           ) : (
             <Landing
-              onStart={(subject) => setView({ name: "onboarding", subject })}
+              onStart={(subject) => setView({ name: "diagnostic", subject })}
               onTry={(subject) => setView({ name: "try", subject })}
               onLogin={() => setView({ name: "auth" })}
               onNav={setView}
@@ -440,18 +454,18 @@ function AppShell() {
         {view.name === "mistakes" && <MistakesView onNav={setView} />}
         {view.name === "stats" && <StatsView onNav={setView} />}
 
-        {view.name === "diagnostic" && (() => {
-          const subject = view.subject ?? effectivePrimarySubject(profile);
-          return subject ? (
-            <DiagnosticView subject={subject} onFinish={() => setView({ name: "plan", subject })} onSkip={() => setView({ name: "bank" })} />
-          ) : (
-            <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
-              <p className="font-display text-xl font-bold">Сначала выбери предмет</p>
-              <p className="mt-2 text-[13.5px] text-ink2">Короткий онбординг подберёт предмет — и сразу после него можно будет пройти диагностику.</p>
-              <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать</button>
-            </div>
-          );
-        })()}
+        {view.name === "diagnostic" && (
+          <DiagnosticView
+            subject={view.subject ?? effectivePrimarySubject(profile)}
+            onSelectSubject={(subject) => setView({ name: "diagnostic", subject })}
+            onFinish={(result) => setView({ name: "plan", subject: result.subject })}
+            onSaveProgress={(result) => {
+              markGuestDiagSignupIntent(result.subject);
+              setView({ name: "auth", mode: "signup" });
+            }}
+            onSkip={() => setView(profile ? { name: "bank" } : { name: "landing" })}
+          />
+        )}
 
         {view.name === "plan" && (() => {
           const subject = view.subject ?? effectivePrimarySubject(profile);
@@ -503,7 +517,15 @@ function AppShell() {
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}
         {view.name === "parent-pay" && <ParentPayView key={`${view.token}:${view.paymentId ?? ""}`} token={view.token} paymentId={view.paymentId} onNav={setView} />}
         {view.name === "parents" && <ParentsView onNav={setView} />}
-        {view.name === "subject-page" && <SubjectPage subject={view.subject} onStart={(s) => setView({ name: "onboarding", subject: s })} onNav={setView} />}
+        {view.name === "subject-page" && (
+          <SubjectPage
+            subject={view.subject}
+            onStart={(s) =>
+              setView(profile ? (profile.onboardedAt ? { name: "diagnostic", subject: s } : { name: "onboarding", subject: s }) : { name: "diagnostic", subject: s })
+            }
+            onNav={setView}
+          />
+        )}
         {view.name === "reset-password" && <ResetPasswordView token={view.token} onNav={setView} />}
         {view.name === "teacher" && (profile?.isTeacher || profile?.isAdmin) && (
           <Suspense fallback={<p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>}>
