@@ -151,8 +151,8 @@ export default function Landing({
               <button onClick={() => onStart()} className="btn btn-blue px-6 py-3.5 text-sm">
                 {landingStatic.heroCtas[0]} <Icon name="arrowR" size={17} />
               </button>
-              <button onClick={() => tryOrStart()} className="btn btn-ghost px-6 py-3.5 text-sm">
-                Попробовать задание без регистрации
+              <button onClick={() => onStart()} className="btn btn-ghost px-6 py-3.5 text-sm">
+                {landingStatic.heroCtas[1]}
               </button>
             </div>
 
@@ -193,6 +193,13 @@ export default function Landing({
               </div>
               <p className="mt-4 font-mono text-[12px] text-ink2">{preview.note} · {preview.points} п.б.</p>
             </div>
+            <button
+              type="button"
+              onClick={() => tryOrStart()}
+              className="link-slide mx-auto mt-4 block text-center text-[13px] font-bold text-ink2 hover:text-ink"
+            >
+              {landingStatic.previewTryCta}
+            </button>
           </div>
         </div>
       </section>

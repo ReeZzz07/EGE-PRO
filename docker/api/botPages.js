@@ -350,7 +350,7 @@ ${items}
 ${anyPaid && content.perSubjectNote ? `<p>${esc(content.perSubjectNote)}</p>` : ""}
 <p>${esc(content.paymentNote)}</p>
 ${faqHtml}
-<p><a href="/diagnostic">Начать бесплатно: пройти диагностику</a>. Тариф можно выбрать после неё.</p>
+<p><a href="/diagnostic">Начать бесплатно: пройти диагностику</a> — тариф можно выбрать после неё.</p>
 <p>Заявка или вопрос: <a href="/contacts">контакты</a>. Условия: <a href="/oferta">публичная оферта</a>, <a href="/privacy">политика конфиденциальности</a>. Для родителей: <a href="/parents">как оплатить за ребёнка</a>.</p>`;
   const list = tariffs.length
     ? {

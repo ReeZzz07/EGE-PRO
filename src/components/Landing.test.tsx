@@ -72,13 +72,14 @@ describe("Landing", () => {
     expect(screen.getByRole("heading", { level: 2, name: /принцип платформы\s*ИИ не решает за тебя/i })).toBeInTheDocument();
   });
 
-  it("герой: основная кнопка — диагностика; вторая — try без регистрации", async () => {
+  it("герой: обе CTA → диагностика; try — под превью задания", async () => {
     const onStart = vi.fn();
     const onTry = vi.fn();
     render(<Landing onStart={onStart} onTry={onTry} onLogin={vi.fn()} onNav={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Определить свой уровень/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Начать бесплатно$/ })[0]);
     fireEvent.click(screen.getByRole("button", { name: /Попробовать задание без регистрации/ }));
-    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onStart).toHaveBeenCalledTimes(2);
     expect(onTry).toHaveBeenCalledTimes(1);
     expect(DEFAULT_CONTENT.hero.title.length).toBeGreaterThan(0);
   });
@@ -99,18 +100,18 @@ describe("Landing", () => {
     expect(document.body.textContent).not.toMatch(/возврат/i);
   });
 
-  it("кнопки запуска: герой (диагностика + try), mid/end «Начать бесплатно»", async () => {
+  it("кнопки запуска: герой (2× diagnostic) + mid/end «Начать бесплатно»; try под превью", async () => {
     const onStart = vi.fn();
     const onTry = vi.fn();
     render(<Landing onStart={onStart} onTry={onTry} onLogin={vi.fn()} onNav={vi.fn()} />);
     await screen.findByText("АТТЕСТАТ");
     expect(screen.getAllByRole("button", { name: /Определить свой уровень/ })).toHaveLength(1);
     expect(screen.getByRole("button", { name: /Попробовать задание без регистрации/ })).toBeInTheDocument();
-    // mid + footer (герой больше не дублирует «Начать бесплатно»)
+    // hero secondary + mid + footer
     const free = screen.getAllByRole("button", { name: "Начать бесплатно" });
-    expect(free).toHaveLength(2);
+    expect(free).toHaveLength(3);
     for (const b of free) fireEvent.click(b);
-    expect(onStart).toHaveBeenCalledTimes(2);
+    expect(onStart).toHaveBeenCalledTimes(3);
   });
 
   it("ссылки из ТЗ: статья о диагностике, сравнение с живым репетитором — переходы без перезагрузки; /parents — страница для родителей", async () => {

@@ -287,6 +287,11 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       )}
 
       <p className="mt-8 text-center text-[12px] text-ink2">{content.paymentNote}</p>
+      <p className="mt-3 text-center">
+        <button onClick={() => onNav({ name: "diagnostic" })} className="btn btn-ghost px-5 py-2.5 text-[12.5px]">
+          Начать бесплатно: пройти диагностику <Icon name="arrowR" size={15} />
+        </button>
+      </p>
       <p className="mt-2 text-center text-[12px] text-ink2">
         Выбирая платный тариф, ты соглашаешься с{" "}
         <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold text-ink2 hover:text-ink">
