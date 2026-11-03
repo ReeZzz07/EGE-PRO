@@ -123,6 +123,13 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
         <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-ink2">
           {contactsContent.intro.replace("{reply}", reply)}
         </p>
+        <p className="mt-3 max-w-xl text-[13.5px] leading-relaxed text-ink2">
+          Канал заявки: форма ниже или{" "}
+          <a href={`mailto:${info.supportEmail}`} className="link-slide font-bold text-blue hover:text-ink">
+            {info.supportEmail}
+          </a>
+          . Онлайн-сервис для учеников по всей России.
+        </p>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
@@ -270,18 +277,41 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
             </ul>
           </div>
 
-          {(legal.inn || legal.ogrnip) && (
-            <div className="sheet p-5">
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">реквизиты</p>
+          <div className="sheet p-5">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-ink2">реквизиты</p>
+            {legal.inn || legal.ogrnip ? (
               <p className="mt-2 font-mono text-[12.5px] leading-relaxed">
                 {legal.inn && <>ИНН {legal.inn}</>}
                 {legal.inn && legal.ogrnip && <br />}
                 {legal.ogrnip && <>ОГРНИП {legal.ogrnip}</>}
               </p>
-            </div>
-          )}
+            ) : (
+              <p className="mt-2 text-[13px] leading-relaxed text-ink2">
+                Исполнитель и реквизиты — в{" "}
+                <button type="button" onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide font-bold text-ink2 hover:text-ink">
+                  публичной оферте
+                </button>
+                .
+              </p>
+            )}
+            <p className="mt-2 text-[12.5px] text-ink2">Онлайн-сервис подготовки к ЕГЭ (вся Россия).</p>
+          </div>
         </aside>
       </div>
+
+      {Array.isArray((contactsContent as { faq?: { q: string; a: string }[] }).faq) && (contactsContent as { faq: { q: string; a: string }[] }).faq.length > 0 && (
+        <section className="mt-10 max-w-3xl">
+          <h2 className="font-display text-xl font-black">Частые вопросы</h2>
+          <div className="mt-4 space-y-4">
+            {(contactsContent as { faq: { q: string; a: string }[] }).faq.map((f) => (
+              <div key={f.q}>
+                <h3 className="font-display text-[15px] font-bold">{f.q}</h3>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-ink2">{f.a}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {loggedIn && <MyRequests items={mine} />}
     </div>

@@ -276,7 +276,8 @@ ${[shortHtml, subjectsHtml, processHtml, capsHtml, principleHtml, hintsHtml, dif
 <section>
 <h2>${esc(LANDING_HEADINGS.cta)}</h2>
 <p>${esc(LANDING_STATIC.ctaFinal.text)}</p>
-<p><a href="/diagnostic">${esc(LANDING_STATIC.ctaFinal.button)}</a>: зарегистрируйтесь на ${siteName}, ответьте на 8–12 заданий за 7–10 минут и получите уровень, слабые темы и персональный план. Вопросы — на странице <a href="/contacts">контактов</a>.</p>
+<p><a href="/diagnostic">${esc(LANDING_STATIC.ctaFinal.button)}</a>: зарегистрируйтесь на ${siteName}, ответьте на 8–12 заданий за 7–10 минут и получите уровень, слабые темы и персональный план.</p>
+<p>Оставить заявку или вопрос: страница <a href="/contacts">«Контакты»</a>${contactEmail ? ` или письмо на <a href="mailto:${esc(contactEmail)}">${esc(contactEmail)}</a>` : ""} — форма обратной связи и почта поддержки, отвечаем в течение одного дня.</p>
 </section>`;
   const orgLd = { "@context": "https://schema.org", ...org(siteUrl, ""), description: seo.pages.home.description, ...(contactEmail ? { contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: contactEmail, availableLanguage: "ru" } } : {}) };
   const siteLd = siteUrl ? { "@context": "https://schema.org", "@type": "WebSite", name: siteName, url: siteUrl, inLanguage: "ru" } : null;
@@ -301,6 +302,16 @@ ${[shortHtml, subjectsHtml, processHtml, capsHtml, principleHtml, hintsHtml, dif
 export function renderTariffsPage({ seo, content, tariffs, siteUrl = "", verificationMetaTags = "" }) {
   const canonicalUrl = siteUrl ? `${siteUrl}/tariffs` : "";
   const anyPaid = tariffs.some((t) => t.price > 0);
+  const paid = tariffs.filter((t) => t.price > 0);
+  const minPaid = paid.length ? rubles(Math.min(...paid.map((t) => t.price))) : "";
+  const faq = Array.isArray(content.faq) && content.faq.length
+    ? content.faq
+    : [
+        { q: "С какой суммы начинается платный доступ?", a: minPaid ? `Платные тарифы начинаются от ${minPaid} за 30 дней. Есть бесплатный тариф «Попробовать» с лимитом обращений к ИИ.` : "Есть бесплатный тариф с лимитом обращений к ИИ и платные тарифы на 30 дней." },
+        { q: "Есть ли автопродление?", a: "Нет. Оплата разовая через ЮKassa на 30 дней, карта не сохраняется для автосписаний." },
+        { q: "Может ли оплатить родитель?", a: "Да. Ученик может отправить родителю ссылку на оплату из аккаунта; подробности — на странице «Родителям»." },
+        { q: "Что входит во все тарифы?", a: "Диагностика, персональный план, банк заданий формата ЕГЭ и ИИ-репетитор. Отличаются число предметов и лимит обращений к ИИ." },
+      ];
   const items = tariffs
     .map((t) => {
       const l = tariffLine(t);
@@ -316,13 +327,28 @@ ${t.features.map((f) => `<li>${esc(f)}</li>`).join("\n")}
 </article>`;
     })
     .join("\n");
+  const facts = `<section>
+<h2>Коротко о тарифах</h2>
+<ul>
+<li>Оплата: ЮKassa, карта или СБП, срок 30 дней</li>
+<li>Без автопродления и без хранения карты для списаний</li>
+${minPaid ? `<li>Платные тарифы: от ${esc(minPaid)} / 30 дней</li>` : ""}
+${anyPaid && content.perSubjectNote ? `<li>${esc(content.perSubjectNote)}</li>` : ""}
+</ul>
+</section>`;
+  const faqHtml = `<section>
+<h2>Частые вопросы</h2>
+${faq.map((f) => `<h3>${esc(f.q)}</h3>\n<p>${esc(f.a)}</p>`).join("\n")}
+</section>`;
   const body = `<h1>${esc(content.title)}</h1>
 <p>${esc(content.subtitle)}</p>
+${facts}
 ${items}
 ${anyPaid && content.perSubjectNote ? `<p>${esc(content.perSubjectNote)}</p>` : ""}
 <p>${esc(content.paymentNote)}</p>
+${faqHtml}
 <p><a href="/diagnostic">Начать бесплатно: пройти диагностику</a>. Тариф можно выбрать после неё.</p>
-<p>Условия: <a href="/oferta">публичная оферта</a>, <a href="/privacy">политика конфиденциальности</a>. Для родителей: <a href="/parents">как оплатить за ребёнка</a>.</p>`;
+<p>Заявка или вопрос: <a href="/contacts">контакты</a>. Условия: <a href="/oferta">публичная оферта</a>, <a href="/privacy">политика конфиденциальности</a>. Для родителей: <a href="/parents">как оплатить за ребёнка</a>.</p>`;
   const list = tariffs.length
     ? {
         "@context": "https://schema.org",
@@ -341,7 +367,7 @@ ${anyPaid && content.perSubjectNote ? `<p>${esc(content.perSubjectNote)}</p>` : 
         })),
       }
     : null;
-  return page({ title: seo.pages.tariffs.title, description: seo.pages.tariffs.description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(list, crumbsLd(siteUrl, [["Главная", "/"], ["Тарифы", "/tariffs"]])) }, body);
+  return page({ title: seo.pages.tariffs.title, description: seo.pages.tariffs.description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(list, faqLd(faq), crumbsLd(siteUrl, [["Главная", "/"], ["Тарифы", "/tariffs"]])) }, body);
 }
 
 // ─────────────────────── родителям ───────────────────────
@@ -401,15 +427,27 @@ ${PARENTS.faq.map((f) => `<h3>${esc(f.q)}</h3>\n<p>${esc(f.a)}</p>`).join("\n")}
 export function renderContactsPage({ seo, info, legal, siteUrl = "", verificationMetaTags = "" }) {
   const canonicalUrl = siteUrl ? `${siteUrl}/contacts` : "";
   const reply = info.replyWithinHours === 24 ? "в течение одного дня" : `в течение ${info.replyWithinHours} часов`;
-  const requisites = legal && (legal.inn || legal.ogrnip) ? `<section>\n<h2>Реквизиты</h2>\n<p>${legal.inn ? `ИНН ${esc(legal.inn)}` : ""}${legal.inn && legal.ogrnip ? "<br>" : ""}${legal.ogrnip ? `ОГРНИП ${esc(legal.ogrnip)}` : ""}</p>\n</section>` : "";
+  const requisites = legal && (legal.inn || legal.ogrnip) ? `<section>\n<h2>Реквизиты</h2>\n<p>${legal.inn ? `ИНН ${esc(legal.inn)}` : ""}${legal.inn && legal.ogrnip ? "<br>" : ""}${legal.ogrnip ? `ОГРНИП ${esc(legal.ogrnip)}` : ""}</p>\n<p>Онлайн-сервис подготовки к ЕГЭ (вся Россия). Юридические условия — в <a href="/oferta">оферте</a>.</p>\n</section>` : `<section>\n<h2>Реквизиты</h2>\n<p>Исполнитель указан в <a href="/oferta">публичной оферте</a>. Онлайн-сервис подготовки к ЕГЭ (вся Россия).</p>\n</section>`;
   const channels = info.channels.length ? `<ul>\n${info.channels.map((c) => `<li><a href="${esc(c.url)}" rel="noopener">${esc(c.label)}</a></li>`).join("\n")}\n</ul>` : "";
+  const faq = Array.isArray(CONTACTS.faq) && CONTACTS.faq.length
+    ? CONTACTS.faq
+    : [
+        { q: "Как быстро вы отвечаете?", a: `Обычно ${reply}. Письма читает команда, не автоответчик.` },
+        { q: "Как оставить заявку или сообщить об ошибке?", a: "Используйте форму на этой странице или напишите на почту поддержки — приложите скрин и адрес страницы, если это баг." },
+        { q: "Где начать подготовку?", a: "На главной нажмите «Определить свой уровень» или откройте бесплатную диагностику — это основной способ заявки в продукт." },
+        { q: "Может ли оплатить родитель?", a: "Да, через ссылку из кабинета ученика. Подробности — на странице «Родителям»." },
+      ];
   const body = `<h1>${esc(CONTACTS.h1)}</h1>
 <p>${esc(CONTACTS.intro.replace("{reply}", reply))}</p>
 <section>
+<h2>Как оставить заявку</h2>
+<p>Напишите на почту или заполните форму обратной связи ниже на сайте (после загрузки страницы). Это и есть канал заявки: вопрос по оплате, ошибка в задании, идея.</p>
+<p><a href="mailto:${esc(info.supportEmail)}">${esc(info.supportEmail)}</a> — отвечаем ${esc(reply)}.</p>
+${channels}
+</section>
+<section>
 <h2>Почта поддержки</h2>
 <p><a href="mailto:${esc(info.supportEmail)}">${esc(info.supportEmail)}</a></p>
-<p>Отвечаем ${esc(reply)}.</p>
-${channels}
 </section>
 <section>
 <h2>Быстрые ответы</h2>
@@ -417,17 +455,27 @@ ${channels}
 <li><a href="/oferta">Условия оплаты: в оферте</a></li>
 <li><a href="/privacy">Как мы работаем с данными: политика конфиденциальности</a></li>
 <li><a href="/parents">Как оплатить за ребёнка: для родителей</a></li>
+<li><a href="/diagnostic">Бесплатная диагностика уровня</a></li>
 </ul>
 </section>
+<section>
+<h2>Частые вопросы</h2>
+${faq.map((f) => `<h3>${esc(f.q)}</h3>\n<p>${esc(f.a)}</p>`).join("\n")}
+</section>
 ${requisites}`;
+  const orgEntity = {
+    ...org(siteUrl, seo.ogImage || ""),
+    ...(legal?.inn ? { taxID: String(legal.inn) } : {}),
+    contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: info.supportEmail, availableLanguage: "ru", areaServed: "RU" },
+  };
   const contactLd = {
     "@context": "https://schema.org",
     "@type": "ContactPage",
     name: CONTACTS.seo.title,
     ...(canonicalUrl ? { url: canonicalUrl } : {}),
-    mainEntity: { ...org(siteUrl, ""), contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: info.supportEmail, availableLanguage: "ru" } },
+    mainEntity: orgEntity,
   };
-  return page({ title: CONTACTS.seo.title, description: CONTACTS.seo.description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(contactLd, crumbsLd(siteUrl, [["Главная", "/"], ["Контакты", "/contacts"]])) }, body);
+  return page({ title: CONTACTS.seo.title, description: CONTACTS.seo.description, canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, extra: ld(contactLd, faqLd(faq), crumbsLd(siteUrl, [["Главная", "/"], ["Контакты", "/contacts"]])) }, body);
 }
 
 // ─────────────────────── оферта и политика ───────────────────────
@@ -451,9 +499,18 @@ export function legalTextToHtml(text) {
 export function renderLegalPage({ key, doc, seo, siteUrl = "", verificationMetaTags = "" }) {
   const path = key === "offer" ? "/oferta" : "/privacy";
   const canonicalUrl = siteUrl ? `${siteUrl}${path}` : "";
-  const body = `<h1>${esc(doc.title)}</h1>\n${doc.updated_at ? `<p>Редакция от ${esc(dateRu(doc.updated_at))}</p>\n` : ""}${legalTextToHtml(doc.content)}`;
+  const body = `<h1>${esc(doc.title)}</h1>\n${doc.updated_at ? `<p>Редакция от ${esc(dateRu(doc.updated_at))}</p>\n` : ""}${legalTextToHtml(doc.content)}\n<p>Связь: <a href="/contacts">контакты</a>. Онлайн-сервис (вся Россия).</p>`;
+  const webPage = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: LEGAL_SEO[key].title,
+    description: LEGAL_SEO[key].description,
+    inLanguage: "ru",
+    ...(canonicalUrl ? { url: canonicalUrl } : {}),
+    isPartOf: { "@type": "WebSite", name: siteName, ...(siteUrl ? { url: siteUrl } : {}) },
+  };
   // как и в SPA (LegalDoc.tsx): не для поисковой выдачи, но ссылки обходить можно
-  return page({ ...LEGAL_SEO[key], canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, noindex: true }, body);
+  return page({ ...LEGAL_SEO[key], canonicalUrl, ogImage: seo.ogImage, verificationMetaTags, noindex: true, extra: ld(webPage, crumbsLd(siteUrl, [["Главная", "/"], [key === "offer" ? "Оферта" : "Конфиденциальность", path]])) }, body);
 }
 
 // ─────────────────────── точка входа ───────────────────────

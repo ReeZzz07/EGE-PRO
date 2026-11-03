@@ -70,6 +70,7 @@ test("служебные страницы приложения закрыты о
     assert.equal(isNotFound(sample), false, `${p} — страница приложения, а не 404`);
     assert.equal(pubPaths.includes(p), false, `${p} не должен быть и публичным`);
   }
-  assert.match(caddy, /handle @private \{\s*header X-Robots-Tag "noindex, follow"\s*rewrite \* \/__private\s*reverse_proxy api:8787 web:3000/);
+  assert.match(caddy, /handle @private \{[\s\S]*?header X-Robots-Tag "noindex, follow"[\s\S]*?rewrite \* \/__private[\s\S]*?reverse_proxy api:8787 web:3000/);
+  assert.match(caddy, /header_up X-Private-Path \{vars\.private_path\}/);
   assert.ok(caddy.indexOf("handle @public") < caddy.indexOf("handle @private") && caddy.indexOf("handle @private") < caddy.lastIndexOf("\thandle {"));
 });

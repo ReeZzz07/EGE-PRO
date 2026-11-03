@@ -68,7 +68,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             <span className="font-display text-[15px] font-black">ЕГЭ·ПРО</span>
           </div>
           <p className="mt-4 max-w-sm whitespace-pre-line text-[13px] leading-relaxed text-paper/60">{legalEntity.footerText}</p>
-          <p className="mt-4 font-mono text-[11px] text-paper/40">© 2026 · сделано для тех, кто метит на 100 баллов</p>
+          <p className="mt-4 font-mono text-[11px] text-paper/40">© 2026 · онлайн-тренажёр ЕГЭ для всей России</p>
           {(legalEntity.inn || legalEntity.ogrnip) && (
             <p className="mt-1 font-mono text-[11px] text-paper/40">
               {legalEntity.inn && <>ИНН {legalEntity.inn}</>}
@@ -77,6 +77,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
             </p>
           )}
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+            <a href="mailto:support@ege-tutor.ru" className="link-slide text-[11.5px] font-bold text-paper/70 hover:text-paper">support@ege-tutor.ru</a>
             <button onClick={() => onNav({ name: "legal", doc: "offer" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Публичная оферта</button>
             <button onClick={() => onNav({ name: "legal", doc: "privacy" })} className="link-slide text-[11.5px] text-paper/50 hover:text-paper/80">Политика конфиденциальности</button>
             <button onClick={() => onNav({ name: "parents" })} className="link-slide text-[11.5px] font-bold text-paper/70 hover:text-paper">Родителям</button>

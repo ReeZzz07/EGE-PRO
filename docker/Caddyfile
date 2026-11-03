@@ -78,8 +78,11 @@ www.{$SITE_HOST} {
 	}
 	handle @private {
 		header X-Robots-Tag "noindex, follow"
+		# путь до rewrite — чтобы api отдал H1/текст под конкретный URL (иначе /__private = пустая оболочка)
+		vars private_path {http.request.uri.path}
 		rewrite * /__private
 		reverse_proxy api:8787 web:3000 {
+			header_up X-Private-Path {vars.private_path}
 			lb_policy first
 			lb_try_duration 3s
 			lb_try_interval 250ms

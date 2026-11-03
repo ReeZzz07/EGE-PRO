@@ -198,5 +198,15 @@ test("server.js: маршрут /__private отдаёт оболочку с noin
   const src = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
   assert.match(src, /app\.get\("\/__private"/);
   assert.match(src, /toNoindexShell\(shell\)/);
+  assert.match(src, /privatePrerenderHtml/);
+  assert.match(src, /X-Private-Path|x-private-path/);
   assert.match(src, /X-Robots-Tag", "noindex, follow"/);
+});
+
+test("privatePrerenderHtml: /diagnostic содержит H1 и noindex title", async () => {
+  const { privatePrerenderHtml } = await import("../spaShell.js");
+  const html = privatePrerenderHtml("/diagnostic");
+  assert.match(html, /<h1>Диагностика уровня по предмету<\/h1>/);
+  assert.match(html, /noindex, follow/);
+  assert.match(html, /<title>Диагностика уровня ЕГЭ/);
 });

@@ -49,7 +49,9 @@ describe("ContactsView", () => {
   it("показывает почту поддержки, срок ответа и реквизиты; мессенджеры — только включённые", async () => {
     vi.mocked(fb.useContactInfo).mockReturnValue(info([{ id: "whatsapp", label: "WhatsApp", url: "https://wa.me/message/ABC" }]));
     render(<ContactsView onNav={vi.fn()} />);
-    expect(screen.getByRole("link", { name: "support@ege-tutor.ru" })).toHaveAttribute("href", "mailto:support@ege-tutor.ru");
+    const mail = screen.getAllByRole("link", { name: "support@ege-tutor.ru" });
+    expect(mail.length).toBeGreaterThanOrEqual(1);
+    expect(mail[0]).toHaveAttribute("href", "mailto:support@ege-tutor.ru");
     expect(screen.getAllByText(/в течение одного дня/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", "https://wa.me/message/ABC");
     expect(screen.queryByRole("link", { name: "Telegram" })).not.toBeInTheDocument();
