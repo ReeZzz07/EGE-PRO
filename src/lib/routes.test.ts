@@ -86,6 +86,7 @@ describe("pathToView", () => {
 
   it("/blog и /blog/:slug — база знаний, единственный роут здесь с переменным сегментом пути", () => {
     expect(pathToView("/blog")).toEqual({ name: "blog" });
+    expect(pathToView("/blog", "?cat=subjects")).toEqual({ name: "blog", category: "subjects" });
     expect(pathToView("/blog/ii-repetitor-vs-zhivoi")).toEqual({ name: "blog-article", slug: "ii-repetitor-vs-zhivoi" });
     // percent-encoded сегмент декодируется
     expect(pathToView("/blog/%D1%82%D0%B5%D1%81%D1%82")).toEqual({ name: "blog-article", slug: "тест" });
@@ -115,6 +116,7 @@ describe("viewToPath", () => {
 
   it("blog и blog-article — реальные URL, slug кодируется", () => {
     expect(viewToPath({ name: "blog" })).toBe("/blog");
+    expect(viewToPath({ name: "blog", category: "subjects" })).toBe("/blog?cat=subjects");
     expect(viewToPath({ name: "blog-article", slug: "ii-repetitor" })).toBe("/blog/ii-repetitor");
   });
 });

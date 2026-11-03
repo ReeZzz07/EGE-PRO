@@ -497,7 +497,7 @@ function AppShell() {
         {view.name === "subjects" && <SubjectsView onNav={setView} />}
         {view.name === "kim2027" && <Kim2027Changes />}
         {view.name === "legal" && <LegalDoc doc={view.doc} onNav={setView} />}
-        {view.name === "blog" && <BlogList onNav={setView} />}
+        {view.name === "blog" && <BlogList onNav={setView} category={view.category} />}
         {view.name === "blog-article" && <BlogArticle slug={view.slug} onNav={setView} />}
         {view.name === "renew" && profile && <RenewView onNav={setView} />}
         {view.name === "payment-return" && <PaymentReturnView paymentId={view.paymentId} onNav={setView} />}

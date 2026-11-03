@@ -5,6 +5,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import DOMPurify from "dompurify";
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { inferBlogCategory, normalizeBlogCategory, type BlogCategoryId } from "./blogCategories";
+
+export type { BlogCategoryId };
 
 export interface BlogArticle {
   id: string;
@@ -15,6 +18,8 @@ export interface BlogArticle {
   coverImage: string | null;
   isPublished: boolean;
   isPinned: boolean;
+  /** Рубрика для сайдбара /blog (см. blogCategories.ts, миграция 0049). */
+  category: BlogCategoryId;
   /** false — статья видна только зарегистрированным (любым, не только платным); гостям RLS её не
    *  отдаёт вовсе, см. supabase/migrations/0033_blog_visibility.sql. По умолчанию true. */
   visibleToGuests: boolean;
@@ -36,6 +41,7 @@ export type BlogArticleInput = {
   coverImage: string | null;
   isPinned: boolean;
   visibleToGuests: boolean;
+  category: BlogCategoryId;
 };
 
 const RU_TO_LATIN: Record<string, string> = {
@@ -71,15 +77,20 @@ export function sanitizeArticleHtml(html: string): string {
 }
 
 function fromRow(row: Record<string, unknown>): BlogArticle {
+  const title = row.title as string;
+  const slug = row.slug as string;
+  const rawCat = row.category as string | null | undefined;
   return {
     id: row.id as string,
-    slug: row.slug as string,
-    title: row.title as string,
+    slug,
+    title,
     excerpt: row.excerpt as string,
     content: row.content as string,
     coverImage: (row.cover_image as string | null) ?? null,
     isPublished: row.is_published as boolean,
     isPinned: row.is_pinned as boolean,
+    // до миграции 0049 колонки нет — выводим эвристикой, чтобы сайдбар не падал в «Другое»
+    category: rawCat != null ? normalizeBlogCategory(rawCat) : inferBlogCategory(title, slug),
     visibleToGuests: row.visible_to_guests as boolean,
     publishedAt: row.published_at ? new Date(row.published_at as string).getTime() : null,
     scheduledAt: row.scheduled_at ? new Date(row.scheduled_at as string).getTime() : null,
@@ -149,6 +160,7 @@ export async function createArticle(input: BlogArticleInput, userId: string): Pr
     cover_image: input.coverImage,
     is_pinned: input.isPinned,
     visible_to_guests: input.visibleToGuests,
+    category: input.category,
     created_by: userId,
   });
   return error ? { error: friendlyWriteError(error.message) } : {};
@@ -164,6 +176,7 @@ export async function updateArticle(id: string, patch: Partial<BlogArticleInput>
   if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
   if (patch.isPinned !== undefined) row.is_pinned = patch.isPinned;
   if (patch.visibleToGuests !== undefined) row.visible_to_guests = patch.visibleToGuests;
+  if (patch.category !== undefined) row.category = patch.category;
   const { error } = await supabase.from("blog_articles").update(row).eq("id", id);
   return error ? { error: friendlyWriteError(error.message) } : {};
 }

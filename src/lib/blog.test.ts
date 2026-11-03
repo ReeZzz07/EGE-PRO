@@ -60,7 +60,7 @@ describe("createArticle", () => {
     vi.mocked(supabase!.from).mockReturnValue({
       insert: () => Promise.resolve({ error: { message: 'duplicate key value violates unique constraint "blog_articles_slug_key"' } }),
     } as never);
-    const res = await createArticle({ title: "t", slug: "dup", excerpt: "e", content: "c", coverImage: null, isPinned: false, visibleToGuests: true }, "user-1");
+    const res = await createArticle({ title: "t", slug: "dup", excerpt: "e", content: "c", coverImage: null, isPinned: false, visibleToGuests: true, category: "method" }, "user-1");
     expect(res.error).toBe("Такой URL (slug) уже используется — выбери другой.");
   });
 
@@ -68,7 +68,7 @@ describe("createArticle", () => {
     vi.mocked(supabase!.from).mockReturnValue({
       insert: () => Promise.resolve({ error: { message: "connection refused" } }),
     } as never);
-    const res = await createArticle({ title: "t", slug: "s", excerpt: "e", content: "c", coverImage: null, isPinned: false, visibleToGuests: true }, "user-1");
+    const res = await createArticle({ title: "t", slug: "s", excerpt: "e", content: "c", coverImage: null, isPinned: false, visibleToGuests: true, category: "method" }, "user-1");
     expect(res.error).toBe("connection refused");
   });
 });

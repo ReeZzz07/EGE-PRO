@@ -10,7 +10,7 @@ vi.mock("../lib/blog", async (orig) => ({ ...(await orig<typeof import("../lib/b
 vi.mock("../lib/blogEngagement", async (orig) => ({ ...(await orig<typeof import("../lib/blogEngagement")>()), loadAllEngagement: vi.fn() }));
 
 const article = (slug: string): blog.BlogArticle => ({
-  id: slug, slug, title: `Статья ${slug}`, excerpt: "Анонс", content: "", coverImage: null, isPublished: true, isPinned: false, visibleToGuests: true, publishedAt: Date.now(), scheduledAt: null, createdAt: Date.now(), updatedAt: Date.now(),
+  id: slug, slug, title: `Статья ${slug}`, excerpt: "Анонс", content: "", coverImage: null, isPublished: true, isPinned: false, category: "method", visibleToGuests: true, publishedAt: Date.now(), scheduledAt: null, createdAt: Date.now(), updatedAt: Date.now(),
 });
 
 beforeEach(() => {

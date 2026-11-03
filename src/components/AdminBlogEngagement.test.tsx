@@ -13,7 +13,7 @@ vi.mock("../lib/blog", async (orig) => ({ ...(await orig<typeof import("../lib/b
 vi.mock("../lib/blogEngagement", async (orig) => ({ ...(await orig<typeof import("../lib/blogEngagement")>()), loadAdminEngagement: vi.fn(), removeComment: vi.fn() }));
 
 const article = (id: string, slug: string, isPublished: boolean): blog.BlogArticle => ({
-  id, slug, title: `Статья ${slug}`, excerpt: "", content: "<p>x</p>", coverImage: null, isPublished, isPinned: false, visibleToGuests: true, publishedAt: isPublished ? Date.now() : null, scheduledAt: null, createdAt: Date.now(), updatedAt: Date.now(),
+  id, slug, title: `Статья ${slug}`, excerpt: "", content: "<p>x</p>", coverImage: null, isPublished, isPinned: false, category: "method", visibleToGuests: true, publishedAt: isPublished ? Date.now() : null, scheduledAt: null, createdAt: Date.now(), updatedAt: Date.now(),
 });
 const COMMENT: api.AdminComment = { id: 7, body: "Спам-комментарий", createdAt: "2026-10-07T10:00:00Z", author: "Ольга", email: "olga@example.org", articleSlug: "a", articleTitle: "Статья a" };
 

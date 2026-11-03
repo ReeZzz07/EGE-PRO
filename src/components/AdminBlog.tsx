@@ -17,12 +17,13 @@ import {
   type BlogArticle,
   type BlogArticleInput,
 } from "../lib/blog";
+import { BLOG_CATEGORIES, blogCategoryLabel, inferBlogCategory } from "../lib/blogCategories";
 import { loadAdminEngagement, removeComment, type AdminComment, type EngagementStats } from "../lib/blogEngagement";
 import { Icon, useToast } from "./ui";
 import { SITE_URL } from "../lib/seo";
 import RichTextEditor from "./RichTextEditor";
 
-const EMPTY_FORM: BlogArticleInput = { title: "", slug: "", excerpt: "", content: "", coverImage: null, isPinned: false, visibleToGuests: true };
+const EMPTY_FORM: BlogArticleInput = { title: "", slug: "", excerpt: "", content: "", coverImage: null, isPinned: false, visibleToGuests: true, category: "method" };
 
 // <input type="datetime-local"> хранит и отдаёт "локальное" время без таймзоны — так же, как new
 // Date(value) его и парсит (в таймзоне браузера). Ровно то, что нужно: админ выбирает время по
@@ -101,6 +102,29 @@ function ArticleForm({
             rows={2}
             className="input-blank mt-1.5 w-full resize-y rounded-sm px-3 py-2 text-[13px]"
           />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Рубрика (сайдбар базы знаний)</span>
+          <select
+            value={form.category}
+            onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as BlogArticleInput["category"] }))}
+            className="input-blank mt-1.5 w-full rounded-sm px-3 py-2 text-[13.5px]"
+          >
+            {BLOG_CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          {isNew && (
+            <button
+              type="button"
+              className="link-slide mt-1.5 text-[12px] font-bold text-ink2 hover:text-ink"
+              onClick={() => setForm((f) => ({ ...f, category: inferBlogCategory(f.title, f.slug) }))}
+            >
+              подставить по заголовку
+            </button>
+          )}
         </label>
         <div className="sm:col-span-2">
           <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Текст статьи</span>
@@ -264,7 +288,7 @@ export default function AdminBlog() {
           editingId === a.id ? (
             <ArticleForm
               key={a.id}
-              initial={{ title: a.title, slug: a.slug, excerpt: a.excerpt, content: a.content, coverImage: a.coverImage, isPinned: a.isPinned, visibleToGuests: a.visibleToGuests }}
+              initial={{ title: a.title, slug: a.slug, excerpt: a.excerpt, content: a.content, coverImage: a.coverImage, isPinned: a.isPinned, visibleToGuests: a.visibleToGuests, category: a.category }}
               isNew={false}
               saving={saving}
               onCancel={() => setEditingId(null)}
@@ -290,7 +314,7 @@ export default function AdminBlog() {
                   )}
                 </div>
                 <p className="mt-1 truncate font-mono text-[11.5px] text-ink2">
-                  /blog/{a.slug} {a.publishedAt && `· ${new Date(a.publishedAt).toLocaleDateString("ru-RU")}`}
+                  {blogCategoryLabel(a.category)} · /blog/{a.slug} {a.publishedAt && `· ${new Date(a.publishedAt).toLocaleDateString("ru-RU")}`}
                 </p>
                 {engagement[a.id] && (
                   <p data-testid={`admin-stats-${a.slug}`} className="mt-1 font-mono text-[11.5px] text-ink2">

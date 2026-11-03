@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import BlogSidebar from "./BlogSidebar";
 import type { BlogArticle } from "../lib/blog";
 
-const article = (slug: string, pinned = false): BlogArticle => ({
+const article = (slug: string, category: BlogArticle["category"] = "method"): BlogArticle => ({
   id: slug,
   slug,
   title: `Статья ${slug}`,
@@ -11,7 +11,8 @@ const article = (slug: string, pinned = false): BlogArticle => ({
   content: "",
   coverImage: null,
   isPublished: true,
-  isPinned: pinned,
+  isPinned: false,
+  category,
   visibleToGuests: true,
   publishedAt: Date.now(),
   scheduledAt: null,
@@ -20,23 +21,33 @@ const article = (slug: string, pinned = false): BlogArticle => ({
 });
 
 describe("BlogSidebar", () => {
-  it("поиск фильтрует список и ведёт на статью", () => {
-    const onNav = vi.fn();
-    render(<BlogSidebar articles={[article("alpha"), article("beta", true)]} onNav={onNav} />);
+  it("показывает рубрики со счётчиками, без простыни названий статей", () => {
+    const onCategoryChange = vi.fn();
+    render(
+      <BlogSidebar
+        articles={[article("a", "subjects"), article("b", "subjects"), article("c", "parents")]}
+        onNav={vi.fn()}
+        category={null}
+        onCategoryChange={onCategoryChange}
+      />
+    );
     expect(screen.getByTestId("blog-sidebar")).toBeInTheDocument();
-    expect(screen.getByText("Статья alpha")).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText("Название или тема…"), { target: { value: "beta" } });
-    expect(screen.queryByText("Статья alpha")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Статья beta"));
-    expect(onNav).toHaveBeenCalledWith({ name: "blog-article", slug: "beta" });
+    const cats = screen.getByRole("navigation", { name: "Рубрики" });
+    expect(cats).toHaveTextContent("По предметам");
+    expect(cats).toHaveTextContent("Родителям");
+    expect(cats).toHaveTextContent("2");
+    expect(screen.queryByText("Статья a")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /По предметам/ }));
+    expect(onCategoryChange).toHaveBeenCalledWith("subjects");
   });
 
-  it("показывает оглавление и быстрые ссылки", () => {
+  it("оглавление и быстрые ссылки на месте", () => {
     const onNav = vi.fn();
     render(
       <BlogSidebar
         articles={[article("a")]}
         currentSlug="a"
+        currentCategory="method"
         toc={[{ id: "sec-1", text: "Раздел один", level: 2 }]}
         onNav={onNav}
       />

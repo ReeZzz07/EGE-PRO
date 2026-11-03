@@ -2,6 +2,7 @@
 // статьи (не этот список) редактирует админ в AdminBlog.tsx.
 import { useEffect, useMemo, useState } from "react";
 import { loadPublishedArticles, type BlogArticle } from "../lib/blog";
+import { blogCategoryLabel, isBlogCategoryId, type BlogCategoryId } from "../lib/blogCategories";
 import { loadAllEngagement, type EngagementStats } from "../lib/blogEngagement";
 import { PAGE_SHELL } from "../lib/layout";
 import { useDocumentHead } from "../lib/useDocumentHead";
@@ -9,10 +10,11 @@ import { Icon, Reveal } from "./ui";
 import BlogSidebar from "./BlogSidebar";
 import type { View } from "./Header";
 
-export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
+export default function BlogList({ onNav, category: categoryProp }: { onNav: (v: View) => void; category?: string }) {
   const [articles, setArticles] = useState<BlogArticle[] | null>(null);
   const [stats, setStats] = useState<Record<string, Omit<EngagementStats, "liked">>>({});
   const [query, setQuery] = useState("");
+  const category: BlogCategoryId | null = isBlogCategoryId(categoryProp) ? categoryProp : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -29,17 +31,24 @@ export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
   }, []);
 
   useDocumentHead({
-    title: "База знаний — ЕГЭ·ПРО",
+    title: category ? `${blogCategoryLabel(category)} — База знаний — ЕГЭ·ПРО` : "База знаний — ЕГЭ·ПРО",
     description: "Статьи и разборы для подготовки к ЕГЭ: сравнения, гайды, объяснения — как эффективно готовиться и пользоваться платформой.",
-    path: "/blog",
+    path: category ? `/blog?cat=${category}` : "/blog",
   });
+
+  const setCategory = (id: BlogCategoryId | null) => {
+    onNav(id ? { name: "blog", category: id } : { name: "blog" });
+  };
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => {
     if (!articles) return [];
-    if (!q) return articles;
-    return articles.filter((a) => a.title.toLowerCase().includes(q) || a.excerpt.toLowerCase().includes(q));
-  }, [articles, q]);
+    return articles.filter((a) => {
+      if (category && a.category !== category) return false;
+      if (!q) return true;
+      return a.title.toLowerCase().includes(q) || a.excerpt.toLowerCase().includes(q);
+    });
+  }, [articles, q, category]);
 
   if (!articles) {
     return <p className="py-16 text-center font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загрузка…</p>;
@@ -49,7 +58,14 @@ export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
     <div className={`${PAGE_SHELL} pb-20`}>
       <div className="mt-8">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">база знаний</p>
-        <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">Статьи о подготовке к ЕГЭ</h1>
+        <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">
+          {category ? blogCategoryLabel(category) : "Статьи о подготовке к ЕГЭ"}
+        </h1>
+        {category && (
+          <button type="button" onClick={() => setCategory(null)} className="link-slide mt-2 text-[13px] font-bold text-ink2 hover:text-ink">
+            ← все рубрики
+          </button>
+        )}
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_min(320px,32%)]">
@@ -57,7 +73,9 @@ export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
           {articles.length === 0 ? (
             <p className="text-[13.5px] text-ink2">Статей пока нет — загляни позже.</p>
           ) : visible.length === 0 ? (
-            <p className="text-[13.5px] text-ink2">По запросу «{query.trim()}» ничего не нашлось.</p>
+            <p className="text-[13.5px] text-ink2">
+              {q ? `По запросу «${query.trim()}» ничего не нашлось.` : "В этой рубрике пока нет статей."}
+            </p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {visible.map((a, i) => (
@@ -76,7 +94,10 @@ export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
                       />
                     )}
                     <div className="flex flex-1 flex-col p-4">
-                      {a.isPinned && <span className="mb-1.5 w-fit font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-blue">📌 закреплено</span>}
+                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                        {a.isPinned && <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-blue">📌 закреплено</span>}
+                        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink2">{blogCategoryLabel(a.category)}</span>
+                      </div>
                       <h2 className="font-display text-[15px] font-bold leading-snug">{a.title}</h2>
                       <p className="mt-1.5 line-clamp-3 flex-1 text-[12.5px] leading-relaxed text-ink2">{a.excerpt}</p>
                       {stats[a.slug] && (
@@ -100,7 +121,14 @@ export default function BlogList({ onNav }: { onNav: (v: View) => void }) {
           )}
         </div>
 
-        <BlogSidebar articles={articles} onNav={onNav} query={query} onQueryChange={setQuery} />
+        <BlogSidebar
+          articles={articles}
+          onNav={onNav}
+          query={query}
+          onQueryChange={setQuery}
+          category={category}
+          onCategoryChange={setCategory}
+        />
       </div>
     </div>
   );

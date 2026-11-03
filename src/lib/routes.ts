@@ -23,7 +23,7 @@ export function viewToPath(view: View): string {
   if (view.name === "parents") return "/parents";
   if (view.name === "parent-pay") return `/pay-for/${encodeURIComponent(view.token)}${view.paymentId ? `?paymentId=${encodeURIComponent(view.paymentId)}` : ""}`;
   if (view.name === "subject-page") return subjectPagePath(view.subject);
-  if (view.name === "blog") return "/blog";
+  if (view.name === "blog") return view.category ? `/blog?cat=${encodeURIComponent(view.category)}` : "/blog";
   if (view.name === "blog-article") return `/blog/${encodeURIComponent(view.slug)}`;
   if (view.name === "payment-return") return `/payment/return?paymentId=${encodeURIComponent(view.paymentId)}`;
   if (view.name === "reset-password") return `/reset-password?token=${encodeURIComponent(view.token)}`;
@@ -61,7 +61,10 @@ export function pathToView(pathname: string, search = ""): View | null {
     const subject = subjectBySlug(pathname.slice("/ege/".length));
     return subject ? { name: "subject-page", subject } : null;
   }
-  if (pathname === "/blog") return { name: "blog" };
+  if (pathname === "/blog") {
+    const cat = new URLSearchParams(search).get("cat") || undefined;
+    return cat ? { name: "blog", category: cat } : { name: "blog" };
+  }
   if (pathname.startsWith("/blog/")) {
     const rest = pathname.slice("/blog/".length);
     if (!rest || rest.includes("/")) return null;

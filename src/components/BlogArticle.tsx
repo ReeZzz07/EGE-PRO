@@ -87,7 +87,7 @@ export default function BlogArticle({ slug, onNav }: { slug: string; onNav: (v: 
           <ArticleEngagement slug={data.slug} title={data.title} published={data.isPublished} onNav={onNav} />
         </div>
 
-        <BlogSidebar articles={list} currentSlug={data.slug} toc={prepared.toc} onNav={onNav} />
+        <BlogSidebar articles={list} currentSlug={data.slug} currentCategory={data.category} toc={prepared.toc} onNav={onNav} />
       </div>
     </div>
   );
