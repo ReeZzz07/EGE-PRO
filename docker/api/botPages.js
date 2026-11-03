@@ -266,13 +266,15 @@ ${lm.items.map((x) => `<li><strong>${esc(x.t)}</strong>: ${esc(x.d)}</li>`).join
 <h2>${esc(LANDING_MORE.shortAnswer.title)}</h2>
 <p>${esc(bank(LANDING_MORE.shortAnswer.text))}</p>
 </section>`;
+  // AEO: абзац-ответ сразу под H1 (не ниже превью/статистики)
   const body = `<h1>${esc(landing.hero.title)}</h1>
 <p>${esc(landing.hero.subtitle)}</p>
+${shortHtml}
 <p><a href="/diagnostic">${esc(LANDING_STATIC.heroCtas[0])}</a> · <a href="/diagnostic">${esc(LANDING_STATIC.heroCtas[1])}</a></p>
 ${statsHtml}
 <p><a href="/parents">Для родителей: чем это отличается от репетитора</a> · <a href="/blog">База знаний: статьи и разборы</a></p>
 ${previewHtml}
-${[shortHtml, subjectsHtml, processHtml, capsHtml, principleHtml, hintsHtml, diffHtml, essayHtml, tariffsHtml, limitsHtml, parentsHtml, reviewsHtml, faqHtml, blogHtml].filter(Boolean).join("\n")}
+${[subjectsHtml, processHtml, capsHtml, principleHtml, hintsHtml, diffHtml, essayHtml, tariffsHtml, limitsHtml, parentsHtml, reviewsHtml, faqHtml, blogHtml].filter(Boolean).join("\n")}
 <section>
 <h2>${esc(LANDING_HEADINGS.cta)}</h2>
 <p>${esc(LANDING_STATIC.ctaFinal.text)}</p>
