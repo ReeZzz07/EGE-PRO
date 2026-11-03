@@ -6,7 +6,8 @@ const BACKSLASH = String.fromCharCode(92);
 
 export const siteName = "ЕГЭ·ПРО";
 export const NAV = `<header><nav><a href="/">${siteName}</a> <a href="/tariffs">Тарифы</a> <a href="/blog">База знаний</a> <a href="/parents">Родителям</a> <a href="/contacts">Контакты</a></nav></header>`;
-export const FOOTER = `<footer><p>${siteName} — учебный проект: тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания взяты из открытого банка ФИПИ; сервис не является официальным ресурсом ФИПИ или Рособрнадзора.</p></footer>`;
+// Реквизиты канона trust/GEO: ИП + ИНН в каждом bot HTML; детали — /oferta и /contacts.
+export const FOOTER = `<footer><p>${siteName} — учебный проект ИП Кодзоков Р.Х. (ИНН 070804531260): тренажёр для подготовки к ЕГЭ с ИИ-репетитором. Задания взяты из открытого банка ФИПИ; сервис не является официальным ресурсом ФИПИ или Рособрнадзора. Реквизиты и оферта: <a href="/oferta">/oferta</a>, <a href="/contacts">/contacts</a>.</p></footer>`;
 
 /** JSON-LD внутри <script>: «<» экранируем, чтобы строка вроде «</script>» в заголовке не закрыла тег. */
 export function jsonLd(obj) {

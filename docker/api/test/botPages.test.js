@@ -157,8 +157,11 @@ test("renderContactsPage: почта, срок ответа, каналы, ре�
   assert.equal(contact.mainEntity.contactPoint.email, "support@ege-tutor.ru");
   const noLegal = renderContactsPage({ seo, info: { supportEmail: "s@e.ru", replyWithinHours: 48, channels: [] }, legal: null, siteUrl: SITE });
   assert.match(noLegal, /обычно в течение 48 часов/);
-  assert.doesNotMatch(noLegal, /ИНН|ОГРНИП/);
+  // блок «Реквизиты» без данных админки — ссылка на оферту; ИНН остаётся в общем bot-футере
+  const noLegalMain = noLegal.match(/<main>[\s\S]*?<\/main>/)?.[0] ?? "";
+  assert.doesNotMatch(noLegalMain, /ИНН|ОГРНИП/);
   assert.match(noLegal, /Исполнитель указан в <a href="\/oferta">публичной оферте<\/a>/);
+  assert.match(noLegal, /<footer>[\s\S]*ИНН 070804531260/);
 });
 
 test("legalTextToHtml / renderLegalPage: абзацы и переносы как в SPA, HTML экранируется, страница с noindex", () => {

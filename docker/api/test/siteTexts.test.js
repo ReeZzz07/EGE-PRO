@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_PAGE_SEO } from "../botPages.js";
+import { FOOTER } from "../botLayout.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const EXT = new Set([".ts", ".tsx", ".js", ".json", ".html"]);
@@ -45,4 +46,11 @@ test("описание страницы контактов не обещает �
   const contacts = JSON.parse(read(path.join(root, "docker/api/content/contacts.json")));
   assert.doesNotMatch(contacts.seo.description, /мессенджер/i);
   assert.match(contacts.seo.description, /почта/i);
+});
+
+test("bot-футер содержит ИП/ИНН и ссылки на оферту и контакты", () => {
+  assert.match(FOOTER, /ИП Кодзоков Р\.Х\./);
+  assert.match(FOOTER, /ИНН 070804531260/);
+  assert.match(FOOTER, /href="\/oferta"/);
+  assert.match(FOOTER, /href="\/contacts"/);
 });

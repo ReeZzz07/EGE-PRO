@@ -9,7 +9,8 @@ export const MAX_REVIEW_BODY = 1500;
 /** Оценки не выше этой публично не показываются — видны только команде */
 export const MAX_PRIVATE_RATING = 3;
 /** Публичный блок отзывов показываем, только когда их набралось хотя бы столько */
-export const MIN_PUBLIC_REVIEWS = 3;
+/** Блок отзывов скрываем только если опубликованных нет (раньше порог был 3). */
+export const MIN_PUBLIC_REVIEWS = 1;
 
 export type ReviewStatus = "private" | "pending" | "approved" | "rejected";
 
@@ -113,7 +114,7 @@ export async function loadPublicReviews(limit = 12): Promise<PublicReviews | nul
   }
 }
 
-/** Опубликованные отзывы или null, пока не загрузились / их меньше MIN_PUBLIC_REVIEWS (блок тогда не рисуем). */
+/** Опубликованные отзывы или null, пока не загрузились / список пуст (блок тогда не рисуем). */
 export function usePublicReviews(limit = 12): PublicReviews | null {
   const [data, setData] = useState<PublicReviews | null>(null);
   useEffect(() => {

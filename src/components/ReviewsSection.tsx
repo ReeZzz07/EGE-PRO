@@ -1,5 +1,5 @@
 // Публичные отзывы — на лендинге и странице тарифов. Берём только опубликованные (прошедшие
-// модерацию), блок скрыт, пока их меньше MIN_PUBLIC_REVIEWS: два отзыва выглядят хуже, чем ни одного.
+// модерацию); блок скрыт, только если опубликованных 0 (MIN_PUBLIC_REVIEWS = 1).
 import { SUBJECTS, type Subject } from "../data/tasks";
 import { plural } from "../lib/utils";
 import { usePublicReviews, type PublicReview } from "../lib/reviews";
