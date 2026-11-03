@@ -62,13 +62,14 @@ test("renderBlogArticlePage: заголовок, текст, дата, canonical
   assert.match(html, /<a href="\/blog\/drugaya">Другая статья<\/a>/);
   assert.match(html, /<meta property="og:image" content="https:\/\/ege-tutor\.ru\/storage\/blog\/c\.jpg">/);
   const blocks = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
-  assert.equal(blocks.length, 2, "два блока JSON-LD разбираются как JSON");
+  assert.equal(blocks.length, 3, "Article + FAQPage + BreadcrumbList");
   const art = blocks.find((b) => b["@type"] === "Article");
   assert.equal(art.headline, 'Как готовиться </script><b>x');
   assert.equal(art.datePublished, "2026-09-27T09:00:00.000Z");
   assert.equal(art.dateModified, "2026-10-01T09:00:00.000Z");
   assert.equal(art.mainEntityOfPage["@id"], "https://ege-tutor.ru/blog/kak-gotovitsya");
   assert.equal(art.author.name, "ЕГЭ·ПРО");
+  assert.ok(blocks.find((b) => b["@type"] === "FAQPage"));
   const crumbs = blocks.find((b) => b["@type"] === "BreadcrumbList");
   assert.deepEqual(crumbs.itemListElement.map((i) => i.position), [1, 2, 3]);
   assert.equal(html.split("</script><b>").length, 1, "сырой </script> из заголовка нигде не попал в разметку");
@@ -87,9 +88,12 @@ test("renderBlogIndexPage: список статей ссылками с ано�
   assert.match(html, /<h1>База знаний<\/h1>/);
   assert.match(html, /<h2><a href="\/blog\/a">Первая<\/a><\/h2>/);
   assert.match(html, /<p>Анонс 1<\/p>/);
-  const ld = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/)[1]);
+  assert.match(html, /Что публикуется в базе знаний ЕГЭ·ПРО\?/);
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
+  const ld = blocks.find((b) => b["@type"] === "CollectionPage");
   assert.equal(ld.mainEntity.itemListElement.length, 2);
   assert.equal(ld.mainEntity.itemListElement[0].url, "https://ege-tutor.ru/blog/a");
+  assert.ok(blocks.find((b) => b["@type"] === "FAQPage"));
   assert.match(renderBlogIndexPage({ articles: [], siteUrl: "" }), /Статьи скоро появятся/);
 });
 

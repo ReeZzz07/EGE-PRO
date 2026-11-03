@@ -6,6 +6,7 @@ import * as blog from "../lib/blog";
 import * as api from "../lib/blogEngagement";
 
 vi.mock("../lib/useDocumentHead", () => ({ useDocumentHead: vi.fn() }));
+vi.mock("../lib/useJsonLd", () => ({ useJsonLd: vi.fn(), faqPageLd: vi.fn((items: unknown) => items) }));
 vi.mock("../lib/blog", async (orig) => ({ ...(await orig<typeof import("../lib/blog")>()), loadPublishedArticles: vi.fn() }));
 vi.mock("../lib/blogEngagement", async (orig) => ({ ...(await orig<typeof import("../lib/blogEngagement")>()), loadAllEngagement: vi.fn() }));
 
@@ -35,5 +36,7 @@ describe("BlogList: счётчики в карточках", () => {
     expect(await screen.findByRole("heading", { name: "Статья a" })).toBeInTheDocument();
     expect(screen.queryByTestId("counters-a")).not.toBeInTheDocument();
     expect(screen.getByTestId("blog-sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("blog-faq")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Что публикуется в базе знаний ЕГЭ·ПРО?" })).toBeInTheDocument();
   });
 });

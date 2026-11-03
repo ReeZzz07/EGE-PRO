@@ -1,14 +1,19 @@
 // Публичный список статей — /blog, доступен и гостям (SEO-трафик — весь смысл раздела). Текст
-// статьи (не этот список) редактирует админ в AdminBlog.tsx.
+// статьи (не этот список) редактирует админ в AdminBlog.tsx. Lead + FAQ = тот же blogIndex.json, что bot (AEO).
 import { useEffect, useMemo, useState } from "react";
 import { loadPublishedArticles, type BlogArticle } from "../lib/blog";
 import { blogCategoryLabel, isBlogCategoryId, type BlogCategoryId } from "../lib/blogCategories";
 import { loadAllEngagement, type EngagementStats } from "../lib/blogEngagement";
 import { PAGE_SHELL } from "../lib/layout";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
+import blogIndex from "../../docker/api/content/blogIndex.json";
 import { Icon, Reveal } from "./ui";
 import BlogSidebar from "./BlogSidebar";
+import FaqAccordion from "./FaqAccordion";
 import type { View } from "./Header";
+
+const BLOG_FAQ = Array.isArray(blogIndex.faq) ? blogIndex.faq : [];
 
 export default function BlogList({ onNav, category: categoryProp }: { onNav: (v: View) => void; category?: string }) {
   const [articles, setArticles] = useState<BlogArticle[] | null>(null);
@@ -31,10 +36,12 @@ export default function BlogList({ onNav, category: categoryProp }: { onNav: (v:
   }, []);
 
   useDocumentHead({
-    title: category ? `${blogCategoryLabel(category)} — База знаний — ЕГЭ·ПРО` : "База знаний — ЕГЭ·ПРО",
-    description: "Статьи и разборы для подготовки к ЕГЭ: сравнения, гайды, объяснения — как эффективно готовиться и пользоваться платформой.",
+    title: category ? `${blogCategoryLabel(category)} — База знаний — ЕГЭ·ПРО` : blogIndex.seo.title,
+    description: blogIndex.seo.description,
     path: category ? `/blog?cat=${category}` : "/blog",
   });
+  // Один FAQPage на страницу; текст = видимый FaqAccordion (тот же blogIndex.json, что bot HTML).
+  useJsonLd("blog-faq", faqPageLd(BLOG_FAQ));
 
   const setCategory = (id: BlogCategoryId | null) => {
     onNav(id ? { name: "blog", category: id } : { name: "blog" });
@@ -59,8 +66,9 @@ export default function BlogList({ onNav, category: categoryProp }: { onNav: (v:
       <div className="mt-8">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">база знаний</p>
         <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">
-          {category ? blogCategoryLabel(category) : "Статьи о подготовке к ЕГЭ"}
+          {category ? blogCategoryLabel(category) : blogIndex.h1}
         </h1>
+        {!category && <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-ink2">{blogIndex.intro}</p>}
         {category && (
           <button type="button" onClick={() => setCategory(null)} className="link-slide mt-2 text-[13px] font-bold text-ink2 hover:text-ink">
             ← все рубрики
@@ -118,6 +126,13 @@ export default function BlogList({ onNav, category: categoryProp }: { onNav: (v:
                 </Reveal>
               ))}
             </div>
+          )}
+
+          {!category && BLOG_FAQ.length > 0 && (
+            <section className="mt-12 max-w-3xl" data-testid="blog-faq">
+              <h2 className="font-display text-xl font-black">{blogIndex.faqTitle}</h2>
+              <FaqAccordion items={BLOG_FAQ} />
+            </section>
           )}
         </div>
 
