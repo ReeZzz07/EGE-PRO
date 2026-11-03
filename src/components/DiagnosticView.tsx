@@ -235,7 +235,7 @@ export default function DiagnosticView({
           {guest ? (
             <div className="mt-7 space-y-3">
               <div className="border-2 border-ink bg-hl px-4 py-3 text-[13px] leading-relaxed text-ink">
-                <strong>Сохрани результат.</strong> Регистрация → короткий онбординг → план и скидка на первую оплату (шаги welcome offer). Диагностика уже будет засчитана.
+                <strong>Сохрани результат.</strong> Регистрация → короткий онбординг → план и скидка на первую оплату. Диагностика уже будет засчитана.
               </div>
               <button
                 type="button"
