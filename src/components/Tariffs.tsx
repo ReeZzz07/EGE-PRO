@@ -13,9 +13,11 @@ import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } 
 import { createPayment } from "../lib/payments";
 import { reachGoal } from "../lib/metrika";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import { plural } from "../lib/utils";
 import { useWelcomeOffer } from "../lib/offers";
 import { Icon, useToast } from "./ui";
+import FaqAccordion from "./FaqAccordion";
 import ReviewsSection from "./ReviewsSection";
 import WelcomeOfferBanner, { pendingStepsText } from "./WelcomeOfferBanner";
 import ParentPayModal from "./ParentPayModal";
@@ -49,6 +51,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   }, []);
 
   useDocumentHead({ ...seo.pages.tariffs, path: "/tariffs", ogImage: seo.ogImage });
+  useJsonLd("tariffs-faq", faqPageLd(content.faq ?? []));
 
   const choose = async (t: Tariff, method?: "card" | "sbp") => {
     if (!profile) {
@@ -228,6 +231,13 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
       </div>
 
       <ReviewsSection limit={3} className="mx-auto mt-12 max-w-5xl" />
+
+      {content.faq && content.faq.length > 0 && (
+        <section className="mx-auto mt-12 max-w-3xl">
+          <h2 className="font-display text-xl font-black">Частые вопросы</h2>
+          <FaqAccordion items={content.faq} />
+        </section>
+      )}
 
       <p className="mt-8 text-center text-[12.5px] text-ink2">
         Вопрос по оплате или тарифу?{" "}

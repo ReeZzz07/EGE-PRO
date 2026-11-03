@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { emailProblem } from "../lib/validation";
 import { DEFAULT_LEGAL_ENTITY, loadLegalEntityInfo, type LegalEntityInfo } from "../lib/legalEntity";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import {
   FEEDBACK_TOPICS, MAX_MESSAGE, MIN_MESSAGE, STATUS_LABEL, TOPIC_LABEL,
   loadMyFeedback, sendFeedback, useContactInfo,
@@ -15,6 +16,11 @@ import {
 import { Icon } from "./ui";
 import type { View } from "./Header";
 import contactsContent from "../../docker/api/content/contacts.json";
+
+type ContactsFaq = { q: string; a: string };
+const contactsFaq: ContactsFaq[] = Array.isArray((contactsContent as { faq?: ContactsFaq[] }).faq)
+  ? (contactsContent as { faq: ContactsFaq[] }).faq
+  : [];
 
 const ID = "contacts-field";
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
@@ -73,6 +79,7 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
     path: "/contacts",
     ogImage: "",
   });
+  useJsonLd("contacts-faq", faqPageLd(contactsFaq));
 
   useEffect(() => {
     loadLegalEntityInfo().then(setLegal);
@@ -299,11 +306,11 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
         </aside>
       </div>
 
-      {Array.isArray((contactsContent as { faq?: { q: string; a: string }[] }).faq) && (contactsContent as { faq: { q: string; a: string }[] }).faq.length > 0 && (
+      {contactsFaq.length > 0 && (
         <section className="mt-10 max-w-3xl">
           <h2 className="font-display text-xl font-black">Частые вопросы</h2>
           <div className="mt-4 space-y-4">
-            {(contactsContent as { faq: { q: string; a: string }[] }).faq.map((f) => (
+            {contactsFaq.map((f) => (
               <div key={f.q}>
                 <h3 className="font-display text-[15px] font-bold">{f.q}</h3>
                 <p className="mt-1 text-[13.5px] leading-relaxed text-ink2">{f.a}</p>

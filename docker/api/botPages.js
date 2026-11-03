@@ -653,8 +653,9 @@ export function renderSubjectPage({ subject, content, tariffs, steps, paymentNot
   const n = content.total;
   const taskWord = `${n.toLocaleString("ru-RU")} ${plural(n, "задание", "задания", "заданий")}`;
   const title = `Подготовка к ЕГЭ по ${subject.dative} — ${siteName}`;
-  const lead = `${taskWord} из открытого банка ФИПИ по предмету «${subject.name}»: ${subject.desc.replace(/\.$/, "")}.`;
-  const description = trimText(`${lead} Диагностика, личный план и ИИ-репетитор, который объясняет, а не решает за тебя.`, 300);
+  const lead = `Подготовка к ЕГЭ по ${subject.dative} в ЕГЭ·ПРО: диагностика 7–10 минут, план по слабым темам, задания формата открытого банка ФИПИ и ИИ-репетитор без готового ответа.`;
+  const bankLine = `${taskWord} по предмету «${subject.name}»: ${subject.desc.replace(/\.$/, "")}.`;
+  const description = trimText(`${lead} ${bankLine}`, 300);
   const faq = SUBJECT_PAGES.faq.map((f) => ({ q: fill(f.q, { dative: subject.dative }), a: fill(f.a, { dative: subject.dative }) }));
   const list = (items) => items.map((x) => `<li>${esc(x.name)}: ${x.n.toLocaleString("ru-RU")} ${plural(x.n, "задание", "задания", "заданий")}</li>`).join("\n");
   const paid = tariffs.filter((t) => t.price > 0);
@@ -668,6 +669,7 @@ export function renderSubjectPage({ subject, content, tariffs, steps, paymentNot
     : "";
   const body = `<h1>Подготовка к ЕГЭ по ${esc(subject.dative)}</h1>
 <p>${esc(lead)}</p>
+<p>${esc(bankLine)}</p>
 <p><a href="/diagnostic">Пройти бесплатную диагностику по предмету</a>: 8–12 заданий за 7–10 минут, уровень, слабые темы и персональный план. · <a href="/tariffs">Тарифы</a> · <a href="/parents">Родителям</a></p>
 ${
   content.sections.length

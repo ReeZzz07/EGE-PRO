@@ -14,6 +14,7 @@ import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { loadTariffsContent } from "../lib/tariffsContent";
 import { plural } from "../lib/utils";
 import FaqAccordion from "./FaqAccordion";
+import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import type { View } from "./Header";
 
 /** Подставляет в текст из landingMore.json живые цифры банка: «{tasks}» → «51 391 задание», «{subjects}» → «11 предметам», «{essay}» → «7 232 задания».
@@ -88,6 +89,7 @@ export default function Landing({
   }, []);
 
   useDocumentHead({ ...seo.pages.home, path: "/", ogImage: seo.ogImage });
+  useJsonLd("home-faq", faqPageLd(content.faq ?? []));
 
   useEffect(() => {
     if (!scrollTo) return;
@@ -194,6 +196,24 @@ export default function Landing({
         </div>
       </section>
 
+      {/* ─── AEO: лид сразу под hero (до бегущей строки) ─── */}
+      <section id="about" className="mt-10 scroll-mt-20">
+        <Reveal className="pop">
+          <div className="relative overflow-hidden border-2 border-ink bg-blue px-6 py-9 text-white shadow-[6px_6px_0_0_#15172e] sm:px-10 sm:py-11">
+            <div className="gridpaper-dark pointer-events-none absolute inset-0 opacity-30" aria-hidden />
+            <div className="relative grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.6fr] lg:gap-14">
+              <div>
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">коротко</span>
+                <h2 className="font-display mt-2 text-3xl font-black leading-tight sm:text-4xl">
+                  Что такое <span className="text-hl">ЕГЭ·ПРО</span>
+                </h2>
+              </div>
+              <p className="text-[16px] leading-[1.75] text-white/95">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
       {/* ─── бегущая строка ─── */}
       {content.ticker.length > 0 && (
         <div className="mt-6 overflow-hidden border-y-2 border-ink bg-ink py-2" aria-hidden>
@@ -210,24 +230,6 @@ export default function Landing({
           </div>
         </div>
       )}
-
-      {/* ─── Короткий самостоятельный ответ «что это» ─── */}
-      <section id="about" className="mt-14 scroll-mt-20">
-        <Reveal className="pop">
-          <div className="relative overflow-hidden border-2 border-ink bg-blue px-6 py-9 text-white shadow-[6px_6px_0_0_#15172e] sm:px-10 sm:py-11">
-            <div className="gridpaper-dark pointer-events-none absolute inset-0 opacity-30" aria-hidden />
-            <div className="relative grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.6fr] lg:gap-14">
-              <div>
-                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-hl">коротко</span>
-                <h2 className="font-display mt-2 text-3xl font-black leading-tight sm:text-4xl">
-                  Что такое <span className="text-hl">ЕГЭ·ПРО</span>
-                </h2>
-              </div>
-              <p className="text-[16px] leading-[1.75] text-white/95">{fillBank(landingMore.shortAnswer.text, getGlobalTaskTotal(), availableSubjects.length, getEssayTaskTotal())}</p>
-            </div>
-          </div>
-        </Reveal>
-      </section>
 
       {/* ─── Блок 2: быстрый выбор предмета ─── */}
       <section id="subjects" className="mt-14 scroll-mt-20">

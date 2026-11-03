@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import { plural } from "../lib/utils";
 import { Icon } from "./ui";
 import FaqAccordion from "./FaqAccordion";
@@ -38,6 +39,7 @@ export default function ParentsView({ onNav }: { onNav: (v: View) => void }) {
     path: "/parents",
     ogImage: seo.ogImage,
   });
+  useJsonLd("parents-faq", faqPageLd(P.faq ?? []));
 
   const paid = tariffs.filter((t) => t.priceRub > 0);
   const minPrice = paid.length ? rubles(Math.min(...paid.map((t) => t.salePriceRub ?? t.priceRub))) : "";

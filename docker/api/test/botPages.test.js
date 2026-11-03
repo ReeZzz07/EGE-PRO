@@ -54,7 +54,7 @@ test("renderHomePage: заголовок и подзаголовок героя,
   assert.match(html, /<p>Диагностика, план и разборы\.<\/p>/);
   assert.match(html, /<li><a href="\/ege\/matematika-profil">Математика \(профиль\)<\/a>: 4\s774 задания — /);
   assert.match(html, /<li><a href="\/ege\/russkii-yazyk">Русский язык<\/a>: 7\s370 заданий — /);
-  assert.match(html, /В банке 12\s144 задания из открытого банка ФИПИ по 2 предметам\./);
+  assert.match(html, /банк 12\s144 задания в формате открытого банка ФИПИ по 2 предметам/);
   assert.match(html, new RegExp(LANDING_HEADINGS.subjects));
   assert.match(html, /<h3>Диагностика<\/h3><p>7–10 минут\.<\/p>/);
   assert.match(html, /<h3>Диагностика уровня<\/h3>/);
@@ -146,15 +146,17 @@ test("renderContactsPage: почта, срок ответа, каналы, ре�
     siteUrl: SITE,
   });
   assert.match(html, /<h1>Напиши нам<\/h1>/);
-  assert.match(html, /Ответим в течение одного дня\./);
+  assert.match(html, /обычно в течение одного дня/);
+  assert.match(html, /Старт подготовки — бесплатная диагностика на главной/);
   assert.match(html, /<a href="mailto:support@ege-tutor\.ru">support@ege-tutor\.ru<\/a>/);
   assert.match(html, /<a href="https:\/\/t\.me\/egepro" rel="noopener">Telegram<\/a>/);
   assert.match(html, /ИНН 070804531260<br>ОГРНИП 321072600021713/);
   const contact = ldBlocks(html).find((b) => b["@type"] === "ContactPage");
   assert.equal(contact.mainEntity.contactPoint.email, "support@ege-tutor.ru");
   const noLegal = renderContactsPage({ seo, info: { supportEmail: "s@e.ru", replyWithinHours: 48, channels: [] }, legal: null, siteUrl: SITE });
-  assert.match(noLegal, /Ответим в течение 48 часов\./);
-  assert.doesNotMatch(noLegal, /Реквизиты/);
+  assert.match(noLegal, /обычно в течение 48 часов/);
+  assert.doesNotMatch(noLegal, /ИНН|ОГРНИП/);
+  assert.match(noLegal, /Исполнитель указан в <a href="\/oferta">публичной оферте<\/a>/);
 });
 
 test("legalTextToHtml / renderLegalPage: абзацы и переносы как в SPA, HTML экранируется, страница с noindex", () => {
@@ -215,7 +217,8 @@ test("renderSubjectPage: h1 «по биологии», число заданий
   });
   assert.match(html, /<title>Подготовка к ЕГЭ по биологии — ЕГЭ·ПРО<\/title>/);
   assert.match(html, /<h1>Подготовка к ЕГЭ по биологии<\/h1>/);
-  assert.match(html, /11\s252 задания из открытого банка ФИПИ по предмету «Биология»/);
+  assert.match(html, /Подготовка к ЕГЭ по биологии в ЕГЭ·ПРО: диагностика 7–10 минут/);
+  assert.match(html, /11\s252 задания по предмету «Биология»/);
   assert.match(html, /<li>Анатомия и физиология: 2\s284 задания<\/li>/);
   assert.match(html, /<h3>Самые большие темы<\/h3>/);
   assert.match(html, /<h3>Диагностика<\/h3><p>7–10 минут\.<\/p>/);
@@ -339,7 +342,7 @@ test("renderHomePage: порядок блоков по ТЗ и все новые
 
 test("renderHomePage: короткий ответ с живыми цифрами, три уровня подсказок, пять отличий, проверка сочинений с числом заданий", () => {
   const html = renderHomePage(homeArgs());
-  assert.match(html, /В банке 7\s457 заданий в формате Открытого банка заданий ФИПИ по 2 предметам\./);
+  assert.match(html, /банк 7\s457 заданий в формате открытого банка ФИПИ по 2 предметам/);
   assert.match(html, /<li><strong>Уровень 1: намёк на тему<\/strong>/);
   assert.match(html, /<li><strong>Уровень 3: почти полный разбор<\/strong>/);
   assert.equal((html.match(/<h2>Чем ИИ-репетитор[\s\S]*?<\/ul>/)[0].match(/<li>/g) ?? []).length, 5);

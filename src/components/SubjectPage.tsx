@@ -6,6 +6,7 @@ import type { Subject } from "../data/tasks";
 import { DEFAULT_CONTENT, loadLandingContent, type ProcessItem } from "../lib/content";
 import { loadSubjectContent, subjectPagePath, SUBJECT_PAGES, type SubjectContent } from "../lib/subjectPage";
 import { useDocumentHead } from "../lib/useDocumentHead";
+import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import { plural } from "../lib/utils";
 import { Icon } from "./ui";
 import FaqAccordion from "./FaqAccordion";
@@ -29,12 +30,18 @@ export default function SubjectPage({ subject, onStart, onNav }: { subject: Subj
     };
   }, [subject]);
 
-  const lead = `${content ? `${tasks(content.total)} из открытого банка ФИПИ по предмету` : "Задания из открытого банка ФИПИ по предмету"} «${meta.name}»: ${meta.desc.replace(/\.$/, "")}.`;
+  // AEO: абзац-ответ сразу под H1; банк ФИПИ — уточнение во второй строке, когда посчитался total
+  const lead = `Подготовка к ЕГЭ по ${meta.dative} в ЕГЭ·ПРО: диагностика 7–10 минут, план по слабым темам, задания формата открытого банка ФИПИ и ИИ-репетитор без готового ответа.`;
+  const bankLine = content
+    ? `${tasks(content.total)} по предмету «${meta.name}»: ${meta.desc.replace(/\.$/, "")}.`
+    : null;
+  const faqItems = SUBJECT_PAGES.faq.map((f) => ({ q: fill(f.q, meta.dative), a: fill(f.a, meta.dative) }));
   useDocumentHead({
     title: `Подготовка к ЕГЭ по ${meta.dative} — ЕГЭ·ПРО`,
-    description: `${lead} Диагностика, личный план и ИИ-репетитор, который объясняет, а не решает за тебя.`,
+    description: `${lead} ${bankLine ?? meta.desc}`,
     path: subjectPagePath(subject),
   });
+  useJsonLd(`subject-faq-${subject}`, faqPageLd(faqItems));
 
   const others = SUBJECT_PAGES.landingSubjects.filter((s) => s !== subject);
   const list = (items: { name: string; n: number }[]) => (
@@ -54,6 +61,7 @@ export default function SubjectPage({ subject, onStart, onNav }: { subject: Subj
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">подготовка к егэ</p>
         <h1 className="font-display mt-2 text-2xl font-black leading-tight sm:text-4xl">Подготовка к ЕГЭ по {meta.dative}</h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink2">{lead}</p>
+        {bankLine && <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-ink2">{bankLine}</p>}
         <div className="mt-5 flex flex-wrap gap-3">
           <button onClick={() => onStart(subject)} className="btn btn-blue px-5 py-2.5 text-[13.5px]">
             Пройти бесплатную диагностику <Icon name="arrowR" size={15} />
@@ -98,7 +106,7 @@ export default function SubjectPage({ subject, onStart, onNav }: { subject: Subj
 
       <section className="mt-12">
         <h2 className="font-display text-xl font-black">{SUBJECT_PAGES.faqTitle}</h2>
-        <FaqAccordion items={SUBJECT_PAGES.faq.map((f) => ({ q: fill(f.q, meta.dative), a: fill(f.a, meta.dative) }))} />
+        <FaqAccordion items={faqItems} />
       </section>
 
       <section className="mt-12">

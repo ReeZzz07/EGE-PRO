@@ -28,4 +28,11 @@ describe("loadTariffsContent", () => {
     expect(res.title).toBe("Новый заголовок");
     expect(res.paymentNote).toBe(DEFAULT_TARIFFS_CONTENT.paymentNote);
   });
+
+  it("пустой faq в БД не затирает дефолтный AEO FAQ", async () => {
+    vi.mocked(supabase!.from).mockReturnValue(mockResult({ data: { data: { title: "X", faq: [] } }, error: null }) as never);
+    const res = await loadTariffsContent();
+    expect(res.faq).toEqual(DEFAULT_TARIFFS_CONTENT.faq);
+    expect(res.faq!.length).toBeGreaterThan(0);
+  });
 });

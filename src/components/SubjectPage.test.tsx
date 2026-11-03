@@ -17,7 +17,8 @@ describe("SubjectPage", () => {
     render(<SubjectPage subject="bio" onStart={vi.fn()} onNav={vi.fn()} />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Подготовка к ЕГЭ по биологии");
     expect(await screen.findByText("Зоология")).toBeInTheDocument();
-    expect(screen.getByText(/11\s252 задания из открытого банка ФИПИ по предмету «Биология»/)).toBeInTheDocument();
+    expect(screen.getByText(/Подготовка к ЕГЭ по биологии в ЕГЭ·ПРО: диагностика 7–10 минут/)).toBeInTheDocument();
+    expect(await screen.findByText(/11\s252 задания по предмету «Биология»/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "С чего начать подготовку к ЕГЭ по биологии?" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Русский язык" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Физика" })).not.toBeInTheDocument();

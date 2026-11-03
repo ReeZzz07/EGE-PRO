@@ -87,7 +87,7 @@ describe("Landing", () => {
     render(<Landing onStart={vi.fn()} onLogin={vi.fn()} onNav={vi.fn()} />);
     await screen.findByText("АТТЕСТАТ");
     expect(screen.getByRole("heading", { name: "Что такое ЕГЭ·ПРО" })).toBeInTheDocument();
-    expect(screen.getByText(/В банке 51\s391 задание в формате Открытого банка заданий ФИПИ по 3 предметам\./)).toBeInTheDocument();
+    expect(screen.getByText(/банк 51\s391 задание в формате открытого банка ФИПИ по 3 предметам/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Три уровня подсказок" })).toBeInTheDocument();
     expect(screen.getByText("Уровень 3: почти полный разбор")).toBeInTheDocument();
     const diff = screen.getByRole("heading", { name: "Чем ИИ-репетитор ЕГЭ·ПРО отличается от обычной нейросети" }).closest("section")!;
