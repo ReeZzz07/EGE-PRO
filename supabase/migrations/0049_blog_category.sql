@@ -13,18 +13,10 @@ create index if not exists blog_articles_category_idx
   on public.blog_articles (category)
   where is_published = true;
 
--- Разовая раскладка уже опубликованных статей по эвристике заголовка/slug.
-update public.blog_articles set category = case
-  when title ~* 'родител' or slug ~* 'roditel' then 'parents'
-  when title ~* 'стресс|мотивац|тревог' or slug ~* 'stress|motivac' then 'wellbeing'
-  when title ~* 'изменен|КИМ|демоверс' or slug ~* 'izmenen|kim|aktual' then 'changes'
-  when title ~* 'знакомств|платформ|как устроен|диагност' or slug ~* 'znakomst|platform|diagnostik|ege-pro' then 'platform'
-  when title ~* 'литератур|истори|хими|англи|биолог|матем|физик|общество|информат|геогр|русск'
-    or slug ~* 'literat|istor|him|angl|biolog|matem|fizik|obschest|informat|geograf|russk'
-    then 'subjects'
-  when title ~* 'как |совет|план|подготов|метод|разбор|критери'
-    or slug ~* 'kak-|sovet|podgotov|metod'
-    then 'method'
-  else category
-end
-where category = 'other';
+-- Разовая раскладка по slug (ASCII) — без кириллицы в regex (ломается при пайпе Windows→psql).
+update public.blog_articles set category = 'parents' where category = 'other' and slug ~* 'roditel';
+update public.blog_articles set category = 'wellbeing' where category = 'other' and slug ~* 'stress|motivac';
+update public.blog_articles set category = 'changes' where category = 'other' and slug ~* 'izmenen|aktual|kim';
+update public.blog_articles set category = 'platform' where category = 'other' and slug ~* 'znakomst|platform|diagnostik|ege-pro|egepro';
+update public.blog_articles set category = 'subjects' where category = 'other' and slug ~* 'literat|istor|him|angl|biolog|matem|fizik|obschest|informat|geograf|russk';
+update public.blog_articles set category = 'method' where category = 'other' and slug ~* 'sovet|podgotov|metod|kak-|podskaz|repetitor|plan';
