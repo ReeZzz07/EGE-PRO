@@ -124,7 +124,7 @@ test("parentsUsText: {price} → «От X за 30 дней, » или «Фикс
 
 test("renderParentsPage: таблица «репетитор и ЕГЭ·ПРО» с минимальной ценой, шаги, тарифы, оплата за ребёнка, вопросы и FAQPage", () => {
   const html = renderParentsPage({ seo, tariffs, siteUrl: SITE });
-  assert.match(html, /<h1>Подготовка к ЕГЭ, которую можно позволить себе каждый месяц<\/h1>/);
+  assert.match(html, /<h1>Подготовка к ЕГЭ с понятной оплатой на 30 дней<\/h1>/);
   assert.match(html, /<th scope="row">Стоимость<\/th><td>[^<]*<\/td><td>От 1\s990 ₽ за 30 дней, занимайтесь сколько нужно/);
   assert.equal([...html.matchAll(/<tr><th scope="row">/g)].length, 7, "все семь строк таблицы");
   assert.match(html, /<h2>Как оплатить за ребёнка<\/h2>/);

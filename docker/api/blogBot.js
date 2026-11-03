@@ -172,7 +172,7 @@ export function renderBlogIndexPage({ articles, siteUrl = "", verificationMetaTa
     head({ title, description, canonicalUrl, verificationMetaTags, extra: `${ld ? `${jsonLd(ld)}\n` : ""}${jsonLd(ldFaq)}` }) +
     `${NAV}
 <main>
-<h1>База знаний</h1>
+<h1>${escapeHtml(BLOG_INDEX.h1)}</h1>
 <p>${escapeHtml(BLOG_INDEX.intro)}</p>
 <section>
 <h2>${escapeHtml(BLOG_INDEX.factsTitle)}</h2>

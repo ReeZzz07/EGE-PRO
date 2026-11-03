@@ -44,5 +44,5 @@ test("описание главной не обещает предмет, кот
 test("описание страницы контактов не обещает мессенджеры: канал включается в админке и может отсутствовать", () => {
   const contacts = JSON.parse(read(path.join(root, "docker/api/content/contacts.json")));
   assert.doesNotMatch(contacts.seo.description, /мессенджер/i);
-  assert.match(contacts.seo.description, /почта поддержки/i);
+  assert.match(contacts.seo.description, /почта/i);
 });

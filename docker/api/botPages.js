@@ -30,8 +30,9 @@ export const DEFAULT_PAGE_SEO = {
       "ЕГЭ·ПРО — онлайн-тренажёр ЕГЭ с ИИ-репетитором: 51 391 задание из банка ФИПИ по 11 предметам, диагностика, план и проверка сочинений. Начни бесплатно.",
   },
   tariffs: {
-    title: "Тарифы — ЕГЭ·ПРО",
-    description: "Бесплатный и платные тарифы подготовки к ЕГЭ с ИИ-репетитором: банк заданий ФИПИ, персональный план, проверка сочинений по критериям.",
+    title: "Тарифы ЕГЭ·ПРО: от 1990 ₽ на 30 дней, без автопродления",
+    description:
+      "Бесплатный тариф и пакеты Аттестат/ВУЗ/ВУЗ+: диагностика, план, банк ФИПИ и ИИ без готового ответа. Оплата разово на 30 дней через ЮKassa.",
   },
 };
 
@@ -656,7 +657,8 @@ export function renderSubjectPage({ subject, content, tariffs, steps, paymentNot
   const title = `Подготовка к ЕГЭ по ${subject.dative} — ${siteName}`;
   const lead = `Подготовка к ЕГЭ по ${subject.dative} в ЕГЭ·ПРО: диагностика 7–10 минут, план по слабым темам, задания формата открытого банка ФИПИ и ИИ-репетитор без готового ответа.`;
   const bankLine = `${taskWord} по предмету «${subject.name}»: ${subject.desc.replace(/\.$/, "")}.`;
-  const description = trimText(`${lead} ${bankLine}`, 300);
+  // Meta description ≈ сниппет: lead без второй строки банка (цифры остаются в видимом HTML).
+  const description = trimText(lead, 160);
   const faq = SUBJECT_PAGES.faq.map((f) => ({ q: fill(f.q, { dative: subject.dative }), a: fill(f.a, { dative: subject.dative }) }));
   const list = (items) => items.map((x) => `<li>${esc(x.name)}: ${x.n.toLocaleString("ru-RU")} ${plural(x.n, "задание", "задания", "заданий")}</li>`).join("\n");
   const paid = tariffs.filter((t) => t.price > 0);

@@ -85,7 +85,7 @@ test("renderBlogArticlePage: без домена нет canonical, JSON-LD ст�
 
 test("renderBlogIndexPage: список статей ссылками с анонсами, JSON-LD ItemList; пустой список — не пустая страница", () => {
   const html = renderBlogIndexPage({ articles: [{ slug: "a", title: "Первая", excerpt: "Анонс 1", published_at: "2026-09-27T09:00:00Z" }, { slug: "b", title: "Вторая", excerpt: "", published_at: null }], siteUrl: "https://ege-tutor.ru" });
-  assert.match(html, /<h1>База знаний<\/h1>/);
+  assert.match(html, /<h1>Статьи о подготовке к ЕГЭ<\/h1>/);
   assert.match(html, /<h2><a href="\/blog\/a">Первая<\/a><\/h2>/);
   assert.match(html, /<p>Анонс 1<\/p>/);
   assert.match(html, /Что публикуется в базе знаний ЕГЭ·ПРО\?/);
