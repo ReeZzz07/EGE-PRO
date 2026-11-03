@@ -68,6 +68,31 @@ describe("parseStatementBlocks", () => {
     expect(b[0].right.items[0]).toBe("1) +7 → -1");
   });
 
+  it("маркеры вплотную к тексту/числам (как в банке химии) — всё равно колонки", () => {
+    const line =
+      "СХЕМА РЕАКЦИИ А) KClO4 → KCl + O2Б) KClO3 → KCl + KClO4В) KClO3 → KCl + O2 | ИЗМЕНЕНИЕ СТЕПЕНИ ОКИСЛЕНИЯ ОКИСЛИТЕЛЯ1) +7 → -12) -2 → 03) +5 → -14) +1 → -1";
+    const b = expandInlineListLine(line);
+    expect(b[0].kind).toBe("match");
+    if (b[0].kind !== "match") throw new Error("expected match");
+    expect(b[0].left.items).toEqual([
+      "А) KClO4 → KCl + O2",
+      "Б) KClO3 → KCl + KClO4",
+      "В) KClO3 → KCl + O2",
+    ]);
+    expect(b[0].right.items).toEqual(["1) +7 → -1", "2) -2 → 0", "3) +5 → -1", "4) +1 → -1"]);
+  });
+
+  it("заголовок вплотную к А) и пункты без пробелов перед буквой", () => {
+    const line =
+      "СПОСОБ ВОЗДЕЙСТВИЯ НА СИСТЕМУА) увеличение объема реактораБ) добавление йодоводородной кислотыВ) уменьшение температурыГ) добавление катализатора | НАПРАВЛЕНИЕ СМЕЩЕНИЯ ХИМИЧЕСКОГО РАВНОВЕСИЯ1) смещается в сторону реагентов 2) практически не смещается3) смещается в сторону продуктов";
+    const b = expandInlineListLine(line);
+    expect(b[0].kind).toBe("match");
+    if (b[0].kind !== "match") throw new Error("expected match");
+    expect(b[0].left.title).toBe("СПОСОБ ВОЗДЕЙСТВИЯ НА СИСТЕМУ");
+    expect(b[0].left.items).toHaveLength(4);
+    expect(b[0].right.items).toHaveLength(3);
+  });
+
   it("одиночный схлопнутый список 1) 2) 3) без колонок", () => {
     const b = expandInlineListLine("Выберите верные: 1) первое 2) второе 3) третье");
     expect(b[0]).toMatchObject({
@@ -77,7 +102,7 @@ describe("parseStatementBlocks", () => {
     });
   });
 
-  it("parseListColumn не режет «+1 →» внутри пункта", () => {
-    expect(parseListColumn("1) +7 → -1 2) -2 → 0").items).toEqual(["1) +7 → -1", "2) -2 → 0"]);
+  it("parseListColumn не режет «+1 →» внутри пункта и склеивает «-12)» → «-1» + «2)»", () => {
+    expect(parseListColumn("1) +7 → -12) -2 → 0").items).toEqual(["1) +7 → -1", "2) -2 → 0"]);
   });
 });
