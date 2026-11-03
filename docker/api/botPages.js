@@ -439,9 +439,10 @@ export function renderContactsPage({ seo, info, legal, siteUrl = "", verificatio
         { q: "Где начать подготовку?", a: "На главной нажмите «Определить свой уровень» или откройте бесплатную диагностику — это основной способ заявки в продукт." },
         { q: "Может ли оплатить родитель?", a: "Да, через ссылку из кабинета ученика. Подробности — на странице «Родителям»." },
       ];
+  const product = CONTACTS.product ? `<p>${esc(CONTACTS.product)}</p>\n` : "";
   const body = `<h1>${esc(CONTACTS.h1)}</h1>
 <p>${esc(CONTACTS.intro.replace("{reply}", reply))}</p>
-<section>
+${product}<section>
 <h2>Как оставить заявку</h2>
 <p>Напишите на почту или заполните форму обратной связи ниже на сайте (после загрузки страницы). Это и есть канал заявки: вопрос по оплате, ошибка в задании, идея.</p>
 <p><a href="mailto:${esc(info.supportEmail)}">${esc(info.supportEmail)}</a> — отвечаем ${esc(reply)}.</p>

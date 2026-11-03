@@ -47,7 +47,7 @@ export default function AdminSubjectAddon() {
           Включена
         </label>
         <label className="block">
-          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Цена за предмет, ₽/мес</span>
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Цена за предмет, ₽ / 30 дн</span>
           <input value={priceStr} onChange={(e) => setPriceStr(e.target.value)} inputMode="numeric" className="input-blank mt-1.5 block w-32 rounded-sm px-3 py-2 text-[13px]" />
         </label>
         <button onClick={save} disabled={saving} className="btn btn-blue px-5 py-2.5 text-[13px]">

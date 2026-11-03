@@ -137,7 +137,7 @@ function TariffForm({ initial, isNew, onCancel, onSave, saving }: { initial: Tar
           />
         </label>
         <label className="block">
-          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Цена, ₽/мес (0 — бесплатно)</span>
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Цена, ₽ / 30 дн (0 — бесплатно)</span>
           <input
             type="number"
             min={0}
@@ -147,7 +147,7 @@ function TariffForm({ initial, isNew, onCancel, onSave, saving }: { initial: Tar
           />
         </label>
         <label className="block">
-          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Цена со скидкой, ₽/мес (пусто — без скидки)</span>
+          <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink2">Цена со скидкой, ₽ / 30 дн (пусто — без скидки)</span>
           <input
             type="number"
             min={0}
@@ -323,10 +323,10 @@ export default function AdminTariffs() {
                     "бесплатно"
                   ) : t.salePriceRub != null ? (
                     <>
-                      <s>{t.priceRub.toLocaleString("ru-RU")} ₽</s> → <span className="font-bold text-ink">{t.salePriceRub.toLocaleString("ru-RU")} ₽/мес</span> (−{Math.round((1 - t.salePriceRub / t.priceRub) * 100)}%)
+                      <s>{t.priceRub.toLocaleString("ru-RU")} ₽</s> → <span className="font-bold text-ink">{t.salePriceRub.toLocaleString("ru-RU")} ₽ / 30 дн</span> (−{Math.round((1 - t.salePriceRub / t.priceRub) * 100)}%)
                     </>
                   ) : (
-                    `${t.priceRub.toLocaleString("ru-RU")} ₽/мес`
+                    `${t.priceRub.toLocaleString("ru-RU")} ₽ / 30 дн`
                   )}{" "}
                   · {t.subjectsCount} предм. · {t.dailyAiLimit != null ? `${t.dailyAiLimit} ИИ-запросов/день` : "безлимит ИИ"} · код: {t.id}
                 </p>

@@ -28,7 +28,8 @@ import type { View } from "./Header";
 
 export function money(rub: number): string {
   if (rub === 0) return "Бесплатно";
-  return `${rub.toLocaleString("ru-RU")} ₽/мес`;
+  // Канон биллинга — разовая оплата на 30 дней (не подписка «/мес»).
+  return `${rub.toLocaleString("ru-RU")} ₽ / 30 дн`;
 }
 
 export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {

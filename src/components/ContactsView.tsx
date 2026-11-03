@@ -19,9 +19,16 @@ import type { View } from "./Header";
 import contactsContent from "../../docker/api/content/contacts.json";
 
 type ContactsFaq = { q: string; a: string };
-const contactsFaq: ContactsFaq[] = Array.isArray((contactsContent as { faq?: ContactsFaq[] }).faq)
-  ? (contactsContent as { faq: ContactsFaq[] }).faq
-  : [];
+type ContactsPack = {
+  seo: { title: string; description: string };
+  eyebrow: string;
+  h1: string;
+  intro: string;
+  product?: string;
+  faq?: ContactsFaq[];
+};
+const contacts = contactsContent as ContactsPack;
+const contactsFaq: ContactsFaq[] = Array.isArray(contacts.faq) ? contacts.faq : [];
 
 const ID = "contacts-field";
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
@@ -75,8 +82,8 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
   const [mine, setMine] = useState<MyFeedback[]>([]);
 
   useDocumentHead({
-    title: contactsContent.seo.title,
-    description: contactsContent.seo.description,
+    title: contacts.seo.title,
+    description: contacts.seo.description,
     path: "/contacts",
     ogImage: "",
   });
@@ -126,17 +133,20 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
   return (
     <div className={`${PAGE_SHELL} pb-20`}>
       <div className="mt-8 sm:mt-12">
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{contactsContent.eyebrow}</p>
-        <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">{contactsContent.h1}</h1>
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{contacts.eyebrow}</p>
+        <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">{contacts.h1}</h1>
         <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-ink2">
-          {contactsContent.intro.replace("{reply}", reply)}
+          {contacts.intro.replace("{reply}", reply)}
         </p>
+        {contacts.product && (
+          <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed text-ink2">{contacts.product}</p>
+        )}
         <p className="mt-3 max-w-xl text-[13.5px] leading-relaxed text-ink2">
           Канал заявки: форма ниже или{" "}
           <a href={`mailto:${info.supportEmail}`} className="link-slide font-bold text-blue hover:text-ink">
             {info.supportEmail}
           </a>
-          . Онлайн-сервис для учеников по всей России.
+          .
         </p>
       </div>
 

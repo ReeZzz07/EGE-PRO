@@ -46,7 +46,7 @@ describe("ParentsView", () => {
     const text = norm(table.textContent);
     expect(text).not.toMatch(/гарант/i);
     expect(text).not.toMatch(/лучше репетитора|заменит репетитора/i);
-    expect(text).toMatch(/Более 50 тысяч заданий/);
+    expect(text).toMatch(/51 391 задание из открытого банка ФИПИ/);
     expect(text).toMatch(/три уровня подсказок/);
   });
 

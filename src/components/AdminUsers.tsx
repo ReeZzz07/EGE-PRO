@@ -240,7 +240,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
             <select value={tariffId} onChange={(e) => setTariffId(e.target.value)} className="input-blank mt-1 w-full rounded-sm px-3 py-2 text-[13px]">
               {tariffs.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} {t.priceRub > 0 ? `— ${t.priceRub.toLocaleString("ru-RU")} ₽/мес` : "— бесплатно"}
+                  {t.name} {t.priceRub > 0 ? `— ${t.priceRub.toLocaleString("ru-RU")} ₽ / 30 дн` : "— бесплатно"}
                 </option>
               ))}
             </select>
@@ -277,7 +277,7 @@ export function UserDetailPanel({ id, ownId, onChanged, onClose }: { id: string;
             />
             {selectedTariff && selectedTariff.priceRub > 0 && discountPercent !== "" && (
               <p className="mt-1 text-[11.5px] text-ink2">
-                Со скидкой: {Math.round(selectedTariff.priceRub * (1 - Math.max(0, Math.min(100, Number(discountPercent) || 0)) / 100)).toLocaleString("ru-RU")} ₽/мес
+                Со скидкой: {Math.round(selectedTariff.priceRub * (1 - Math.max(0, Math.min(100, Number(discountPercent) || 0)) / 100)).toLocaleString("ru-RU")} ₽ / 30 дн
               </p>
             )}
           </label>

@@ -93,14 +93,14 @@ test("renderHomePage: пустые секции не рисуются, отзы�
 test("renderTariffsPage: заголовок и тексты из админки, карточки тарифов с ценой и лимитом, Service+Offer с ценой со скидкой", () => {
   const html = renderTariffsPage({
     seo,
-    content: { eyebrow: "тарифы", title: "Выбери, сколько предметов готовить", subtitle: "Диагностика, план и ИИ-репетитор.", perSubjectNote: "при поштучной покупке — от 1290 ₽/мес за предмет", paymentNote: "Разовая оплата на 30 дней, без автосписаний." },
+    content: { eyebrow: "тарифы", title: "Выбери, сколько предметов готовить", subtitle: "Диагностика, план и ИИ-репетитор.", perSubjectNote: "поштучно — от 1290 ₽ за предмет на 30 дней", paymentNote: "Разовая оплата на 30 дней, без автосписаний." },
     tariffs,
     siteUrl: SITE,
   });
   assert.match(html, /<h1>Выбери, сколько предметов готовить<\/h1>/);
   assert.match(html, /<h2>ВУЗ<\/h2>\s*<p><strong>2\s793 ₽<\/strong> за 30 дней \(вместо 3\s990 ₽\)<\/p>/);
   assert.match(html, /<li>до 3 обращений к ИИ-репетитору в день<\/li>/);
-  assert.match(html, /при поштучной покупке/);
+  assert.match(html, /поштучно — от 1290 ₽ за предмет на 30 дней/);
   assert.match(html, /Разовая оплата на 30 дней, без автосписаний\./);
   const list = ldBlocks(html).find((b) => b["@type"] === "ItemList");
   assert.equal(list.itemListElement.length, 3);
@@ -148,6 +148,8 @@ test("renderContactsPage: почта, срок ответа, каналы, ре�
   assert.match(html, /<h1>Напиши нам<\/h1>/);
   assert.match(html, /обычно в течение одного дня/);
   assert.match(html, /Старт подготовки — бесплатная диагностика на главной/);
+  assert.match(html, /ИИ-репетитор без готового ответа/);
+  assert.match(html, /от 1990 ₽ разово на 30 дней/);
   assert.match(html, /<a href="mailto:support@ege-tutor\.ru">support@ege-tutor\.ru<\/a>/);
   assert.match(html, /<a href="https:\/\/t\.me\/egepro" rel="noopener">Telegram<\/a>/);
   assert.match(html, /ИНН 070804531260<br>ОГРНИП 321072600021713/);
@@ -325,7 +327,7 @@ const homeArgs = () => ({
   tariffs,
   reviews: [],
   articles: [{ slug: "znakomstvo-s-ege-pro", title: "Знакомство с ЕГЭ·ПРО", excerpt: "Как устроена платформа" }],
-  perSubjectNote: "при поштучной покупке — от 1290 ₽/мес за предмет",
+  perSubjectNote: "поштучно — от 1290 ₽ за предмет на 30 дней",
   siteUrl: SITE,
 });
 
@@ -353,7 +355,7 @@ test("renderHomePage: короткий ответ с живыми цифрами
 test("renderHomePage: тарифы — HTML-таблица, условия оплаты, поштучная цена из настроек, три кнопки диагностики, внутренние ссылки из ТЗ", () => {
   const html = renderHomePage(homeArgs());
   assert.match(html, /<table>[\s\S]*<\/table>/);
-  assert.match(html, /На всех тарифах есть диагностика, персональный план и пробные варианты\. При поштучной покупке — от 1290 ₽\/мес за предмет\./);
+  assert.match(html, /На всех тарифах есть диагностика, персональный план и пробные варианты\. Поштучно — от 1290 ₽ за предмет на 30 дней\./);
   assert.match(html, /картой или через СБП, через ЮKassa, без сохранения карты и без автопродления\. Тариф включается сразу после оплаты, чек приходит на почту\. Оплатить может родитель/);
   assert.ok((html.match(/<a href="\/diagnostic">/g) ?? []).length >= 3, "кнопок диагностики не меньше трёх");
   for (const href of ["/tariffs", "/parents", "/blog/ii-repetitor-protiv-zhivogo-repetitora", "/blog/kak-rabotaet-diagnostika-i-plan", "/blog/znakomstvo-s-ege-pro"]) assert.ok(html.includes('href="' + href + '"'), href);

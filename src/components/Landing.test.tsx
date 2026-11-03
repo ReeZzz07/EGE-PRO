@@ -30,7 +30,7 @@ const tariffs = [
 
 beforeEach(() => {
   vi.mocked(tariffsLib.loadActiveTariffs).mockResolvedValue(tariffs as never);
-  vi.mocked(tariffsContent.loadTariffsContent).mockResolvedValue({ eyebrow: "", title: "", subtitle: "", perSubjectNote: "при поштучной покупке — от 1290 ₽/мес за предмет", paymentNote: "Разовая оплата на 30 дней, без автосписаний." });
+  vi.mocked(tariffsContent.loadTariffsContent).mockResolvedValue({ eyebrow: "", title: "", subtitle: "", perSubjectNote: "поштучно — от 1290 ₽ за предмет на 30 дней", paymentNote: "Разовая оплата на 30 дней, без автосписаний." });
 });
 
 describe("Landing", () => {
@@ -44,7 +44,7 @@ describe("Landing", () => {
     expect(rows).toHaveLength(3);
     expect(rows[1]).toHaveTextContent(/Попробовать\s*0 ₽\s*2 на выбор\s*до 3 обращений в день/);
     expect(rows[2]).toHaveTextContent(/АТТЕСТАТ\s*1\s990 ₽ за 30 дней\s*2 на выбор\s*без лимита/);
-    expect(screen.getByText(/На всех тарифах есть диагностика, персональный план и пробные варианты\. При поштучной покупке — от 1290 ₽\/мес за предмет\./)).toBeInTheDocument();
+    expect(screen.getByText(/На всех тарифах есть диагностика, персональный план и пробные варианты\. Поштучно — от 1290 ₽ за предмет на 30 дней\./)).toBeInTheDocument();
     expect(screen.getByText(/без автопродления\. Тариф включается сразу после оплаты, чек приходит на почту\./)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Все тарифы и условия оплаты" }));
     expect(onNav).toHaveBeenCalledWith({ name: "tariffs" });
