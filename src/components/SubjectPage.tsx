@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Subject } from "../data/tasks";
 import { DEFAULT_CONTENT, loadLandingContent, type ProcessItem } from "../lib/content";
 import { loadSubjectContent, subjectPagePath, SUBJECT_PAGES, type SubjectContent } from "../lib/subjectPage";
+import { PAGE_SHELL } from "../lib/layout";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import { plural } from "../lib/utils";
@@ -56,7 +57,7 @@ export default function SubjectPage({ subject, onStart, onNav }: { subject: Subj
   );
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-20">
+    <div className={`${PAGE_SHELL} pb-20`}>
       <div className="mt-8 sm:mt-12">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">подготовка к егэ</p>
         <h1 className="font-display mt-2 text-2xl font-black leading-tight sm:text-4xl">Подготовка к ЕГЭ по {meta.dative}</h1>

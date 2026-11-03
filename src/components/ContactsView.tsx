@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { emailProblem } from "../lib/validation";
 import { DEFAULT_LEGAL_ENTITY, loadLegalEntityInfo, type LegalEntityInfo } from "../lib/legalEntity";
+import { PAGE_SHELL } from "../lib/layout";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import {
@@ -123,7 +124,7 @@ export default function ContactsView({ onNav, topic: initialTopic, taskId }: { o
   const reply = info.replyWithinHours === 24 ? "в течение одного дня" : `в течение ${info.replyWithinHours} часов`;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-20">
+    <div className={`${PAGE_SHELL} pb-20`}>
       <div className="mt-8 sm:mt-12">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{contactsContent.eyebrow}</p>
         <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">{contactsContent.h1}</h1>

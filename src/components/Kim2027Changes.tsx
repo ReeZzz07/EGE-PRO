@@ -66,17 +66,17 @@ function SubjectCard({ subject }: { subject: Subject }) {
 
 export default function Kim2027Changes() {
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-10">
-      <div className="max-w-3xl">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-10">
+      <div>
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-amber">проект фипи · на 2027 год</p>
         <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">Что меняется в ЕГЭ 2027</h1>
 
-        <p className="mt-4 flex gap-2.5 border-l-4 border-amber bg-amber/10 px-4 py-3 text-[13px] leading-relaxed text-ink2">
+        <p className="mt-4 flex max-w-3xl gap-2.5 border-l-4 border-amber bg-amber/10 px-4 py-3 text-[13px] leading-relaxed text-ink2">
           <Icon name="alert" size={16} className="mt-0.5 shrink-0 text-amber" />
           <span>{KIM_2027_STATUS_NOTE}</span>
         </p>
 
-        <p className="mt-5 text-[13px] leading-relaxed text-ink2">
+        <p className="mt-5 max-w-3xl text-[13px] leading-relaxed text-ink2">
           Реальные структурные изменения затронули только 3 предмета из 12 — математику (профиль), историю и информатику.
           У остальных предметов структура заданий не меняется.
         </p>

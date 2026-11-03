@@ -42,7 +42,7 @@ export default function LegalDoc({ doc, onNav }: { doc: LegalDocKey; onNav: (v: 
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="no-print mt-8 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {(Object.keys(LEGAL_DOC_LABELS) as LegalDocKey[]).map((k) => (

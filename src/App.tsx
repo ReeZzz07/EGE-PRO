@@ -53,7 +53,7 @@ function Footer({ onNav }: { onNav: (v: View) => void }) {
   }, []);
   return (
     <footer className="border-t-2 border-ink bg-night text-paper">
-      <div className="mx-auto grid max-w-[1600px] gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="mx-auto grid w-full max-w-[1600px] gap-8 px-4 py-10 sm:grid-cols-[1.4fr_1fr_1fr]">
         {/* На мобильном (одна колонка) блок с лого/реквизитами уходит вниз, а Предметы/Инструменты —
             наверх: так посетитель сразу видит полезные ссылки, а не реквизиты ИП. На десктопе (grid
             из 3 колонок) order игнорируется относительным CSS-каскадом sm:order-* — три колонки
@@ -445,7 +445,7 @@ function AppShell() {
           return subject ? (
             <DiagnosticView subject={subject} onFinish={() => setView({ name: "plan", subject })} onSkip={() => setView({ name: "bank" })} />
           ) : (
-            <div className="mx-auto max-w-xl px-4 py-16 text-center">
+            <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
               <p className="font-display text-xl font-bold">Сначала выбери предмет</p>
               <p className="mt-2 text-[13.5px] text-ink2">Короткий онбординг подберёт предмет — и сразу после него можно будет пройти диагностику.</p>
               <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать</button>
@@ -458,7 +458,7 @@ function AppShell() {
           return subject ? (
             <PlanView subject={subject} onStartTraining={(taskId) => setView({ name: "task", id: taskId })} onSkipToBank={() => setView({ name: "bank" })} onNav={setView} />
           ) : (
-            <div className="mx-auto max-w-xl px-4 py-16 text-center">
+            <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
               <p className="font-display text-xl font-bold">План пока не построен</p>
               <p className="mt-2 text-[13.5px] text-ink2">Пройди короткий онбординг и диагностику — тогда появится персональный план.</p>
               <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать</button>
@@ -480,7 +480,7 @@ function AppShell() {
           return subject ? (
             <MockExam subject={subject} onFinish={() => setView({ name: "session-summary" })} onExit={() => setView({ name: "home" })} />
           ) : (
-            <div className="mx-auto max-w-xl px-4 py-16 text-center">
+            <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
               <p className="font-display text-xl font-bold">Сначала выбери предмет</p>
               <p className="mt-2 text-[13.5px] text-ink2">Пробник строится по одному из твоих предметов.</p>
               <button onClick={() => setView({ name: "onboarding" })} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">Начать онбординг</button>

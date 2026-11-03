@@ -42,7 +42,7 @@ export default function PlanView({ subject, onStartTraining, onSkipToBank, onNav
 
   if (!plan || !result) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
         <p className="font-display text-xl font-bold">План ещё не готов</p>
         <p className="mt-2 text-[13.5px] text-ink2">Сначала пройди короткую диагностику — на её основе строится план.</p>
         <button onClick={onSkipToBank} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">В банк заданий</button>
@@ -53,7 +53,7 @@ export default function PlanView({ subject, onStartTraining, onSkipToBank, onNav
   const firstTaskId = plan.today.find((i) => i.taskIds.length)?.taskIds[0];
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-14">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-14">
       <Reveal>
         <span className={`font-display inline-block border-2 border-ink px-2.5 py-1 text-[12px] font-black ${meta.color}`}>{meta.name}</span>
         <h1 className="font-display mt-4 text-2xl font-black">Твой план подготовки</h1>

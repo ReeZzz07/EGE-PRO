@@ -15,7 +15,7 @@ const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 20;
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto max-w-2xl px-4 pb-20 pt-8 sm:pt-12">{children}</div>;
+  return <div className="mx-auto w-full max-w-[1600px] px-4 pb-20 pt-8 sm:pt-12">{children}</div>;
 }
 
 function Notice({ tone, title, children }: { tone: "ok" | "err" | "wait"; title: string; children?: React.ReactNode }) {

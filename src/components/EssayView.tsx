@@ -130,7 +130,7 @@ export default function EssayView({ task, onNav, nextTaskId }: { task: EgeTask; 
   const previous = drafts.length >= 2 ? drafts[drafts.length - 2] : null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button onClick={() => onNav({ name: "bank" })} className="link-slide flex items-center gap-2 text-sm font-bold text-ink2 hover:text-ink">
           <Icon name="arrowL" size={16} /> Банк заданий

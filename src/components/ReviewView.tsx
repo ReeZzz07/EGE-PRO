@@ -227,7 +227,7 @@ export default function ReviewView({ onNav }: { onNav: (v: View) => void }) {
   const { state, loading, reload } = useMyReviewState();
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-8 sm:mt-12">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">отзыв</p>
         <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">Как тебе ЕГЭ·ПРО?</h1>

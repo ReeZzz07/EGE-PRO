@@ -171,7 +171,7 @@ export default function OnboardingFlow({
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-12">
       <OfferStepHint step="onboarding" />
       {/* прогресс шагов */}
       <div className="mb-8 flex items-center gap-1.5">

@@ -42,7 +42,7 @@ export default function RenewView({ onNav }: { onNav: (v: View) => void }) {
 
   if (!sub || !r) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
         <h1 className="font-display text-xl font-black">Нечего продлять</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-ink2">У тебя нет платного тарифа, который можно продлить. Выбери подходящий — это займёт минуту.</p>
         <button onClick={() => onNav({ name: "tariffs" })} className="btn btn-blue mt-6 px-5 py-2.5 text-sm">
@@ -55,7 +55,7 @@ export default function RenewView({ onNav }: { onNav: (v: View) => void }) {
   const frozen = sub.frozenSubjects;
   const discountRub = Math.round((r.tariffPriceRub + r.addonsPriceRub - r.amountRub) * 100) / 100;
   return (
-    <div className="mx-auto max-w-xl px-4 py-12">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-12">
       <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">продление</p>
       <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">Продлить тариф «{r.tariffName}»</h1>
       <p className="mt-3 text-[13.5px] leading-relaxed text-ink2">

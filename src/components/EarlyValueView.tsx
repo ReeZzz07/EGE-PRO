@@ -125,7 +125,7 @@ export default function EarlyValueView({
 
   if (phase === "pick" || (!subject && !loading)) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-12">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-12">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">без регистрации</p>
         <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">Попробуй одно задание</h1>
         <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-ink2">
@@ -154,7 +154,7 @@ export default function EarlyValueView({
 
   if (loading || !task) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-24 text-center">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-24 text-center">
         <Icon name="refresh" size={28} className="mx-auto animate-spin text-ink/40" />
         <p className="font-display mt-4 text-lg font-bold">Готовим задание…</p>
         {error && <p className="mt-3 text-[13px] text-red">{error}</p>}
@@ -164,7 +164,7 @@ export default function EarlyValueView({
 
   if (phase === "done") {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
         <span className="mx-auto flex h-11 w-11 items-center justify-center border-2 border-ink bg-ink text-hl">
           <Icon name="check" size={20} />
         </span>
@@ -191,7 +191,7 @@ export default function EarlyValueView({
       : "Задание без регистрации";
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-10">
       <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">
         {SUBJECTS[task.subject].name} · {title}
       </p>

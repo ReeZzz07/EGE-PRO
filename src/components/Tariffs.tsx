@@ -12,6 +12,7 @@ import { DEFAULT_SEO, loadSeoSettings } from "../lib/seo";
 import { DEFAULT_TARIFFS_CONTENT, loadTariffsContent, type TariffsPageContent } from "../lib/tariffsContent";
 import { createPayment } from "../lib/payments";
 import { reachGoal } from "../lib/metrika";
+import { PAGE_SHELL } from "../lib/layout";
 import { useDocumentHead } from "../lib/useDocumentHead";
 import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import { plural } from "../lib/utils";
@@ -92,7 +93,7 @@ export default function Tariffs({ onNav }: { onNav: (v: View) => void }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-20">
+    <div className={`${PAGE_SHELL} pb-20`}>
       <div className="mt-8 text-center sm:mt-12">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">{content.eyebrow}</p>
         <h1 className="font-display mt-2 text-2xl font-black sm:text-3xl">{content.title}</h1>

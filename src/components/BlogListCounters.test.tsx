@@ -32,7 +32,8 @@ describe("BlogList: счётчики в карточках", () => {
   it("если цифры не пришли (сбой), список выглядит как раньше", async () => {
     vi.mocked(api.loadAllEngagement).mockResolvedValue({});
     render(<BlogList onNav={vi.fn()} />);
-    expect(await screen.findByText("Статья a")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Статья a" })).toBeInTheDocument();
     expect(screen.queryByTestId("counters-a")).not.toBeInTheDocument();
+    expect(screen.getByTestId("blog-sidebar")).toBeInTheDocument();
   });
 });

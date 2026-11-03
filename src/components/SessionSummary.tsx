@@ -20,7 +20,7 @@ export default function SessionSummary({ onNav }: { onNav: (v: View) => void }) 
   const plan = primarySubject && profile ? loadStudyPlan(primarySubject, profile.id) : null;
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-16">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-16">
       <Reveal>
         <span className="flex h-12 w-12 items-center justify-center border-2 border-ink bg-hl text-ink">
           <Icon name="check" size={22} />

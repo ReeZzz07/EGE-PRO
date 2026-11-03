@@ -224,7 +224,7 @@ export default function MockExam({
 
   if (loadingRetry) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
         <Icon name="refresh" size={22} className="mx-auto animate-spin text-ink2" />
         <p className="mt-3 font-mono text-[12.5px] font-bold uppercase tracking-widest text-ink2">Загружаем сохранённый вариант…</p>
       </div>
@@ -233,7 +233,7 @@ export default function MockExam({
 
   if (retryMissing || !subject || !meta) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16 text-center">
         <p className="font-display text-xl font-bold">Вариант не найден</p>
         <p className="mt-2 text-[13.5px] text-ink2">Возможно, он был удалён.</p>
         <button onClick={onExit} className="btn btn-ink mt-6 px-5 py-2.5 text-sm">На главную</button>
@@ -243,7 +243,7 @@ export default function MockExam({
 
   if (phase === "setup") {
     return (
-      <div className="mx-auto max-w-xl px-4 py-16">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16">
         <Reveal>
           <span className={`font-display inline-block border-2 border-ink px-2.5 py-1 text-[12px] font-black ${meta.color}`}>{meta.name}</span>
           <h1 className="font-display mt-4 text-2xl font-black">{retryTaskIds ? "Повторная попытка" : "Пробный вариант"}</h1>
@@ -282,7 +282,7 @@ export default function MockExam({
   if ((phase === "running" || phase === "grading") && current) {
     const isEssay = current.answerType === "essay";
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-8">
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-[11px] font-bold uppercase text-red">экзамен-режим</span>
           <span className={`ml-auto flex items-center gap-1.5 border-2 px-2.5 py-1 font-mono text-[13px] font-bold tabular-nums ${timeLeft < 60 ? "border-red text-red" : "border-ink/25 text-ink"}`}>
@@ -342,7 +342,7 @@ export default function MockExam({
     const gradeMode = isGradeSubject(subject);
 
     return (
-      <div className="mx-auto max-w-xl px-4 py-14">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-14">
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">результаты</p>
           <h1 className="font-display mt-1 text-2xl font-black">{meta.name}</h1>

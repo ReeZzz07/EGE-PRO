@@ -80,7 +80,7 @@ export default function TaskBank({ onNav, initialSubject }: { onNav: (v: View) =
     derived.solvedIds.has(t.id) ? "solved" : derived.mistakeIds.has(t.id) ? "mistake" : "new";
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">открытый банк · ФИПИ</p>

@@ -55,7 +55,7 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
 
   if (phase === "setup") {
     return (
-      <div className="mx-auto max-w-xl px-4 py-16">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-16">
         <OfferStepHint step="diagnostic" />
         <Reveal>
           <span className={`font-display inline-block border-2 border-ink px-2.5 py-1 text-[12px] font-black ${meta.color}`}>{meta.name}</span>
@@ -87,7 +87,7 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
 
   if (phase === "running" && task) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-10">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[12px] font-bold text-ink2">задание {idx + 1} из {tasks.length}</span>
           <span className="font-mono text-[11px] text-ink2">без подсказок</span>
@@ -121,7 +121,7 @@ export default function DiagnosticView({ subject, onFinish, onSkip }: { subject:
   if (phase === "result" && result) {
     const tone = result.level === "high" ? "text-green" : result.level === "mid" ? "text-amber" : "text-blue";
     return (
-      <div className="mx-auto max-w-xl px-4 py-14">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-14">
         <Reveal>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">твой результат</p>
           <h1 className="font-display mt-1 text-2xl font-black">

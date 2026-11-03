@@ -327,7 +327,7 @@ export default function Dashboard({ onNav }: { onNav: (v: View) => void }) {
   const showPlanUpgrade = !!profile && !isGuestMode && !profile.isAdmin && profile.tariffId === "free" && !!primarySubject && !!diagnosticDone;
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4">
+    <div className="mx-auto w-full max-w-[1600px] px-4">
       {welcomeContent && profile && (
         <WelcomeContentModal
           content={welcomeContent}

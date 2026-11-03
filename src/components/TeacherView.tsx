@@ -91,7 +91,7 @@ export default function TeacherView({ onNav }: { onNav: (v: View) => void }) {
   const active = classes.find((c) => c.id === selected);
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-8 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">учитель</p>

@@ -84,7 +84,7 @@ export function MistakesView({ onNav }: { onNav: (v: View) => void }) {
     .filter(Boolean);
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-red">работа над ошибками</p>
@@ -210,7 +210,7 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
   ];
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-8">
         <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">личный протокол</p>
         <h1 className="font-display mt-1 text-3xl font-black sm:text-4xl">Статистика</h1>
@@ -352,7 +352,7 @@ export function StatsView({ onNav }: { onNav: (v: View) => void }) {
 /* ─────────── Полная страница репетитора ─────────── */
 export function TutorView({ onNav }: { onNav: (v: View) => void }) {
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-20">
+    <div className="mx-auto w-full max-w-[1600px] px-4 pb-20">
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.2fr]">
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">кабинет репетитора</p>

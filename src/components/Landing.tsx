@@ -14,6 +14,7 @@ import { loadActiveTariffs, type Tariff } from "../lib/tariffs";
 import { loadTariffsContent } from "../lib/tariffsContent";
 import { plural } from "../lib/utils";
 import FaqAccordion from "./FaqAccordion";
+import { PAGE_SHELL } from "../lib/layout";
 import { faqPageLd, useJsonLd } from "../lib/useJsonLd";
 import type { View } from "./Header";
 
@@ -119,7 +120,7 @@ export default function Landing({
   const preview = { ...landingStatic.preview, subject: landingStatic.preview.subject as Subject };
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4">
+    <div className={PAGE_SHELL}>
       {/* ─── Блок 1: первый экран ─── */}
       <div className="mt-6 flex items-center justify-between">
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.3em] text-blue">● новый ученик</span>

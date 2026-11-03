@@ -30,7 +30,7 @@ export default function SubjectsView({ onNav }: { onNav: (v: View) => void }) {
   const cap = sub?.subjectsCap ?? tariff?.subjectsCount;
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-10">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-10">
       <p className="font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue">мои предметы</p>
       <h1 className="font-display mt-1 text-2xl font-black sm:text-3xl">Что готовим</h1>
 

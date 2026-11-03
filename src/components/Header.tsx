@@ -140,7 +140,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
   return (
     <>
     <header className="app-header sticky top-0 z-50 border-b-2 border-ink bg-paper/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
+      <div className="mx-auto flex w-full max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
         <button onClick={() => onNav({ name: "home" })} className="group flex shrink-0 items-center gap-2.5" aria-label="На главную">
           <span className="flex h-9 w-9 items-center justify-center border-2 border-ink bg-ink text-hl transition group-hover:bg-blue group-hover:border-blue">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -301,7 +301,7 @@ export default function Header({ view, onNav }: { view: View; onNav: (v: View) =
       aria-label="Основная навигация"
       className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
     >
-      <div className="mx-auto flex max-w-[1600px] items-stretch justify-around">
+      <div className="mx-auto flex w-full max-w-[1600px] items-stretch justify-around">
         {bottomItems.map((n) => {
           const isActive = active === n.id;
           return (
