@@ -1,6 +1,7 @@
 // Таблицы в условиях (26.09.2026: биология «Анализ информации», таблица приходила строками «a | b | c»).
+// Схлопнутые списки соответствия (химия и др.) — одна строка «А) … Б) … | 1) … 2) …».
 import { describe, expect, it } from "vitest";
-import { parseStatementBlocks } from "./statementBlocks";
+import { expandInlineListLine, parseListColumn, parseStatementBlocks } from "./statementBlocks";
 
 const BIO = [
   "Проанализируйте таблицу «Содержание соединений». Выберите все утверждения.",
@@ -47,5 +48,36 @@ describe("parseStatementBlocks", () => {
 
   it("без « | » — только абзацы", () => {
     expect(parseStatementBlocks(["раз", "два"]).every((b) => b.kind === "text")).toBe(true);
+  });
+
+  it("схлопнутое соответствие А)/1) с « | » → две колонки списков", () => {
+    const line =
+      "СХЕМА РЕАКЦИИ А) KClO4 → KCl + O2 Б) KClO3 → KCl + KClO4 В) KClO3 → KCl + O2 | ИЗМЕНЕНИЕ СТЕПЕНИ ОКИСЛЕНИЯ ОКИСЛИТЕЛЯ 1) +7 → -1 2) -2 → 0 3) +5 → -1 4) +1 → -1";
+    const b = parseStatementBlocks([line]);
+    expect(b).toHaveLength(1);
+    expect(b[0].kind).toBe("match");
+    if (b[0].kind !== "match") throw new Error("expected match");
+    expect(b[0].left.title).toBe("СХЕМА РЕАКЦИИ");
+    expect(b[0].left.items).toEqual([
+      "А) KClO4 → KCl + O2",
+      "Б) KClO3 → KCl + KClO4",
+      "В) KClO3 → KCl + O2",
+    ]);
+    expect(b[0].right.title).toMatch(/ИЗМЕНЕНИЕ/);
+    expect(b[0].right.items).toHaveLength(4);
+    expect(b[0].right.items[0]).toBe("1) +7 → -1");
+  });
+
+  it("одиночный схлопнутый список 1) 2) 3) без колонок", () => {
+    const b = expandInlineListLine("Выберите верные: 1) первое 2) второе 3) третье");
+    expect(b[0]).toMatchObject({
+      kind: "list",
+      title: "Выберите верные:",
+      items: ["1) первое", "2) второе", "3) третье"],
+    });
+  });
+
+  it("parseListColumn не режет «+1 →» внутри пункта", () => {
+    expect(parseListColumn("1) +7 → -1 2) -2 → 0").items).toEqual(["1) +7 → -1", "2) -2 → 0"]);
   });
 });

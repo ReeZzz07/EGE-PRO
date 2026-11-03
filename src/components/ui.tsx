@@ -554,15 +554,48 @@ export function statementPreview(line: string | undefined): string {
 /** Строки условия → абзацы и таблицы (строки «a | b | c» подряд — это таблица из исходного задания, см.
  *  lib/statementBlocks.ts). Пользователь: «содержание таблицы прослеживается, но не показывается таблицей —
  *  неудобно читать, а люди платят за удобство» (26.09.2026). */
+function StatementListColumn({ title, items, images }: { title: string; items: string[]; images?: string[] }) {
+  return (
+    <div data-testid="statement-list">
+      {title ? (
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-ink2">
+          <StatementLine text={title} images={images} />
+        </p>
+      ) : null}
+      <ul className={`${title ? "mt-2" : ""} space-y-1.5`}>
+        {items.map((item, j) => (
+          <li key={j} className="[overflow-wrap:anywhere] text-[14.5px] leading-snug">
+            <StatementLine text={item} images={images} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function StatementBody({ statement, images }: { statement: string[]; images?: string[] }) {
   return (
     <>
-      {parseStatementBlocks(statement).map((b, i) =>
-        b.kind === "text" ? (
-          <p key={i} className="[overflow-wrap:anywhere]">
-            <StatementLine text={b.text} images={images} />
-          </p>
-        ) : (
+      {parseStatementBlocks(statement).map((b, i) => {
+        if (b.kind === "text") {
+          return (
+            <p key={i} className="[overflow-wrap:anywhere]">
+              <StatementLine text={b.text} images={images} />
+            </p>
+          );
+        }
+        if (b.kind === "list") {
+          return <StatementListColumn key={i} title={b.title} items={b.items} images={images} />;
+        }
+        if (b.kind === "match") {
+          return (
+            <div key={i} className="grid gap-4 sm:grid-cols-2" data-testid="statement-match">
+              <StatementListColumn title={b.left.title} items={b.left.items} images={images} />
+              <StatementListColumn title={b.right.title} items={b.right.items} images={images} />
+            </div>
+          );
+        }
+        return (
           <div key={i} className="max-w-full overflow-x-auto">
             <table className="w-full border-collapse text-[14px] leading-snug" data-testid="statement-table">
               <tbody>
@@ -585,8 +618,8 @@ export function StatementBody({ statement, images }: { statement: string[]; imag
               </tbody>
             </table>
           </div>
-        )
-      )}
+        );
+      })}
     </>
   );
 }
